@@ -271,12 +271,29 @@
                      font-size: 13px !important; border: 1px solid hsl(var(--border)) !important;
                      box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
 
+/* Pulsing core */
 @keyframes route-pulse {
   0%, 100% { stroke-opacity: 1; }
-  50%       { stroke-opacity: 0.45; }
+  50%       { stroke-opacity: 0.38; }
 }
-.route-selected { animation: route-pulse 1.4s ease-in-out infinite; }
-.route-glow     { animation: route-pulse 1.4s ease-in-out infinite reverse; }
+/* Outer ambient glow */
+@keyframes glow-outer {
+  0%, 100% { stroke-opacity: 0.10; }
+  50%       { stroke-opacity: 0.22; }
+}
+/* Mid diffuse glow */
+@keyframes glow-mid {
+  0%, 100% { stroke-opacity: 0.20; }
+  50%       { stroke-opacity: 0.36; }
+}
+.route-selected   { animation: route-pulse 1.4s ease-in-out infinite; }
+.route-glow-outer { animation: glow-outer  1.4s ease-in-out infinite; }
+.route-glow-mid   { animation: glow-mid    1.4s ease-in-out infinite reverse; }
+
+/* Label badge hover (Leaflet marker div) */
+.leaflet-marker-pane div:hover {
+  filter: brightness(1.15);
+}
 
 /* ── Sentence chip ────────────────────────────────────────────── */
 .chip {

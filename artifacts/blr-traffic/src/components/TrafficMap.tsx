@@ -1,14 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState, Fragment } from "react";
 import {
-  MapContainer, TileLayer, Polyline, Tooltip, useMap,
+  MapContainer, TileLayer, Polyline, Tooltip, Marker, useMap, useMapEvents,
 } from "react-leaflet";
+import L from "leaflet";
 import { ROUTE_COORDS, BLR_BOUNDS } from "@/lib/routeCoords";
 
-interface RouteInfo {
-  label_short: string;
-  avgSpeed?: number;
-}
-
+/* ──────────────────────────────────────────────────────────────── */
+/*  Types                                                           */
+/* ──────────────────────────────────────────────────────────────── */
+interface RouteInfo { label_short: string; avgSpeed?: number; }
 interface Props {
   routes: RouteInfo[];
   selectedRoute: string;
@@ -16,158 +16,336 @@ interface Props {
   dark: boolean;
 }
 
-/* Fit map to Bangalore bounding box on first render */
+/* ──────────────────────────────────────────────────────────────── */
+/*  Maths helpers                                                   */
+/* ──────────────────────────────────────────────────────────────── */
+
+/** Deterministic curve-side from route name char codes */
+function sideof(name: string): 1 | -1 {
+  return name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 2 === 0 ? 1 : -1;
+}
+
+/**
+ * Quadratic Bézier arc between two lat/lng endpoints.
+ * Curve height = 22 % of chord length, applied perpendicular.
+ */
+function bezierArc(
+  p0: [number, number],
+  p2: [number, number],
+  side: 1 | -1,
+  steps = 40,
+): [number, number][] {
+  const [lat1, lng1] = p0;
+  const [lat2, lng2] = p2;
+  const dLat = lat2 - lat1;
+  const dLng = lng2 - lng1;
+  const dist = Math.sqrt(dLat * dLat + dLng * dLng) || 1e-9;
+  const cf   = dist * 0.22;          // curvature factor
+  const mLat = (lat1 + lat2) / 2;
+  const mLng = (lng1 + lng2) / 2;
+  // perpendicular unit vector scaled by cf
+  const pLat = (-dLng / dist) * cf * side;
+  const pLng = ( dLat / dist) * cf * side;
+  const cLat = mLat + pLat;           // control point
+  const cLng = mLng + pLng;
+
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps;
+    const u = 1 - t;
+    return [
+      u * u * lat1 + 2 * u * t * cLat + t * t * lat2,
+      u * u * lng1 + 2 * u * t * cLng + t * t * lng2,
+    ] as [number, number];
+  });
+}
+
+/** Point on the arc at t = 0.5 (the apex of the curve) */
+function arcApex(
+  p0: [number, number],
+  p2: [number, number],
+  side: 1 | -1,
+): [number, number] {
+  const [lat1, lng1] = p0;
+  const [lat2, lng2] = p2;
+  const dLat = lat2 - lat1;
+  const dLng = lng2 - lng1;
+  const dist = Math.sqrt(dLat * dLat + dLng * dLng) || 1e-9;
+  const cf   = dist * 0.22;
+  const mLat = (lat1 + lat2) / 2;
+  const mLng = (lng1 + lng2) / 2;
+  const pLat = (-dLng / dist) * cf * side;
+  const pLng = ( dLat / dist) * cf * side;
+  const cLat = mLat + pLat;
+  const cLng = mLng + pLng;
+  // B(0.5) = 0.25*P0 + 0.5*C + 0.25*P2
+  return [
+    0.25 * lat1 + 0.5 * cLat + 0.25 * lat2,
+    0.25 * lng1 + 0.5 * cLng + 0.25 * lng2,
+  ];
+}
+
+/* ──────────────────────────────────────────────────────────────── */
+/*  DivIcon label factory                                           */
+/* ──────────────────────────────────────────────────────────────── */
+function makeLabelIcon(label: string, selected: boolean, dark: boolean): L.DivIcon {
+  const bg = selected
+    ? "rgba(220,38,38,0.95)"
+    : dark ? "rgba(15,23,42,0.86)" : "rgba(30,41,59,0.82)";
+  const shadow = selected
+    ? "0 2px 14px rgba(239,68,68,0.55), 0 1px 4px rgba(0,0,0,0.4)"
+    : "0 1px 4px rgba(0,0,0,0.35)";
+  const scale = selected ? "scale(1.13)" : "scale(1)";
+  const border = selected ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.2)";
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+      transform:translate(-50%,-50%) ${scale};
+      background:${bg};
+      color:#fff;
+      padding:3px 9px 3px 7px;
+      border-radius:20px;
+      font-size:10.5px;
+      font-weight:700;
+      white-space:nowrap;
+      letter-spacing:0.03em;
+      border:1px solid ${border};
+      box-shadow:${shadow};
+      cursor:pointer;
+      user-select:none;
+      transition:transform 0.18s;
+    ">${selected ? "📍 " : ""}${label}</div>`,
+    iconSize:   [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────── */
+/*  Internal components                                             */
+/* ──────────────────────────────────────────────────────────────── */
+
+/** Fits the viewport to all Bangalore routes on mount. */
 function FitView() {
   const map = useMap();
   useEffect(() => {
-    map.fitBounds(BLR_BOUNDS, { padding: [20, 20] });
+    map.fitBounds(BLR_BOUNDS, { padding: [28, 28], animate: true });
   }, [map]);
   return null;
 }
 
-const TILE_LIGHT = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-const TILE_DARK  = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const TILE_ATTR  = '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors &copy; <a href="https://carto.com">CARTO</a>';
+/** Exposes current zoom level to parent component. */
+function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useMapEvents({ zoomend: () => onZoom(map.getZoom()) });
+  return null;
+}
 
+/* ──────────────────────────────────────────────────────────────── */
+/*  Tiles                                                           */
+/* ──────────────────────────────────────────────────────────────── */
+const TILE_DARK  = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const TILE_LIGHT = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+const TILE_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com">CARTO</a>';
+
+/* ──────────────────────────────────────────────────────────────── */
+/*  Main component                                                  */
+/* ──────────────────────────────────────────────────────────────── */
 export function TrafficMap({ routes, selectedRoute, onRouteSelect, dark }: Props) {
+  const [zoom, setZoom] = useState(11);
+  const showAllLabels = zoom >= 12;
+
   return (
     <div style={{
       borderRadius: "1.25rem", overflow: "hidden",
-      height: "24rem", border: "1px solid hsl(var(--border))",
+      height: "27rem", border: "1px solid hsl(var(--border))",
       position: "relative",
     }}>
       <MapContainer
         center={[12.97, 77.59]}
         zoom={11}
         style={{ height: "100%", width: "100%" }}
-        zoomControl={true}
+        zoomControl
         scrollWheelZoom={false}
       >
         <FitView />
+        <ZoomTracker onZoom={setZoom} />
         <TileLayer url={dark ? TILE_DARK : TILE_LIGHT} attribution={TILE_ATTR} />
 
-        {/* All non-selected routes */}
+        {/* ── Non-selected routes ────────────────────────────── */}
         {routes.map((route) => {
-          const coords = ROUTE_COORDS[route.label_short];
-          if (!coords || route.label_short === selectedRoute) return null;
-          const isBaseline = route.label_short === "Airport Expy";
-          const speedEmoji = route.avgSpeed
-            ? route.avgSpeed > 30 ? "⚡" : "🐌"
+          const raw = ROUTE_COORDS[route.label_short];
+          if (!raw || route.label_short === selectedRoute) return null;
+
+          const isAirport = route.label_short === "Airport Expy";
+          const side      = sideof(route.label_short);
+          const arc       = bezierArc(raw[0], raw[1], side);
+          const apex      = arcApex(raw[0], raw[1], side);
+          const speedTxt  = route.avgSpeed != null
+            ? `${route.avgSpeed > 30 ? "⚡" : "🐌"} ${route.avgSpeed} km/h`
             : "";
+
           return (
-            <Polyline
-              key={route.label_short}
-              positions={coords}
-              pathOptions={{
-                color: isBaseline ? "#22c55e" : dark ? "#94a3b8" : "#334155",
-                weight: isBaseline ? 3 : 4,
-                opacity: 0.65,
-                dashArray: isBaseline ? "8 5" : undefined,
-              }}
-              eventHandlers={{ click: () => onRouteSelect(route.label_short) }}
-            >
-              <Tooltip sticky>
-                <span style={{ fontWeight: 600 }}>{route.label_short}</span>
-                {speedEmoji && route.avgSpeed != null && (
-                  <span> &nbsp;{speedEmoji} {route.avgSpeed} km/h</span>
-                )}
-                <span style={{ display: "block", fontSize: 11, opacity: 0.7 }}>
-                  Click to select
-                </span>
-              </Tooltip>
-            </Polyline>
+            <Fragment key={route.label_short}>
+              <Polyline
+                positions={arc}
+                pathOptions={{
+                  color: isAirport ? "#22c55e" : dark ? "#64748b" : "#475569",
+                  weight:     isAirport ? 12 : 10,
+                  opacity:    0.40,
+                  dashArray:  isAirport ? "10 6" : undefined,
+                  lineCap:    "round",
+                  lineJoin:   "round",
+                }}
+                eventHandlers={{ click: () => onRouteSelect(route.label_short) }}
+              >
+                <Tooltip sticky>
+                  <strong>{route.label_short}</strong>
+                  {speedTxt && <span>&nbsp; {speedTxt}</span>}
+                  <span style={{ display: "block", fontSize: 11, opacity: 0.65 }}>Click to select</span>
+                </Tooltip>
+              </Polyline>
+
+              {/* Label marker: always for Airport Expy, zoom-gated for others */}
+              {(showAllLabels || isAirport) && (
+                <Marker
+                  position={apex}
+                  icon={makeLabelIcon(route.label_short, false, dark)}
+                  eventHandlers={{ click: () => onRouteSelect(route.label_short) }}
+                  zIndexOffset={0}
+                >
+                  <Tooltip direction="top" offset={[0, -8]}>
+                    <strong>{route.label_short}</strong>
+                    {speedTxt && <span>&nbsp; {speedTxt}</span>}
+                  </Tooltip>
+                </Marker>
+              )}
+            </Fragment>
           );
         })}
 
-        {/* Selected route — rendered last so it's on top */}
+        {/* ── Selected route (rendered last = on top) ────────── */}
         {(() => {
-          const coords = ROUTE_COORDS[selectedRoute];
-          if (!coords) return null;
-          const info = routes.find(r => r.label_short === selectedRoute);
-          const speedEmoji = info?.avgSpeed
-            ? info.avgSpeed > 30 ? "⚡" : "🐌"
+          const raw = ROUTE_COORDS[selectedRoute];
+          if (!raw) return null;
+
+          const side     = sideof(selectedRoute);
+          const arc      = bezierArc(raw[0], raw[1], side);
+          const apex     = arcApex(raw[0], raw[1], side);
+          const info     = routes.find(r => r.label_short === selectedRoute);
+          const speedTxt = info?.avgSpeed != null
+            ? `${info.avgSpeed > 30 ? "⚡" : "🐌"} ${info.avgSpeed} km/h`
             : "";
+
+          const sharedOpts: Partial<L.PathOptions> = {
+            lineCap: "round", lineJoin: "round",
+          };
+
           return (
-            <>
-              {/* Glow layer */}
+            <Fragment key={`sel-${selectedRoute}`}>
+              {/* Outer ambient glow */}
+              <Polyline positions={arc} pathOptions={{
+                ...sharedOpts, color: "#ef4444",
+                weight: 36, opacity: 0.10, className: "route-glow-outer",
+              }} />
+              {/* Mid diffuse glow */}
+              <Polyline positions={arc} pathOptions={{
+                ...sharedOpts, color: "#f97316",
+                weight: 22, opacity: 0.20, className: "route-glow-mid",
+              }} />
+              {/* Core — pulsing red */}
               <Polyline
-                key={`${selectedRoute}-glow`}
-                positions={coords}
+                positions={arc}
                 pathOptions={{
-                  color: "#ef4444",
-                  weight: 16,
-                  opacity: 0.18,
-                  className: "route-glow",
-                }}
-              />
-              {/* Main pulsing line */}
-              <Polyline
-                key={`${selectedRoute}-main`}
-                positions={coords}
-                pathOptions={{
-                  color: "#ef4444",
-                  weight: 7,
-                  opacity: 1,
+                  ...sharedOpts, color: "#ef4444",
+                  weight: 16, opacity: 1,
                   className: "route-selected",
                 }}
+                eventHandlers={{ click: () => onRouteSelect(selectedRoute) }}
               >
-                <Tooltip sticky permanent={false}>
-                  <span style={{ fontWeight: 700, color: "#dc2626" }}>
-                    📍 {selectedRoute}
-                  </span>
-                  {speedEmoji && info?.avgSpeed != null && (
-                    <span> &nbsp;{speedEmoji} {info.avgSpeed} km/h</span>
-                  )}
-                  <span style={{ display: "block", fontSize: 11, opacity: 0.7 }}>
-                    Currently selected
-                  </span>
+                <Tooltip sticky>
+                  <strong style={{ color: "#dc2626" }}>📍 {selectedRoute}</strong>
+                  {speedTxt && <span>&nbsp; {speedTxt}</span>}
+                  <span style={{ display: "block", fontSize: 11, opacity: 0.65 }}>Currently selected</span>
                 </Tooltip>
               </Polyline>
-            </>
+              {/* Label badge — always shown for selected */}
+              <Marker
+                position={apex}
+                icon={makeLabelIcon(selectedRoute, true, dark)}
+                zIndexOffset={1000}
+                eventHandlers={{ click: () => onRouteSelect(selectedRoute) }}
+              >
+                <Tooltip direction="top" offset={[0, -8]}>
+                  <strong style={{ color: "#dc2626" }}>📍 {selectedRoute}</strong>
+                  {speedTxt && <span>&nbsp; {speedTxt}</span>}
+                </Tooltip>
+              </Marker>
+            </Fragment>
           );
         })()}
       </MapContainer>
 
-      {/* Legend overlay */}
+      {/* ── Legend ─────────────────────────────────────────── */}
       <div style={{
-        position: "absolute", bottom: 12, left: 12, zIndex: 1000,
-        background: dark ? "rgba(15,18,40,0.88)" : "rgba(255,255,255,0.9)",
-        backdropFilter: "blur(8px)",
+        position: "absolute", bottom: 14, left: 14, zIndex: 1000,
+        background: dark ? "rgba(10,15,36,0.92)" : "rgba(255,255,255,0.93)",
+        backdropFilter: "blur(10px)",
         border: "1px solid hsl(var(--border))",
-        borderRadius: 10, padding: "6px 10px", fontSize: 12,
-        color: dark ? "#f1f5f9" : "#1e293b",
+        borderRadius: 12, padding: "8px 12px",
+        fontSize: 11.5, color: dark ? "#f1f5f9" : "#1e293b",
         pointerEvents: "none",
+        boxShadow: dark
+          ? "0 4px 20px rgba(0,0,0,0.5)"
+          : "0 4px 20px rgba(0,0,0,0.12)",
       }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 18, height: 3,
-              background: "#ef4444", borderRadius: 2 }} />
-            <span>Selected route</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 18, height: 2,
-              background: dark ? "#94a3b8" : "#334155", borderRadius: 2 }} />
-            <span>Other routes</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 18, height: 2,
-              borderTop: "2px dashed #22c55e" }} />
-            <span>🟢 Airport Expy baseline</span>
-          </div>
+        <p style={{ fontWeight: 800, marginBottom: 7, fontSize: 10,
+          opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+          Legend
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <LegendRow color="#ef4444" weight={5} label="Selected route" />
+          <LegendRow
+            color={dark ? "#64748b" : "#475569"}
+            weight={3.5} label="Other routes" opacity={0.7}
+          />
+          <LegendRow color="#22c55e" weight={3} dashed label="🟢 Airport Expy" />
         </div>
       </div>
 
-      {/* Click hint */}
+      {/* ── Hint ───────────────────────────────────────────── */}
       <div style={{
-        position: "absolute", top: 12, right: 12, zIndex: 1000,
-        background: dark ? "rgba(15,18,40,0.8)" : "rgba(255,255,255,0.85)",
+        position: "absolute", top: 14, right: 14, zIndex: 1000,
+        background: dark ? "rgba(10,15,36,0.82)" : "rgba(255,255,255,0.88)",
         backdropFilter: "blur(8px)",
         border: "1px solid hsl(var(--border))",
-        borderRadius: 8, padding: "4px 8px", fontSize: 11,
-        color: "hsl(var(--muted-foreground))", pointerEvents: "none",
+        borderRadius: 9, padding: "4px 10px",
+        fontSize: 11, color: "hsl(var(--muted-foreground))",
+        pointerEvents: "none",
       }}>
-        Click a route to select it
+        Hover for speed · Click to select · Scroll to zoom
       </div>
+    </div>
+  );
+}
+
+/* Tiny legend row helper */
+function LegendRow({
+  color, weight, label, dashed, opacity = 1,
+}: { color: string; weight: number; label: string; dashed?: boolean; opacity?: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {dashed ? (
+        <svg width={26} height={8} viewBox="0 0 26 8" style={{ flexShrink: 0, opacity }}>
+          <line x1="0" y1="4" x2="26" y2="4"
+            stroke={color} strokeWidth={weight}
+            strokeDasharray="6 4" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg width={26} height={8} viewBox="0 0 26 8" style={{ flexShrink: 0, opacity }}>
+          <line x1="0" y1="4" x2="26" y2="4"
+            stroke={color} strokeWidth={weight} strokeLinecap="round" />
+        </svg>
+      )}
+      <span>{label}</span>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { Sun, Moon, Download } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, WeeklyAggregate } from "@/lib/useTrafficData";
 
 /* ── Colours ──────────────────────────────────────────────────── */
 const LC = { primary:"#2563eb", teal:"#0d9488", purple:"#7c3aed", pink:"#db2777" };
@@ -111,6 +111,105 @@ function Sparkles() {
   );
 }
 
+/* ── Napkin chart — baseline (blue) / gap / recent (pink) ─────── */
+function NapkinChart({
+  baselineWeeks, recentWeeks, dark,
+}: {
+  baselineWeeks: WeeklyAggregate[];
+  recentWeeks:   WeeklyAggregate[];
+  dark: boolean;
+}) {
+  const bLen = baselineWeeks.length;
+  const rLen = recentWeeks.length;
+  if (bLen + rLen < 2) return null;
+
+  const allSpeeds = [
+    ...baselineWeeks.map(w => w.avgSpeed),
+    ...recentWeeks.map(w => w.avgSpeed),
+  ].filter(s => s > 0);
+  if (allSpeeds.length < 2) return null;
+
+  const minS = Math.min(...allSpeeds);
+  const maxS = Math.max(...allSpeeds);
+  const range = maxS - minS || 1;
+
+  const W = 500, H = 76;
+  const PX = 14, PY = 10;
+  const chartW = W - PX * 2;
+  const chartH = H - PY * 2 - 14; /* leave 14px for date labels */
+
+  const hasGap = bLen > 0 && rLen > 0;
+  /* allocate x-space: 43% baseline / 14% gap / 43% recent (or 100% if only one) */
+  const bFrac = bLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
+  const rFrac = rLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
+  const bXS = PX;
+  const bXE = PX + chartW * bFrac;
+  const rXS = hasGap ? W - PX - chartW * rFrac : PX;
+  const rXE = W - PX;
+
+  const toY = (s: number) => PY + chartH - ((s - minS) / range) * chartH;
+
+  const pts = (weeks: WeeklyAggregate[], xs: number, xe: number) =>
+    weeks.length === 1
+      ? `${xs},${toY(weeks[0].avgSpeed)} ${xe},${toY(weeks[0].avgSpeed)}`
+      : weeks.map((w, i) => {
+          const x = xs + (i / (weeks.length - 1)) * (xe - xs);
+          return `${x.toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`;
+        }).join(" ");
+
+  const muted = dark ? "#475569" : "#cbd5e1";
+  const labelColor = dark ? "#64748b" : "#94a3b8";
+  const fmtLabel = (s: string) =>
+    new Date(s).toLocaleDateString("en-IN", { day:"numeric", month:"short" });
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width:"100%", height:76, display:"block" }}
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {/* Gap connector — dashed */}
+      {hasGap && (
+        <line
+          x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
+          x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}
+          stroke={muted} strokeWidth={1.5} strokeDasharray="4 3"
+        />
+      )}
+      {/* Baseline polyline — blue */}
+      {bLen > 0 && (
+        <polyline points={pts(baselineWeeks, bXS, bXE)}
+          fill="none" stroke="#60a5fa" strokeWidth={3.5}
+          strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      {/* Recent polyline — pink */}
+      {rLen > 0 && (
+        <polyline points={pts(recentWeeks, rXS, rXE)}
+          fill="none" stroke="#f472b6" strokeWidth={3.5}
+          strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      {/* Junction dots */}
+      {hasGap && bLen > 0 && (
+        <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill="#60a5fa" />
+      )}
+      {hasGap && rLen > 0 && (
+        <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill="#f472b6" />
+      )}
+      {/* Date labels — start / end */}
+      {bLen > 0 && (
+        <text x={bXS} y={H - 1} fontSize={10} fill={labelColor} textAnchor="start">
+          {fmtLabel(baselineWeeks[0].weekKey)}
+        </text>
+      )}
+      {rLen > 0 && (
+        <text x={rXE} y={H - 1} fontSize={10} fill={labelColor} textAnchor="end">
+          {fmtLabel(recentWeeks[rLen - 1].weekKey)}
+        </text>
+      )}
+    </svg>
+  );
+}
+
 /* ── Dashboard ────────────────────────────────────────────────── */
 export default function Dashboard() {
   /* UI state */
@@ -133,6 +232,15 @@ export default function Dashboard() {
   const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout>>();
+  /* thumb drag/hover tracking for date tooltips */
+  const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
+  const sliderValsRef = useRef(sliderVals);
+  sliderValsRef.current = sliderVals;
+  useEffect(() => {
+    const up = () => setDragThumb(-1);
+    window.addEventListener("pointerup", up);
+    return () => window.removeEventListener("pointerup", up);
+  }, []);
 
   /* data */
   const { routes, allRows, loading, error, rowCount } = useTrafficData();
@@ -173,12 +281,26 @@ export default function Dashboard() {
   /* ── Slider — full dataset, independent of period chip ─────── */
   const allRouteWeeks = useAllRouteWeeks(allRows, selectedRoute, tod);
 
-  /* Reset slider when route or tod changes (NOT on period change) */
+  /* Reset slider when route or tod changes (NOT on period change).
+     Snaps to config.json baseline_default_start / baseline_default_end. */
   useEffect(() => {
-    if (allRouteWeeks.length > 0) {
-      const mid = Math.max(0, Math.floor((allRouteWeeks.length - 1) * 0.5));
-      setSliderVals([0, mid]);
+    if (allRouteWeeks.length === 0) return;
+    const cfgStart = (appConfig as Record<string,string>).baseline_default_start;
+    const cfgEnd   = (appConfig as Record<string,string>).baseline_default_end;
+    let leftIdx  = 0;
+    let rightIdx = Math.max(0, Math.floor((allRouteWeeks.length - 1) * 0.5));
+    if (cfgStart) {
+      const idx = allRouteWeeks.findIndex(w => w.weekKey >= cfgStart);
+      if (idx >= 0) leftIdx = idx;
     }
+    if (cfgEnd) {
+      let idx = -1;
+      for (let i = allRouteWeeks.length - 1; i >= 0; i--) {
+        if (allRouteWeeks[i].weekKey <= cfgEnd) { idx = i; break; }
+      }
+      if (idx >= 0) rightIdx = idx;
+    }
+    setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
   }, [selectedRoute, tod, allRouteWeeks.length]);
 
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
@@ -226,9 +348,12 @@ export default function Dashboard() {
   const recentStartDate   = recentWeeks[0]?.weekKey;
   const lastDate          = allRouteWeeks[allRouteWeeks.length - 1]?.weekKey;
 
-  /* Slider change handler */
+  /* Slider change handler — also detects which thumb is moving */
   const handleSliderChange = useCallback((vals: number[]) => {
     const [l, r] = vals as [number, number];
+    const [prevL, prevR] = sliderValsRef.current;
+    if (l !== prevL) setDragThumb(0);
+    else if (r !== prevR) setDragThumb(1);
     setSliderVals([l, r]);
     const win = r - l;
     if ((win <= 1 || win >= allRouteWeeks.length * 0.85) && !showSparkle) {
@@ -475,29 +600,61 @@ export default function Dashboard() {
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                         color: dark?"#f1f5f9":"#1e293b" }}>📏 Baseline Window</p>
                       <p style={{ fontSize:11, color:"hsl(var(--muted-foreground))", marginTop:2 }}>
-                        Full history · {allRouteWeeks.length} weeks · drag 🔵 🐢 to set comparison range
+                        Full history · {allRouteWeeks.length} weeks · drag handles to set comparison range
                       </p>
                     </div>
                     <span style={{ fontSize:11, color:"hsl(var(--muted-foreground))",
                       background:"hsl(var(--muted))", borderRadius:9999, padding:"3px 10px" }}>
-                      📅 period chip filters "recent" only
+                      period chip filters "recent" only
                     </span>
                   </div>
 
-                  <div style={{ padding:"4px 0 2px" }}>
+                  {/* Slider + floating date tooltips */}
+                  <div style={{ padding:"16px 0 4px", position:"relative" }}>
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}
+                      onValueCommit={() => setDragThumb(-1)}
                       style={{ position:"relative", display:"flex",
-                        alignItems:"center", height:52, userSelect:"none", touchAction:"none" }}
+                        alignItems:"center", height:40, userSelect:"none", touchAction:"none" }}
                     >
+                      {/* Left thumb floating date */}
+                      {dragThumb === 0 && baselineStartDate && (
+                        <div style={{
+                          position:"absolute", left:`${leftPct}%`, top:-22,
+                          transform:"translateX(-50%)",
+                          background:"#1e293b", color:"#f1f5f9",
+                          fontSize:11, fontWeight:700, padding:"3px 8px",
+                          borderRadius:6, whiteSpace:"nowrap",
+                          pointerEvents:"none", zIndex:30,
+                          boxShadow:"0 2px 8px rgba(0,0,0,0.35)",
+                        }}>
+                          {fmtShortDate(baselineStartDate)}
+                        </div>
+                      )}
+                      {/* Right thumb floating date */}
+                      {dragThumb === 1 && baselineEndDate && (
+                        <div style={{
+                          position:"absolute", left:`${rightPct}%`, top:-22,
+                          transform:"translateX(-50%)",
+                          background:"#1e293b", color:"#f1f5f9",
+                          fontSize:11, fontWeight:700, padding:"3px 8px",
+                          borderRadius:6, whiteSpace:"nowrap",
+                          pointerEvents:"none", zIndex:30,
+                          boxShadow:"0 2px 8px rgba(0,0,0,0.35)",
+                        }}>
+                          {fmtShortDate(baselineEndDate)}
+                        </div>
+                      )}
+
                       <SliderPrimitive.Track style={{
                         position:"relative", flexGrow:1,
-                        height:14, borderRadius:9999, overflow:"hidden", background:"#e2e8f0",
+                        height:10, borderRadius:9999, overflow:"hidden",
+                        background: dark ? "#1e293b" : "#e2e8f0",
                       }}>
                         <div style={{ position:"absolute", top:0, left:0,
                           width:`${leftPct}%`, height:"100%",
-                          background:"linear-gradient(90deg,#cbd5e1,#e2e8f0)" }} />
+                          background: dark ? "#0f172a" : "#cbd5e1" }} />
                         <div style={{ position:"absolute", top:0, left:`${leftPct}%`,
                           width:`${Math.max(0,rightPct-leftPct)}%`, height:"100%",
                           background:"linear-gradient(90deg,#34d399,#60a5fa)" }} />
@@ -507,118 +664,59 @@ export default function Dashboard() {
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
 
-                      <SliderPrimitive.Thumb className="slider-thumb"
-                        title="Drag to set baseline start"
+                      {/* Left thumb — clean pill lever */}
+                      <SliderPrimitive.Thumb
+                        className="slider-thumb"
+                        onPointerDown={() => setDragThumb(0)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
-                          width:36, height:36, borderRadius:"50%", background:"white",
-                          border:"3px solid #34d399", boxShadow:"0 3px 12px rgba(52,211,153,0.5)",
-                          cursor:"grab", fontSize:16, outline:"none", zIndex:10,
-                          transition:"transform 0.15s ease, box-shadow 0.15s ease" }}>🔵
+                          width:22, height:40, background:"transparent",
+                          border:"none", outline:"none", cursor:"grab", zIndex:10,
+                          flexShrink:0 }}
+                      >
+                        <span style={{
+                          display:"block", width:7, height:28, borderRadius:9999,
+                          background: dark ? "#e2e8f0" : "white",
+                          border:"2px solid #34d399",
+                          boxShadow:"0 2px 8px rgba(52,211,153,0.5), 0 1px 3px rgba(0,0,0,0.2)",
+                        }} />
                       </SliderPrimitive.Thumb>
 
-                      <SliderPrimitive.Thumb className="slider-thumb"
-                        title="Drag to set baseline end"
+                      {/* Right thumb — clean pill lever */}
+                      <SliderPrimitive.Thumb
+                        className="slider-thumb"
+                        onPointerDown={() => setDragThumb(1)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
-                          width:36, height:36, borderRadius:"50%", background:"white",
-                          border:"3px solid #60a5fa", boxShadow:"0 3px 12px rgba(96,165,250,0.5)",
-                          cursor:"grab", fontSize:16, outline:"none", zIndex:10,
-                          transition:"transform 0.15s ease, box-shadow 0.15s ease" }}>🐢
+                          width:22, height:40, background:"transparent",
+                          border:"none", outline:"none", cursor:"grab", zIndex:10,
+                          flexShrink:0 }}
+                      >
+                        <span style={{
+                          display:"block", width:7, height:28, borderRadius:9999,
+                          background: dark ? "#e2e8f0" : "white",
+                          border:"2px solid #a78bfa",
+                          boxShadow:"0 2px 8px rgba(167,139,250,0.5), 0 1px 3px rgba(0,0,0,0.2)",
+                        }} />
                       </SliderPrimitive.Thumb>
                     </SliderPrimitive.Root>
                   </div>
 
+                  {/* Track date labels + legend */}
                   <div style={{ display:"flex", justifyContent:"space-between",
-                    fontSize:11, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
-                    <span>⏮ {fmtSliderDate(allRouteWeeks[0]?.weekKey)}</span>
-                    <span style={{ display:"flex", gap:6, alignItems:"center" }}>
-                      <span style={{ display:"inline-block", width:10, height:10,
-                        borderRadius:2, background:"linear-gradient(90deg,#34d399,#60a5fa)" }} />
-                      🔵 baseline &nbsp;
-                      <span style={{ display:"inline-block", width:10, height:10,
-                        borderRadius:2, background:"linear-gradient(90deg,#a78bfa,#f472b6)" }} />
-                      🐢 recent ({periodLabel})
+                    fontSize:11, color:"hsl(var(--muted-foreground))", marginTop:6 }}>
+                    <span style={{ fontWeight:600 }}>{fmtSliderDate(allRouteWeeks[0]?.weekKey)}</span>
+                    <span style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
+                        <span style={{ display:"inline-block", width:20, height:3,
+                          borderRadius:2, background:"linear-gradient(90deg,#34d399,#60a5fa)" }} />
+                        baseline
+                      </span>
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
+                        <span style={{ display:"inline-block", width:20, height:3,
+                          borderRadius:2, background:"linear-gradient(90deg,#a78bfa,#f472b6)" }} />
+                        recent ({periodLabel})
+                      </span>
                     </span>
-                    <span>{fmtSliderDate(lastDate)} ⏭</span>
-                  </div>
-
-                  {/* Baseline vs Recent tiles */}
-                  <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"stretch" }}>
-                    {/* Baseline tile */}
-                    <div style={{ flex:"1 1 160px",
-                      background: dark ? "rgba(52,211,153,0.12)" : "#f0fdf4",
-                      border: dark ? "1px solid rgba(52,211,153,0.3)" : "1px solid #6ee7b7",
-                      borderRadius:14, padding:"10px 14px" }}>
-                      <p style={{ fontSize:11, fontWeight:700, textTransform:"uppercase",
-                        letterSpacing:"0.06em", color: dark?"#34d399":"#065f46", marginBottom:4 }}>
-                        🔵 Baseline · {fmtSliderDate(baselineStartDate)} → {fmtSliderDate(baselineEndDate)}
-                      </p>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800,
-                        fontSize:26, lineHeight:1, color: dark?"#f1f5f9":"#1e293b", marginBottom:2 }}>
-                        {baselineSpeed || "—"}
-                        <span style={{ fontSize:13, fontWeight:600 }}> km/h</span>
-                      </p>
-                      <p style={{ fontSize:11, color: dark?"#94a3b8":"#065f46" }}>
-                        avg trip: {fmtDuration(baselineDuration)}
-                      </p>
-                      <p style={{ fontSize:10, color: dark?"#64748b":"#065f46", opacity:0.7, marginTop:2 }}>
-                        {baselineWeeks.length} wk · {baselineWeeks.reduce((a,b)=>a+b.count,0)} trips
-                      </p>
-                    </div>
-
-                    {/* Delta */}
-                    <div style={{ display:"flex", flexDirection:"column",
-                      alignItems:"center", justifyContent:"center", padding:"0 4px" }}>
-                      <span style={{ fontSize:22 }}>→</span>
-                      {recentSpeed > 0 && baselineSpeed > 0 && (
-                        <span style={{ fontFamily:"var(--app-font-display)", fontWeight:800,
-                          fontSize:13, marginTop:2,
-                          color: speedDiff > 0 ? "#059669" : speedDiff < 0 ? "#dc2626" : "#92400e" }}>
-                          {speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "="}{" "}
-                          {Math.abs(Math.round(speedDiff*10)/10)} km/h
-                          {" "}({speedPct > 0 ? "+" : ""}{speedPct}%)
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Recent tile */}
-                    <div style={{ flex:"1 1 160px",
-                      background: recentSpeed > baselineSpeed
-                        ? dark ? "rgba(96,165,250,0.12)" : "#eff6ff"
-                        : recentSpeed < baselineSpeed
-                        ? dark ? "rgba(239,68,68,0.10)" : "#fff1f2"
-                        : dark ? "rgba(251,191,36,0.10)" : "#fffbeb",
-                      border: recentSpeed > baselineSpeed
-                        ? dark ? "1px solid rgba(96,165,250,0.3)" : "1px solid #bfdbfe"
-                        : recentSpeed < baselineSpeed
-                        ? dark ? "1px solid rgba(239,68,68,0.3)" : "1px solid #fca5a5"
-                        : dark ? "1px solid rgba(251,191,36,0.3)" : "1px solid #fcd34d",
-                      borderRadius:14, padding:"10px 14px" }}>
-                      <p style={{ fontSize:11, fontWeight:700, textTransform:"uppercase",
-                        letterSpacing:"0.06em", color: dark?"#94a3b8":"#1e3a5f", marginBottom:4 }}>
-                        🐢 Recent ({periodLabel}) ·{" "}
-                        {recentStartDate ? `${fmtSliderDate(recentStartDate)} → now` : "—"}
-                      </p>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800,
-                        fontSize:26, lineHeight:1, marginBottom:2,
-                        color: recentSpeed > baselineSpeed
-                          ? dark ? "#60a5fa" : "#1d4ed8"
-                          : recentSpeed < baselineSpeed
-                          ? "#dc2626"
-                          : dark ? "#fbbf24" : "#92400e" }}>
-                        {recentSpeed || (recentWeeks.length === 0 ? "No recent" : "—")}
-                        {recentSpeed > 0 && <span style={{ fontSize:13, fontWeight:600 }}> km/h</span>}
-                      </p>
-                      <p style={{ fontSize:11, color: dark?"#94a3b8":"#1e3a5f" }}>
-                        {recentWeeks.length === 0
-                          ? `No data in last ${periodLabel} after baseline`
-                          : `avg trip: ${fmtDuration(recentDuration)}`}
-                      </p>
-                      {recentWeeks.length > 0 && (
-                        <p style={{ fontSize:10, color: dark?"#64748b":"#1e3a5f", opacity:0.7, marginTop:2 }}>
-                          {recentWeeks.length} wk · {recentWeeks.reduce((a,b)=>a+b.count,0)} trips
-                        </p>
-                      )}
-                    </div>
+                    <span style={{ fontWeight:600 }}>{fmtSliderDate(lastDate)}</span>
                   </div>
                 </div>
               )}
@@ -628,21 +726,86 @@ export default function Dashboard() {
                 background: dark ? "rgba(30,40,60,0.8)" : v.bg,
                 border:`2px solid ${v.border}`,
                 borderRadius:"1.5rem", padding:"1.5rem 2rem",
-                maxWidth:660, margin:"0 auto", textAlign:"center",
               }}>
-                <div className="animate-bounce-in" key={verdictKey}
-                  style={{ fontSize:"4rem", lineHeight:1, marginBottom:10 }}>
-                  {v.face}
-                </div>
-                <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
-                  color: dark?"#f1f5f9":v.tc }}>
-                  {v.msg}
-                </p>
-                {verdictSubtext && (
-                  <p style={{ marginTop:8, fontSize:12,
-                    color: dark?"#94a3b8":v.tc, opacity:0.85, lineHeight:1.6 }}>
-                    {verdictSubtext}
+                {/* Headline */}
+                <div style={{ textAlign:"center" }}>
+                  <div className="animate-bounce-in" key={verdictKey}
+                    style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
+                    {v.face}
+                  </div>
+                  <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
+                    color: dark?"#f1f5f9":v.tc }}>
+                    {v.msg}
                   </p>
+                  {verdictSubtext && (
+                    <p style={{ marginTop:6, fontSize:12,
+                      color: dark?"#94a3b8":v.tc, opacity:0.85, lineHeight:1.6 }}>
+                      {verdictSubtext}
+                    </p>
+                  )}
+                </div>
+
+                {/* Speed numbers — baseline vs recent */}
+                {baselineSpeed > 0 && (
+                  <div style={{ display:"flex", justifyContent:"center", alignItems:"center",
+                    gap:16, marginTop:18, flexWrap:"wrap" }}>
+                    <div style={{ textAlign:"center" }}>
+                      <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                        letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>
+                        Baseline
+                      </p>
+                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:30,
+                        color: dark?"#f1f5f9":v.tc, lineHeight:1 }}>
+                        {baselineSpeed}
+                        <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>
+                      </p>
+                      <p style={{ fontSize:10, color: dark?"#475569":"#94a3b8", marginTop:3 }}>
+                        {fmtShortDate(baselineStartDate)}–{fmtShortDate(baselineEndDate)}
+                      </p>
+                    </div>
+
+                    {recentSpeed > 0 && (
+                      <>
+                        <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
+                          color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8",
+                          fontFamily:"var(--app-font-display)", fontWeight:800 }}>
+                          <span style={{ fontSize:22 }}>
+                            {speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "—"}
+                          </span>
+                          <span style={{ fontSize:12, marginTop:2 }}>
+                            {Math.abs(Math.round(speedDiff * 10) / 10)} km/h
+                          </span>
+                        </div>
+
+                        <div style={{ textAlign:"center" }}>
+                          <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                            letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>
+                            Recent
+                          </p>
+                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:30,
+                            color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171"
+                              : dark?"#f1f5f9":v.tc, lineHeight:1 }}>
+                            {recentSpeed}
+                            <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>
+                          </p>
+                          <p style={{ fontSize:10, color: dark?"#475569":"#94a3b8", marginTop:3 }}>
+                            {fmtShortDate(recentStartDate)}–{fmtShortDate(lastDate)}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Napkin chart */}
+                {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
+                  <div style={{ marginTop:16, opacity:0.9 }}>
+                    <NapkinChart
+                      baselineWeeks={baselineWeeks}
+                      recentWeeks={recentWeeks}
+                      dark={dark}
+                    />
+                  </div>
                 )}
               </div>
 

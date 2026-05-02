@@ -325,6 +325,8 @@
 .chip-tod      { background: linear-gradient(135deg, #f59e0b, #ef4444); box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
 .chip-worsened { background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 4px 14px rgba(239,68,68,0.35); }
 .chip-improved { background: linear-gradient(135deg, #10b981, #22c55e); box-shadow: 0 4px 14px rgba(16,185,129,0.4); }
+.chip-city     { background: linear-gradient(135deg, #334155, #475569); box-shadow: 0 2px 8px rgba(71,85,105,0.3);
+                 font-size: 0.78em; padding: 0.1em 0.55em; font-weight: 700; }
 
 .chip-route:hover    { box-shadow: 0 6px 20px rgba(16,185,129,0.5); }
 .chip-period:hover   { box-shadow: 0 6px 20px rgba(139,92,246,0.5); }

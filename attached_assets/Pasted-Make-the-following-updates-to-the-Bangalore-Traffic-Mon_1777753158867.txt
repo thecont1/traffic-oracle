@@ -1,0 +1,29 @@
+Make the following updates to the Bangalore Traffic Monitor dashboard:
+
+1. REMOVE THE MAP entirely. No map, no Leaflet, no legend. Clean that space out completely.
+
+2. RENAME THE APP to "TraffiCoracle" with a city chip in the header. Header reads:
+   🚦 TraffiCoracle [📍 Bangalore]
+   The [📍 Bangalore] is a chip in the same playful style as the question chips — clickable but currently inert (placeholder for future multi-city support). Keep "Live data · 59,852 records" subtitle.
+
+3. QUESTION SENTENCE — suggest a reflow-friendly structure that keeps all chips but wraps more gracefully at different screen widths. Try:
+   "On [🛣️ ROUTE], have things [🚦 worsened] over [📅 PERIOD] during [⏰ TIME_OF_DAY]?"
+   This puts the route chip first (most important noun), shortens the line, and the natural clause break after "worsened" means wrapping is less ugly.
+
+4. BASELINE WINDOW SLIDER — critical fix: the slider must always show the FULL span of available data in the dataset (first record date to last record date), completely independent of whatever PERIOD chip is selected in the question. The PERIOD chip filters what counts as "recent". The slider independently sets the baseline comparison window anywhere in the full dataset history. These are two separate controls. Fix the logic so they don't interfere with each other.
+
+5. VERDICT BOX — replace the small grey technical line at the bottom of the verdict box:
+   FROM: "Baseline 30 Mar 26–13 Apr 26 (23.3 km/h) vs recent 20 Apr 26–27 Apr 26 (22.7 km/h) on East Outer Ring"
+   TO: a friendly single sentence that spells out the actual start and end place names (from csv-routes.csv label_full or origin/destination fields), e.g.:
+   "Comparing baseline (30 Mar–13 Apr) to recent (20 Apr–27 Apr) · Tin Factory → Marathahalli Bridge · weekday afternoons"
+   Use the full origin→destination from the routes CSV, not the route shortname.
+
+6. KPI CARDS — unify to a single consistent card style. Remove the four different background colours (green, blue, brown, purple). Use one neutral dark card style for all four.
+
+7. RENAME "P95 WORST CASE" to "Bad day trip" with a tooltip (hover) that says "1-in-20 trips take this long". Also add a small config value in a new file called config.json at the root of the project with the key "worst_case_percentile": 95 — this value should drive the p95 calculation so it can be changed without touching the code.
+
+8. REMOVE "Weekly Sample Count" and "Hourly Distribution" charts entirely from the main view. No collapse, no hide — just gone.
+
+9. REMOVE the helper text "Click chips to cycle options · Click map lines to pick a route · Drag 🌊🦬 handles to set baseline" — it references the map which is gone. Replace with a single softer line: "Tap any highlighted word to explore differently."
+
+Incremental: Remove map + rename app first, checkpoint. Fix slider logic, checkpoint. Verdict sentence + KPI unification, checkpoint.

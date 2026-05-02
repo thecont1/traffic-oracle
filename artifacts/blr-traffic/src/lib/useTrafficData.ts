@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import Papa from "papaparse";
+import appConfig from "../config.json";
+
+const WORST_CASE_PCT: number =
+  (appConfig as Record<string, number>).worst_case_percentile ?? 95;
 
 const ROUTES_URL =
   "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv";
@@ -87,7 +91,7 @@ function percentile(sorted: number[], p: number): number {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
 }
 
-function matchesToD(hour: number, dow: number, tod: TimeOfDay): boolean {
+export function matchesToD(hour: number, dow: number, tod: TimeOfDay): boolean {
   if (tod === "all") return true;
   const isWeekend = dow === 0 || dow === 6;
   if (tod === "weekends") return isWeekend;
@@ -98,17 +102,7 @@ function matchesToD(hour: number, dow: number, tod: TimeOfDay): boolean {
   return false;
 }
 
-function getPeriodCutoff(period: TimePeriod): Date {
-  const now = new Date();
-  const d = new Date(now);
-  if (period === "1m") d.setMonth(d.getMonth() - 1);
-  else if (period === "3m") d.setMonth(d.getMonth() - 3);
-  else if (period === "6m") d.setMonth(d.getMonth() - 6);
-  else d.setFullYear(d.getFullYear() - 1);
-  return d;
-}
-
-function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
+export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
   const byWeek = new Map<string, TrafficRow[]>();
   for (const r of rows) {
     const arr = byWeek.get(r.weekKey) ?? [];
@@ -128,7 +122,7 @@ function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
         avgSpeed: Math.round(avgSpeed * 10) / 10,
         avgDuration: Math.round(avgDuration * 10) / 10,
         medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
-        p95Duration: Math.round(percentile(durations, 95) * 10) / 10,
+        p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
         count: wrows.length,
       };
     });
@@ -139,19 +133,19 @@ function computeStats(rows: TrafficRow[]): StatsResult {
   const durations = rows.map((r) => r.duration_min).sort((a, b) => a - b);
   const speeds = rows.map((r) => r.speed_kmh);
   return {
-    mean: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
-    median: Math.round(percentile(durations, 50) * 10) / 10,
-    p95: Math.round(percentile(durations, 95) * 10) / 10,
-    avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+    mean:    Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+    median:  Math.round(percentile(durations, 50) * 10) / 10,
+    p95:     Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+    avgSpeed:Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
     count: rows.length,
   };
 }
 
 export function useTrafficData() {
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [allRows, setAllRows] = useState<TrafficRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [routes,   setRoutes]   = useState<Route[]>([]);
+  const [allRows,  setAllRows]  = useState<TrafficRow[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
   const [rowCount, setRowCount] = useState(0);
 
   useEffect(() => {
@@ -162,9 +156,7 @@ export function useTrafficData() {
     const fetchCsv = (url: string): Promise<Record<string, string>[]> =>
       new Promise((resolve, reject) => {
         Papa.parse(url, {
-          download: true,
-          header: true,
-          skipEmptyLines: true,
+          download: true, header: true, skipEmptyLines: true,
           complete: (r) => resolve(r.data as Record<string, string>[]),
           error: (e) => reject(e),
         });
@@ -175,8 +167,8 @@ export function useTrafficData() {
         if (cancelled) return;
 
         const routeList: Route[] = routesRaw.map((r) => ({
-          route_code: getCol(r, "route_code").trim(),
-          label_full: getCol(r, "label_full").trim(),
+          route_code:  getCol(r, "route_code").trim(),
+          label_full:  getCol(r, "label_full").trim(),
           label_short: getCol(r, "label_short").trim(),
         }));
 
@@ -191,7 +183,9 @@ export function useTrafficData() {
           const timeRaw = getCol(r, "time").trim();
           if (!dateRaw) continue;
 
-          const tsString = timeRaw ? `${dateRaw}T${timeRaw}:00` : `${dateRaw}T12:00:00`;
+          const tsString = timeRaw
+            ? `${dateRaw}T${timeRaw}:00`
+            : `${dateRaw}T12:00:00`;
           const ts = new Date(tsString);
           if (isNaN(ts.getTime())) continue;
 
@@ -200,11 +194,12 @@ export function useTrafficData() {
           if (!route) continue;
 
           const duration_min = parseNum(getCol(r, "duration"));
-          const distance_km = parseNum(getCol(r, "distance")) || 10;
+          const distance_km  = parseNum(getCol(r, "distance")) || 10;
 
           if (duration_min <= 0 || duration_min > 300) continue;
 
-          const speed_kmh = Math.round((distance_km / (duration_min / 60)) * 10) / 10;
+          const speed_kmh =
+            Math.round((distance_km / (duration_min / 60)) * 10) / 10;
           if (speed_kmh <= 0 || speed_kmh > 150) continue;
 
           rows.push({
@@ -238,21 +233,43 @@ export function useTrafficData() {
   return { routes, allRows, loading, error, rowCount };
 }
 
+/** Full dataset weekly aggregates for a route + tod — no period cutoff.
+ *  Used by the baseline slider so it always spans all available history. */
+export function useAllRouteWeeks(
+  allRows: TrafficRow[],
+  selectedRoute: string,
+  tod: TimeOfDay,
+): WeeklyAggregate[] {
+  return useMemo(() => {
+    const rows = allRows.filter(
+      (r) =>
+        r.label_short === selectedRoute &&
+        matchesToD(r.hour, r.dayOfWeek, tod),
+    );
+    return aggregateRows(rows);
+  }, [allRows, selectedRoute, tod]);
+}
+
 export function useFilteredData(
   allRows: TrafficRow[],
   selectedRoute: string,
   period: TimePeriod,
   tod: TimeOfDay,
-  baselineRoute: string = "Hosur Road"
+  baselineRoute: string = "Hosur Road",
 ) {
   return useMemo(() => {
-    const cutoff = getPeriodCutoff(period);
+    const now = new Date();
+    const cutoff = new Date(now);
+    if (period === "1m") cutoff.setMonth(cutoff.getMonth() - 1);
+    else if (period === "3m") cutoff.setMonth(cutoff.getMonth() - 3);
+    else if (period === "6m") cutoff.setMonth(cutoff.getMonth() - 6);
+    else cutoff.setFullYear(cutoff.getFullYear() - 1);
 
     const filtered = allRows.filter(
       (r) =>
         r.label_short === selectedRoute &&
         r.timestamp >= cutoff &&
-        matchesToD(r.hour, r.dayOfWeek, tod)
+        matchesToD(r.hour, r.dayOfWeek, tod),
     );
 
     const baseline = allRows.filter(
@@ -260,45 +277,28 @@ export function useFilteredData(
         r.label_short === baselineRoute &&
         r.label_short !== selectedRoute &&
         r.timestamp >= cutoff &&
-        matchesToD(r.hour, r.dayOfWeek, tod)
+        matchesToD(r.hour, r.dayOfWeek, tod),
     );
 
     const selectedWeekly = aggregateRows(filtered);
     const baselineWeekly = aggregateRows(baseline);
-    const selectedStats = computeStats(filtered);
-    const baselineStats = computeStats(baseline);
+    const selectedStats  = computeStats(filtered);
+    const baselineStats  = computeStats(baseline);
 
     const merged: WeeklyAggregate[] = selectedWeekly.map((sw) => {
       const bw = baselineWeekly.find((b) => b.weekKey === sw.weekKey);
       return {
         ...sw,
-        baselineSpeed: bw?.avgSpeed ?? null,
+        baselineSpeed:    bw?.avgSpeed    ?? null,
         baselineDuration: bw?.avgDuration ?? null,
       };
     });
 
-    let trend: "improved" | "worsened" | "stable" | "insufficient" = "insufficient";
-    if (selectedWeekly.length >= 4) {
-      const half = Math.floor(selectedWeekly.length / 2);
-      const early = selectedWeekly.slice(0, half);
-      const late = selectedWeekly.slice(-half);
-      const earlyAvg = early.reduce((a, b) => a + b.avgSpeed, 0) / early.length;
-      const lateAvg = late.reduce((a, b) => a + b.avgSpeed, 0) / late.length;
-      const diff = ((lateAvg - earlyAvg) / earlyAvg) * 100;
-      if (diff > 5) trend = "improved";
-      else if (diff < -5) trend = "worsened";
-      else trend = "stable";
-    }
-
     return {
-      filtered,
-      baseline,
-      selectedWeekly,
-      baselineWeekly,
-      selectedStats,
-      baselineStats,
+      filtered, baseline,
+      selectedWeekly, baselineWeekly,
+      selectedStats, baselineStats,
       merged,
-      trend,
     };
   }, [allRows, selectedRoute, period, tod, baselineRoute]);
 }

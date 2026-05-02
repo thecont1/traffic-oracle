@@ -243,38 +243,60 @@ export default function Dashboard() {
     allRows, selectedRoute, period, tod,
   );
 
-  /* ── Data trend (from slider baseline vs recent) ─────────── */
-  const dataTrend: "improved"|"worsened"|"stable"|"insufficient" =
+  /* ── Data trend — absolute threshold from config ─────────── */
+  const VERDICT_THRESHOLD =
+    (appConfig as Record<string, number>).verdict_threshold_kmh ?? 0.5;
+
+  type DataTrend = "improved" | "worsened" | "stable" | "insufficient";
+  const dataTrend: DataTrend =
     recentSpeed > 0 && baselineSpeed > 0 && recentWeeks.length >= 1
-      ? recentSpeed > baselineSpeed * 1.05 ? "improved"
-      : recentSpeed < baselineSpeed * 0.95 ? "worsened"
+      ? speedDiff >  VERDICT_THRESHOLD ? "improved"
+      : speedDiff < -VERDICT_THRESHOLD ? "worsened"
       : "stable"
       : "insufficient";
 
-  /* verdict — flipped when question is "worsened?" */
-  type TrendKey = "improved"|"worsened"|"stable"|"insufficient";
-  const verdictTrend: TrendKey = questionMode === "improved" ? dataTrend : ({
-    improved: "worsened", worsened: "improved", stable: "stable", insufficient: "insufficient",
-  } as Record<TrendKey,TrendKey>)[dataTrend];
+  /* ── Verdict: hypothesis (chip) × data result (2-D matrix) ── */
+  /* The chip is the USER'S HYPOTHESIS. The data either confirms
+     or contradicts it. These are fully independent. */
+  type VerdictKey =
+    | "confirmed_good"      // asked improved, data improved
+    | "confirmed_bad"       // asked worsened, data worsened
+    | "contradicted_better" // asked worsened, data improved
+    | "contradicted_worse"  // asked improved, data worsened
+    | "no_change"           // data stable (either hypothesis)
+    | "insufficient";       // not enough data
 
-  const VERDICT: Record<TrendKey, {face:string; msg:string; border:string; bg:string; tc:string}> = {
-    improved: {
+  const verdictKey: VerdictKey =
+    dataTrend === "insufficient" ? "insufficient"
+    : dataTrend === "stable"     ? "no_change"
+    : questionMode === "improved"
+      ? dataTrend === "improved" ? "confirmed_good"      : "contradicted_worse"
+      : dataTrend === "worsened" ? "confirmed_bad"       : "contradicted_better";
+
+  const VERDICT: Record<VerdictKey, {face:string; msg:string; border:string; bg:string; tc:string}> = {
+    confirmed_good: {
       face: "🤩",
-      msg:  questionMode === "improved"
-        ? "Yes! It's gotten better — speed is up. 🎉"
-        : "Actually, roads have improved — not worsened!",
+      msg:  "Yes! It's gotten better — speed is up. 🎉",
       border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46",
     },
-    worsened: {
+    confirmed_bad: {
       face: "🥵",
-      msg:  questionMode === "worsened"
-        ? "Yep, traffic is heavier — roads have worsened."
-        : "Nope — things have actually slowed down.",
+      msg:  "Yep, it's gotten worse — traffic is heavier.",
       border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b",
     },
-    stable: {
-      face: "🫤",
-      msg:  "Meh. No real change either way.",
+    contradicted_better: {
+      face: "🤩",
+      msg:  "Actually, things have improved! Roads are faster.",
+      border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46",
+    },
+    contradicted_worse: {
+      face: "🥵",
+      msg:  "Actually, things have gotten worse — traffic is heavier.",
+      border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b",
+    },
+    no_change: {
+      face: "😐",
+      msg:  "Not really — no meaningful change either way.",
       border:"#fcd34d", bg:"#fffbeb", tc:"#92400e",
     },
     insufficient: {
@@ -283,11 +305,11 @@ export default function Dashboard() {
       border:"#c4b5fd", bg:"#f5f3ff", tc:"#5b21b6",
     },
   };
-  const v      = VERDICT[verdictTrend];
+  const v      = VERDICT[verdictKey];
   const colors = dark ? DC : LC;
 
   /* Verdict subtitle — friendly sentence with origin→destination */
-  const verdictSubtext = verdictTrend !== "insufficient" && baselineStartDate
+  const verdictSubtext = verdictKey !== "insufficient" && baselineStartDate
     ? `Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${fmtShortDate(lastDate)}) · ${routeEndpoints} · ${todLabel}`
     : undefined;
 
@@ -608,7 +630,7 @@ export default function Dashboard() {
                 borderRadius:"1.5rem", padding:"1.5rem 2rem",
                 maxWidth:660, margin:"0 auto", textAlign:"center",
               }}>
-                <div className="animate-bounce-in" key={verdictTrend}
+                <div className="animate-bounce-in" key={verdictKey}
                   style={{ fontSize:"4rem", lineHeight:1, marginBottom:10 }}>
                   {v.face}
                 </div>

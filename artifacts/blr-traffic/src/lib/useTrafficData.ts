@@ -32,6 +32,8 @@ export interface WeeklyAggregate {
   medianDuration: number;
   p95Duration: number;
   count: number;
+  baselineSpeed?: number | null;
+  baselineDuration?: number | null;
 }
 
 export interface StatsResult {
@@ -47,14 +49,15 @@ export type TimeOfDay =
   | "weekday_morning"
   | "weekday_afternoon"
   | "weekday_evening"
-  | "weekends";
+  | "weekends"
+  | "all";
 
 function getCol(row: Record<string, string>, ...keys: string[]): string {
   for (const k of keys) {
     if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
-    const lk = k.toLowerCase();
+    const lk = k.toLowerCase().trim();
     for (const rk of Object.keys(row)) {
-      if (rk.toLowerCase() === lk) return row[rk];
+      if (rk.toLowerCase().trim() === lk) return row[rk];
     }
   }
   return "";
@@ -68,9 +71,11 @@ function parseNum(s: string): number {
 function toWeekKey(d: Date): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const mon = new Date(d);
-  mon.setDate(diff);
-  return mon.toISOString().slice(0, 10);
+  const mon = new Date(d.getFullYear(), d.getMonth(), diff);
+  const y = mon.getFullYear();
+  const m = String(mon.getMonth() + 1).padStart(2, "0");
+  const dd = String(mon.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -83,6 +88,7 @@ function percentile(sorted: number[], p: number): number {
 }
 
 function matchesToD(hour: number, dow: number, tod: TimeOfDay): boolean {
+  if (tod === "all") return true;
   const isWeekend = dow === 0 || dow === 6;
   if (tod === "weekends") return isWeekend;
   if (isWeekend) return false;
@@ -94,10 +100,12 @@ function matchesToD(hour: number, dow: number, tod: TimeOfDay): boolean {
 
 function getPeriodCutoff(period: TimePeriod): Date {
   const now = new Date();
-  if (period === "1m") return new Date(now.setMonth(now.getMonth() - 1));
-  if (period === "3m") return new Date(now.setMonth(now.getMonth() - 3));
-  if (period === "6m") return new Date(now.setMonth(now.getMonth() - 6));
-  return new Date(now.setFullYear(now.getFullYear() - 1));
+  const d = new Date(now);
+  if (period === "1m") d.setMonth(d.getMonth() - 1);
+  else if (period === "3m") d.setMonth(d.getMonth() - 3);
+  else if (period === "6m") d.setMonth(d.getMonth() - 6);
+  else d.setFullYear(d.getFullYear() - 1);
+  return d;
 }
 
 function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
@@ -173,50 +181,30 @@ export function useTrafficData() {
         }));
 
         const routeByCode = new Map<string, Route>();
-        const routeByLabel = new Map<string, Route>();
         for (const rt of routeList) {
-          if (rt.route_code) routeByCode.set(rt.route_code.toLowerCase(), rt);
-          if (rt.label_short) routeByLabel.set(rt.label_short.toLowerCase(), rt);
-          if (rt.label_full) routeByLabel.set(rt.label_full.toLowerCase(), rt);
+          if (rt.route_code) routeByCode.set(rt.route_code, rt);
         }
-
-        const DEFAULT_DISTANCE = 10;
 
         const rows: TrafficRow[] = [];
         for (const r of trafficRaw) {
-          const tsRaw = getCol(r, "timestamp", "datetime", "date", "time", "recorded_at", "created_at");
-          if (!tsRaw) continue;
-          const ts = new Date(tsRaw);
+          const dateRaw = getCol(r, "date").trim();
+          const timeRaw = getCol(r, "time").trim();
+          if (!dateRaw) continue;
+
+          const tsString = timeRaw ? `${dateRaw}T${timeRaw}:00` : `${dateRaw}T12:00:00`;
+          const ts = new Date(tsString);
           if (isNaN(ts.getTime())) continue;
 
-          const rcRaw = getCol(r, "route_code", "route_id").trim().toLowerCase();
-          const labelRaw = getCol(r, "label_short", "label", "road", "route", "road_name").trim().toLowerCase();
-
-          let route = routeByCode.get(rcRaw) ?? routeByLabel.get(labelRaw) ?? routeByLabel.get(rcRaw);
-          if (!route && rcRaw) {
-            for (const [k, v] of routeByCode) {
-              if (k.includes(rcRaw) || rcRaw.includes(k)) { route = v; break; }
-            }
-          }
-          if (!route && labelRaw) {
-            for (const [k, v] of routeByLabel) {
-              if (k.includes(labelRaw) || labelRaw.includes(k)) { route = v; break; }
-            }
-          }
+          const rcRaw = getCol(r, "route_code").trim();
+          const route = routeByCode.get(rcRaw);
           if (!route) continue;
 
-          const durationRaw = getCol(r, "duration_min", "duration", "travel_time_min", "travel_time", "time_min", "avg_duration_min");
-          const distanceRaw = getCol(r, "distance_km", "distance", "dist_km");
-          const speedRaw = getCol(r, "speed_kmh", "speed", "avg_speed_kmh", "avg_speed");
-
-          const duration_min = parseNum(durationRaw);
-          const distance_km = parseNum(distanceRaw) || DEFAULT_DISTANCE;
-          let speed_kmh = parseNum(speedRaw);
-          if (!speed_kmh && duration_min > 0) {
-            speed_kmh = distance_km / (duration_min / 60);
-          }
+          const duration_min = parseNum(getCol(r, "duration"));
+          const distance_km = parseNum(getCol(r, "distance")) || 10;
 
           if (duration_min <= 0 || duration_min > 300) continue;
+
+          const speed_kmh = Math.round((distance_km / (duration_min / 60)) * 10) / 10;
           if (speed_kmh <= 0 || speed_kmh > 150) continue;
 
           rows.push({
@@ -225,7 +213,7 @@ export function useTrafficData() {
             label_short: route.label_short,
             duration_min: Math.round(duration_min * 10) / 10,
             distance_km,
-            speed_kmh: Math.round(speed_kmh * 10) / 10,
+            speed_kmh,
             hour: ts.getHours(),
             dayOfWeek: ts.getDay(),
             weekKey: toWeekKey(ts),
@@ -255,7 +243,7 @@ export function useFilteredData(
   selectedRoute: string,
   period: TimePeriod,
   tod: TimeOfDay,
-  baselineRoute: string = "Airport Expy"
+  baselineRoute: string = "Hosur Road"
 ) {
   return useMemo(() => {
     const cutoff = getPeriodCutoff(period);
@@ -270,6 +258,7 @@ export function useFilteredData(
     const baseline = allRows.filter(
       (r) =>
         r.label_short === baselineRoute &&
+        r.label_short !== selectedRoute &&
         r.timestamp >= cutoff &&
         matchesToD(r.hour, r.dayOfWeek, tod)
     );
@@ -279,7 +268,7 @@ export function useFilteredData(
     const selectedStats = computeStats(filtered);
     const baselineStats = computeStats(baseline);
 
-    const merged = selectedWeekly.map((sw) => {
+    const merged: WeeklyAggregate[] = selectedWeekly.map((sw) => {
       const bw = baselineWeekly.find((b) => b.weekKey === sw.weekKey);
       return {
         ...sw,

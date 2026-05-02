@@ -265,6 +265,19 @@
   background: linear-gradient(135deg, #0f1728 0%, #0d1a1f 40%, #130f28 100%);
 }
 
+/* ── Leaflet overrides ────────────────────────────────────────── */
+.leaflet-container { font-family: var(--app-font-sans) !important; }
+.leaflet-tooltip   { border-radius: 8px !important; padding: 6px 10px !important;
+                     font-size: 13px !important; border: 1px solid hsl(var(--border)) !important;
+                     box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
+
+@keyframes route-pulse {
+  0%, 100% { stroke-opacity: 1; }
+  50%       { stroke-opacity: 0.45; }
+}
+.route-selected { animation: route-pulse 1.4s ease-in-out infinite; }
+.route-glow     { animation: route-pulse 1.4s ease-in-out infinite reverse; }
+
 /* ── Sentence chip ────────────────────────────────────────────── */
 .chip {
   display: inline-flex;
@@ -290,13 +303,17 @@
 .chip:active {
   transform: scale(0.94);
 }
-.chip-route  { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 4px 14px rgba(16,185,129,0.35); }
-.chip-period { background: linear-gradient(135deg, #8b5cf6, #3b82f6); box-shadow: 0 4px 14px rgba(139,92,246,0.35); }
-.chip-tod    { background: linear-gradient(135deg, #f59e0b, #ef4444); box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
+.chip-route    { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 4px 14px rgba(16,185,129,0.35); }
+.chip-period   { background: linear-gradient(135deg, #8b5cf6, #3b82f6); box-shadow: 0 4px 14px rgba(139,92,246,0.35); }
+.chip-tod      { background: linear-gradient(135deg, #f59e0b, #ef4444); box-shadow: 0 4px 14px rgba(245,158,11,0.35); }
+.chip-worsened { background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 4px 14px rgba(239,68,68,0.35); }
+.chip-improved { background: linear-gradient(135deg, #10b981, #22c55e); box-shadow: 0 4px 14px rgba(16,185,129,0.4); }
 
-.chip-route:hover  { box-shadow: 0 6px 20px rgba(16,185,129,0.5); }
-.chip-period:hover { box-shadow: 0 6px 20px rgba(139,92,246,0.5); }
-.chip-tod:hover    { box-shadow: 0 6px 20px rgba(245,158,11,0.5); }
+.chip-route:hover    { box-shadow: 0 6px 20px rgba(16,185,129,0.5); }
+.chip-period:hover   { box-shadow: 0 6px 20px rgba(139,92,246,0.5); }
+.chip-tod:hover      { box-shadow: 0 6px 20px rgba(245,158,11,0.5); }
+.chip-worsened:hover { box-shadow: 0 6px 20px rgba(239,68,68,0.55); }
+.chip-improved:hover { box-shadow: 0 6px 20px rgba(16,185,129,0.55); }
 
 /* ── Speech bubble verdict ────────────────────────────────────── */
 .bubble {

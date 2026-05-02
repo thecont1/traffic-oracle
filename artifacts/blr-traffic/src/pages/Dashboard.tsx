@@ -8,12 +8,13 @@ import { CSVLink } from "react-csv";
 import { Sun, Moon, Download } from "lucide-react";
 import { useTrafficData, useFilteredData } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay } from "@/lib/useTrafficData";
+import { TrafficMap } from "@/components/TrafficMap";
 
-/* ── Colours ─────────────────────────────────────────────────── */
+/* ── Colours ──────────────────────────────────────────────────── */
 const LC = { primary:"#2563eb", teal:"#0d9488", purple:"#7c3aed", amber:"#d97706", pink:"#db2777" };
 const DC = { primary:"#60a5fa", teal:"#2dd4bf", purple:"#a78bfa", amber:"#fbbf24", pink:"#f472b6" };
 
-/* ── Options ─────────────────────────────────────────────────── */
+/* ── Filter options ───────────────────────────────────────────── */
 const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
   { value:"1m", label:"1 month" }, { value:"3m", label:"3 months" },
   { value:"6m", label:"6 months" }, { value:"1y", label:"1 year" },
@@ -26,7 +27,7 @@ const TOD_LIST: { value: TimeOfDay; label: string }[] = [
   { value:"all",               label:"any time of day" },
 ];
 
-/* ── Helpers ─────────────────────────────────────────────────── */
+/* ── Helpers ──────────────────────────────────────────────────── */
 function fmtWeek(s: string) {
   try { return new Date(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"}); } catch { return s; }
 }
@@ -37,21 +38,21 @@ function fmtSliderDate(s?: string) {
 function fmtDuration(min: number) {
   if (!min) return "—";
   if (min < 60) return `${min.toFixed(0)} min`;
-  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  const h = Math.floor(min/60), m = Math.round(min%60);
   return m ? `${h}h ${m}m` : `${h}h`;
 }
-function weeklyAvgSpeed(weeks: { avgSpeed: number }[]) {
+function weeklyAvgSpeed(weeks: {avgSpeed:number}[]) {
   if (!weeks.length) return 0;
-  return Math.round((weeks.reduce((a,b) => a+b.avgSpeed, 0) / weeks.length) * 10) / 10;
+  return Math.round((weeks.reduce((a,b) => a+b.avgSpeed, 0)/weeks.length)*10)/10;
 }
-function weeklyAvgDuration(weeks: { avgDuration: number }[]) {
+function weeklyAvgDuration(weeks: {avgDuration:number}[]) {
   if (!weeks.length) return 0;
-  return Math.round((weeks.reduce((a,b) => a+b.avgDuration, 0) / weeks.length) * 10) / 10;
+  return Math.round((weeks.reduce((a,b) => a+b.avgDuration, 0)/weeks.length)*10)/10;
 }
 
-/* ── Recharts tooltip ────────────────────────────────────────── */
+/* ── Recharts tooltip ─────────────────────────────────────────── */
 function CustomTooltip({ active, payload, label }: {
-  active?: boolean; payload?: Array<{name:string;value:number;color:string}>; label?: string;
+  active?:boolean; payload?:Array<{name:string;value:number;color:string}>; label?:string;
 }) {
   if (!active || !payload?.length) return null;
   return (
@@ -71,10 +72,10 @@ function CustomTooltip({ active, payload, label }: {
   );
 }
 
-/* ── Chip ────────────────────────────────────────────────────── */
+/* ── Chip ─────────────────────────────────────────────────────── */
+type ChipVariant = "route"|"period"|"tod"|"worsened"|"improved";
 function Chip({ children, icon, variant, onClick, animate }: {
-  children: React.ReactNode; icon: string;
-  variant:"route"|"period"|"tod"; onClick:()=>void; animate:boolean;
+  children:React.ReactNode; icon:string; variant:ChipVariant; onClick:()=>void; animate:boolean;
 }) {
   return (
     <button className={`chip chip-${variant} ${animate?"animate-pop":""}`} onClick={onClick} title="Click to cycle">
@@ -83,43 +84,42 @@ function Chip({ children, icon, variant, onClick, animate }: {
   );
 }
 
-/* ── Sparkle overlay ─────────────────────────────────────────── */
-const SPARKLES = ["🎊","✨","🎉","⭐","💫","🌟","🎊","✨","🎉","💥"];
+/* ── Sparkles ─────────────────────────────────────────────────── */
 function Sparkles() {
+  const s = ["🎊","✨","🎉","⭐","💫","🌟","🎊","✨","🎉","💥"];
   return (
     <div style={{ position:"absolute", inset:0, pointerEvents:"none", overflow:"hidden", zIndex:20 }}>
-      {SPARKLES.map((e, i) => (
+      {s.map((e,i) => (
         <span key={i} className="sparkle-particle" style={{
-          position:"absolute",
-          left:`${4 + i * 9.6}%`,
-          top:`${15 + (i % 4) * 16}%`,
-          fontSize: 12 + (i % 3) * 8,
-          animationDelay:`${i * 0.07}s`,
+          position:"absolute", left:`${4+i*9.6}%`, top:`${15+(i%4)*16}%`,
+          fontSize:12+(i%3)*8, animationDelay:`${i*0.07}s`,
         }}>{e}</span>
       ))}
     </div>
   );
 }
 
-/* ── Main Dashboard ──────────────────────────────────────────── */
+/* ── Dashboard ────────────────────────────────────────────────── */
 export default function Dashboard() {
-  const [dark, setDark]         = useState(false);
-  const [periodIdx, setPeriodIdx] = useState(2);   // 6 months
-  const [todIdx,    setTodIdx]    = useState(1);   // weekday afternoons
-  const [routeIdx,  setRouteIdx]  = useState(0);
+  /* UI state — dark default */
+  const [dark,        setDark]        = useState(true);
+  const [periodIdx,   setPeriodIdx]   = useState(2);   // 6m
+  const [todIdx,      setTodIdx]      = useState(1);   // afternoon
+  const [routeIdx,    setRouteIdx]    = useState(0);
+  const [questionMode,setQuestionMode]= useState<"worsened"|"improved">("worsened");
 
   /* chip animation */
-  const [chipAnim, setChipAnim] = useState<Record<string, boolean>>({});
+  const [chipAnim, setChipAnim] = useState<Record<string,boolean>>({});
   const chipTimer = useRef<ReturnType<typeof setTimeout>>();
-  const popChip = useCallback((key: string) => {
+  const popChip = useCallback((key:string) => {
     clearTimeout(chipTimer.current);
-    setChipAnim(a => ({ ...a, [key]: true }));
-    chipTimer.current = setTimeout(() => setChipAnim(a => ({ ...a, [key]: false })), 400);
+    setChipAnim(a => ({...a,[key]:true}));
+    chipTimer.current = setTimeout(() => setChipAnim(a => ({...a,[key]:false})), 400);
   }, []);
 
-  /* baseline slider */
-  const [sliderVals, setSliderVals] = useState<[number, number]>([0, 0]);
-  const [showSparkle, setShowSparkle] = useState(false);
+  /* slider */
+  const [sliderVals,   setSliderVals]  = useState<[number,number]>([0,0]);
+  const [showSparkle,  setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout>>();
 
   /* data */
@@ -131,58 +131,89 @@ export default function Dashboard() {
   }, [allRows]);
 
   const selectedRoute = routeOptions[routeIdx % routeOptions.length] ?? "Old Airport Road";
-  const period        = PERIOD_LIST[periodIdx].value;
-  const tod           = TOD_LIST[todIdx].value;
-  const periodLabel   = PERIOD_LIST[periodIdx].label;
-  const todLabel      = TOD_LIST[todIdx].label;
+  const period      = PERIOD_LIST[periodIdx].value;
+  const tod         = TOD_LIST[todIdx].value;
+  const periodLabel = PERIOD_LIST[periodIdx].label;
+  const todLabel    = TOD_LIST[todIdx].label;
 
-  const nextRoute  = () => { setRouteIdx(i => (i+1) % routeOptions.length); popChip("route"); };
-  const nextPeriod = () => { setPeriodIdx(i => (i+1) % PERIOD_LIST.length); popChip("period"); };
-  const nextTod    = () => { setTodIdx(i => (i+1) % TOD_LIST.length);    popChip("tod"); };
+  /* chip actions */
+  const nextRoute  = () => { setRouteIdx(i => (i+1)%routeOptions.length); popChip("route"); };
+  const nextPeriod = () => { setPeriodIdx(i => (i+1)%PERIOD_LIST.length); popChip("period"); };
+  const nextTod    = () => { setTodIdx(i => (i+1)%TOD_LIST.length);       popChip("tod");    };
+  const toggleMode = () => {
+    setQuestionMode(m => m === "worsened" ? "improved" : "worsened");
+    popChip("mode");
+  };
 
+  /* route selection from map */
+  const handleRouteSelect = useCallback((route:string) => {
+    const idx = routeOptions.indexOf(route);
+    if (idx >= 0) { setRouteIdx(idx); popChip("route"); setShowSparkle(true); }
+    clearTimeout(sparkleTimer.current);
+    sparkleTimer.current = setTimeout(() => setShowSparkle(false), 1600);
+  }, [routeOptions, popChip]);
+
+  /* filtered data */
   const { merged, selectedStats, baselineStats, filtered } = useFilteredData(
     allRows, selectedRoute, period, tod,
   );
 
-  /* reset slider when filters or data length changes */
+  /* reset slider when filters change */
   useEffect(() => {
     if (merged.length > 0) {
-      const mid = Math.max(0, Math.floor((merged.length - 1) / 2));
-      setSliderVals([0, mid]);
+      setSliderVals([0, Math.max(0, Math.floor((merged.length-1)/2))]);
     }
   }, [selectedRoute, period, tod, merged.length]);
 
-  /* ── Slider derived values ─────────────────────────────────── */
-  const maxIdx    = Math.max(1, merged.length - 1);
+  /* per-route overall avg speed for map tooltips */
+  const routeSpeedMap = useMemo(() => {
+    const stats: Record<string,{sum:number;cnt:number}> = {};
+    for (const r of allRows) {
+      if (!stats[r.label_short]) stats[r.label_short] = {sum:0, cnt:0};
+      stats[r.label_short].sum += r.speed_kmh;
+      stats[r.label_short].cnt += 1;
+    }
+    const result: Record<string,number> = {};
+    for (const [k,{sum,cnt}] of Object.entries(stats)) {
+      result[k] = Math.round((sum/cnt)*10)/10;
+    }
+    return result;
+  }, [allRows]);
+
+  const routeInfos = useMemo(() =>
+    routeOptions.map(l => ({ label_short:l, avgSpeed: routeSpeedMap[l] })),
+    [routeOptions, routeSpeedMap]);
+
+  /* slider derived */
+  const maxIdx    = Math.max(1, merged.length-1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
-  const leftPct   = (safeLeft  / maxIdx) * 100;
-  const rightPct  = (safeRight / maxIdx) * 100;
+  const leftPct   = (safeLeft/maxIdx)*100;
+  const rightPct  = (safeRight/maxIdx)*100;
 
-  const baselineWeeks = useMemo(() => merged.slice(safeLeft, safeRight + 1), [merged, safeLeft, safeRight]);
-  const recentWeeks   = useMemo(() => merged.slice(safeRight + 1),           [merged, safeRight]);
+  const baselineWeeks = useMemo(() => merged.slice(safeLeft, safeRight+1), [merged,safeLeft,safeRight]);
+  const recentWeeks   = useMemo(() => merged.slice(safeRight+1),            [merged,safeRight]);
 
   const baselineSpeed    = weeklyAvgSpeed(baselineWeeks);
   const recentSpeed      = weeklyAvgSpeed(recentWeeks);
   const baselineDuration = weeklyAvgDuration(baselineWeeks);
   const recentDuration   = weeklyAvgDuration(recentWeeks);
-
   const speedDiff = recentSpeed - baselineSpeed;
-  const speedPct  = baselineSpeed > 0 ? Math.round((speedDiff / baselineSpeed) * 100) : 0;
+  const speedPct  = baselineSpeed > 0 ? Math.round((speedDiff/baselineSpeed)*100) : 0;
 
-  /* trend from slider */
-  const sliderTrend: "improved"|"worsened"|"stable"|"insufficient" =
+  /* data trend */
+  const dataTrend: "improved"|"worsened"|"stable"|"insufficient" =
     recentSpeed > 0 && baselineSpeed > 0 && recentWeeks.length >= 1
       ? recentSpeed > baselineSpeed * 1.05 ? "improved"
       : recentSpeed < baselineSpeed * 0.95 ? "worsened"
       : "stable"
       : "insufficient";
 
-  const handleSliderChange = useCallback((vals: number[]) => {
-    const [l, r] = vals as [number, number];
-    setSliderVals([l, r]);
-    const win = r - l;
-    if ((win <= 1 || win >= merged.length * 0.85) && !showSparkle) {
+  const handleSliderChange = useCallback((vals:number[]) => {
+    const [l,r] = vals as [number,number];
+    setSliderVals([l,r]);
+    const win = r-l;
+    if ((win <= 1 || win >= merged.length*0.85) && !showSparkle) {
       setShowSparkle(true);
       clearTimeout(sparkleTimer.current);
       sparkleTimer.current = setTimeout(() => setShowSparkle(false), 1600);
@@ -191,47 +222,72 @@ export default function Dashboard() {
 
   const baselineStartDate = merged[safeLeft]?.weekKey;
   const baselineEndDate   = merged[safeRight]?.weekKey;
-  const recentStartDate   = merged[safeRight + 1]?.weekKey;
-  const lastDate          = merged[merged.length - 1]?.weekKey;
+  const recentStartDate   = merged[safeRight+1]?.weekKey;
+  const lastDate          = merged[merged.length-1]?.weekKey;
 
-  /* verdict */
-  const VERDICT = {
-    improved:    { emoji:"✅", msg:"Yes! Traffic is flowing better — speed is up.",  border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46" },
-    worsened:    { emoji:"❌", msg:"Nope — things have slowed down.",                border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b" },
-    stable:      { emoji:"⚖️", msg:"Pretty stable — no big change either way.",     border:"#fcd34d", bg:"#fffbeb", tc:"#92400e" },
-    insufficient:{ emoji:"🔍", msg:"Need more data — widen the baseline window.",   border:"#c4b5fd", bg:"#f5f3ff", tc:"#5b21b6" },
-  } as const;
-  const v  = VERDICT[sliderTrend];
+  /* verdict — depends on questionMode */
+  type TrendKey = "improved"|"worsened"|"stable"|"insufficient";
+  const verdictTrend: TrendKey = questionMode === "improved" ? dataTrend : {
+    improved:"worsened", worsened:"improved", stable:"stable", insufficient:"insufficient",
+  }[dataTrend] as TrendKey;
+
+  const VERDICT: Record<TrendKey, {emoji:string; face:string; msg:string; border:string; bg:string; tc:string}> = {
+    improved: {
+      emoji:"✅", face:"🤩",
+      msg: questionMode === "improved"
+        ? "Yes! It's gotten better — speed is up. 🎉"
+        : "Actually... roads have improved, not worsened!",
+      border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46",
+    },
+    worsened: {
+      emoji:"❌", face:"🥵",
+      msg: questionMode === "worsened"
+        ? "Yep, roads have worsened — traffic is heavier."
+        : "Nope — things have actually slowed down.",
+      border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b",
+    },
+    stable: {
+      emoji:"⚖️", face:"🫤",
+      msg:"Meh. No real change either way.",
+      border:"#fcd34d", bg:"#fffbeb", tc:"#92400e",
+    },
+    insufficient: {
+      emoji:"🔍", face:"🔍",
+      msg:"Need more data — widen the baseline window.",
+      border:"#c4b5fd", bg:"#f5f3ff", tc:"#5b21b6",
+    },
+  };
+  const v = VERDICT[verdictTrend];
   const colors = dark ? DC : LC;
 
-  /* CSV export */
+  /* CSV */
   const csvHeaders = [
-    { label:"Week",            key:"weekKey" },
-    { label:"Avg Speed km/h",  key:"avgSpeed" },
-    { label:"Avg Duration min",key:"avgDuration" },
-    { label:"Median min",      key:"medianDuration" },
-    { label:"p95 min",         key:"p95Duration" },
-    { label:"Samples",         key:"count" },
+    {label:"Week",            key:"weekKey"},
+    {label:"Avg Speed km/h",  key:"avgSpeed"},
+    {label:"Avg Duration min",key:"avgDuration"},
+    {label:"Median min",      key:"medianDuration"},
+    {label:"p95 min",         key:"p95Duration"},
+    {label:"Samples",         key:"count"},
   ];
 
   /* hourly distribution */
   const hourDist = useMemo(() => {
-    const bins: Record<number, number> = {};
-    for (const r of filtered) bins[r.hour] = (bins[r.hour] ?? 0) + 1;
-    return Array.from({ length:24 }, (_, h) => ({ hour:`${h}:00`, count: bins[h] ?? 0 }));
+    const bins:Record<number,number> = {};
+    for (const r of filtered) bins[r.hour] = (bins[r.hour]??0)+1;
+    return Array.from({length:24},(_,h) => ({hour:`${h}:00`, count:bins[h]??0}));
   }, [filtered]);
 
-  /* ── Render ──────────────────────────────────────────────────── */
+  /* ── Render ───────────────────────────────────────────────────── */
   return (
     <div className={dark ? "dark" : ""}>
       <div className="min-h-screen fun-bg transition-colors">
 
-        {/* ── Header ─────────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────────── */}
         <header style={{
-          background: dark ? "rgba(15,18,40,0.85)" : "rgba(255,255,255,0.75)",
+          background: dark ? "rgba(15,18,40,0.88)" : "rgba(255,255,255,0.78)",
           backdropFilter:"blur(12px)",
           borderBottom:`1px solid hsl(var(--border))`,
-          position:"sticky", top:0, zIndex:50,
+          position:"sticky", top:0, zIndex:500,
         }}>
           <div style={{ maxWidth:1320, margin:"0 auto", padding:"0.75rem 1.5rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
@@ -272,29 +328,49 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* ── Main ────────────────────────────────────────────── */}
-        <main style={{ maxWidth:1320, margin:"0 auto", padding:"2rem 1.5rem",
-          display:"flex", flexDirection:"column", gap:"1.75rem" }}>
+        <main style={{ maxWidth:1320, margin:"0 auto", padding:"1.5rem 1.5rem 2rem",
+          display:"flex", flexDirection:"column", gap:"1.5rem" }}>
 
-          {/* Hero question */}
-          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"2rem 1rem 0.5rem" }}>
+          {/* ── Map ─────────────────────────────────────────── */}
+          {!loading && !error && rowCount > 0 && (
+            <div className="animate-fade-in">
+              <TrafficMap
+                routes={routeInfos}
+                selectedRoute={selectedRoute}
+                onRouteSelect={handleRouteSelect}
+                dark={dark}
+              />
+            </div>
+          )}
+
+          {/* ── Hero question ────────────────────────────────── */}
+          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.25rem 1rem 0.25rem" }}>
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
-              fontSize:"clamp(1.4rem,3.5vw,2.2rem)", lineHeight:1.5,
+              fontSize:"clamp(1.3rem,3.2vw,2rem)", lineHeight:1.6,
               color: dark ? "#f1f5f9" : "#1e293b",
               display:"flex", flexWrap:"wrap", alignItems:"center",
               justifyContent:"center", gap:"0.3em",
             }}>
-              <span>Have road conditions improved on</span>
-              <Chip icon="🛣️" variant="route"  onClick={nextRoute}  animate={!!chipAnim.route}>{selectedRoute}</Chip>
+              <span>Has</span>
+              <Chip icon="🛣️" variant="route"
+                onClick={nextRoute} animate={!!chipAnim.route}>{selectedRoute}</Chip>
+              <Chip
+                icon={questionMode === "worsened" ? "🚦" : "✅"}
+                variant={questionMode}
+                onClick={toggleMode} animate={!!chipAnim.mode}>
+                {questionMode}
+              </Chip>
               <span>over the past</span>
-              <Chip icon="📅" variant="period" onClick={nextPeriod} animate={!!chipAnim.period}>{periodLabel}</Chip>
+              <Chip icon="📅" variant="period"
+                onClick={nextPeriod} animate={!!chipAnim.period}>{periodLabel}</Chip>
               <span>during</span>
-              <Chip icon="⏰" variant="tod"    onClick={nextTod}    animate={!!chipAnim.tod}>{todLabel}</Chip>
+              <Chip icon="⏰" variant="tod"
+                onClick={nextTod} animate={!!chipAnim.tod}>{todLabel}</Chip>
               <span>?</span>
             </h1>
-            <p style={{ marginTop:"0.4rem", fontSize:13, color:"hsl(var(--muted-foreground))" }}>
-              Click any chip to cycle options · Drag the 🔵🐢 handles below to set your comparison window
+            <p style={{ marginTop:"0.3rem", fontSize:12, color:"hsl(var(--muted-foreground))" }}>
+              Click chips to cycle options · Click map lines to pick a route · Drag 🔵🐢 handles to set baseline
             </p>
           </div>
 
@@ -317,41 +393,32 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Content */}
           {!loading && !error && rowCount > 0 && (
             <>
-              {/* ── Baseline slider ─────────────────────────── */}
+              {/* ── Baseline slider ──────────────────────────── */}
               {merged.length > 1 && (
                 <div className="animate-fade-in" style={{
                   background: dark ? "rgba(20,28,50,0.85)" : "rgba(255,255,255,0.92)",
                   border:"1px solid hsl(var(--border))",
-                  borderRadius:"1.5rem",
-                  padding:"1.25rem 1.5rem 1rem",
+                  borderRadius:"1.5rem", padding:"1.25rem 1.5rem 1rem",
                   position:"relative", overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}
 
-                  {/* Title row */}
                   <div style={{ display:"flex", alignItems:"center",
                     justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:8 }}>
                     <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                      color: dark ? "#f1f5f9" : "#1e293b", display:"flex", alignItems:"center", gap:6 }}>
-                      📏 Baseline Window
-                    </p>
+                      color: dark?"#f1f5f9":"#1e293b" }}>📏 Baseline Window</p>
                     <span style={{ fontSize:11, color:"hsl(var(--muted-foreground))",
                       background:"hsl(var(--muted))", borderRadius:9999, padding:"3px 10px" }}>
-                      Drag 🔵 🐢 handles · snap to weeks
+                      Drag 🔵 🐢 · snap to weeks
                     </span>
                   </div>
 
-                  {/* Slider track */}
                   <div style={{ padding:"4px 0 2px" }}>
                     <SliderPrimitive.Root
-                      min={0}
-                      max={maxIdx}
-                      step={1}
-                      value={sliderVals}
-                      onValueChange={handleSliderChange}
+                      min={0} max={maxIdx} step={1}
+                      value={sliderVals} onValueChange={handleSliderChange}
                       style={{ position:"relative", display:"flex",
                         alignItems:"center", height:52, userSelect:"none", touchAction:"none" }}
                     >
@@ -360,60 +427,34 @@ export default function Dashboard() {
                         height:14, borderRadius:9999,
                         overflow:"hidden", background:"#e2e8f0",
                       }}>
-                        {/* Before baseline – soft gray */}
-                        <div style={{
-                          position:"absolute", top:0, left:0,
+                        <div style={{ position:"absolute", top:0, left:0,
                           width:`${leftPct}%`, height:"100%",
-                          background:"linear-gradient(90deg,#cbd5e1,#e2e8f0)",
-                        }} />
-                        {/* Baseline window – teal→blue */}
-                        <div style={{
-                          position:"absolute", top:0, left:`${leftPct}%`,
-                          width:`${Math.max(0, rightPct - leftPct)}%`, height:"100%",
-                          background:"linear-gradient(90deg,#34d399,#60a5fa)",
-                        }} />
-                        {/* Recent – purple→pink */}
-                        <div style={{
-                          position:"absolute", top:0, left:`${rightPct}%`,
-                          width:`${100 - rightPct}%`, height:"100%",
-                          background:"linear-gradient(90deg,#a78bfa,#f472b6)",
-                        }} />
+                          background:"linear-gradient(90deg,#cbd5e1,#e2e8f0)" }} />
+                        <div style={{ position:"absolute", top:0, left:`${leftPct}%`,
+                          width:`${Math.max(0,rightPct-leftPct)}%`, height:"100%",
+                          background:"linear-gradient(90deg,#34d399,#60a5fa)" }} />
+                        <div style={{ position:"absolute", top:0, left:`${rightPct}%`,
+                          width:`${100-rightPct}%`, height:"100%",
+                          background:"linear-gradient(90deg,#a78bfa,#f472b6)" }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
 
-                      {/* Left thumb – baseline start 🔵 */}
-                      <SliderPrimitive.Thumb
-                        className="slider-thumb"
-                        title="Drag to set baseline start"
-                        style={{
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          width:36, height:36, borderRadius:"50%",
-                          background:"white",
-                          border:"3px solid #34d399",
-                          boxShadow:"0 3px 12px rgba(52,211,153,0.5)",
+                      <SliderPrimitive.Thumb className="slider-thumb" title="Drag to set baseline start"
+                        style={{ display:"flex", alignItems:"center", justifyContent:"center",
+                          width:36, height:36, borderRadius:"50%", background:"white",
+                          border:"3px solid #34d399", boxShadow:"0 3px 12px rgba(52,211,153,0.5)",
                           cursor:"grab", fontSize:16, outline:"none", zIndex:10,
-                          transition:"transform 0.15s ease, box-shadow 0.15s ease",
-                        }}
-                      >🔵</SliderPrimitive.Thumb>
+                          transition:"transform 0.15s ease, box-shadow 0.15s ease" }}>🔵</SliderPrimitive.Thumb>
 
-                      {/* Right thumb – baseline end 🐢 */}
-                      <SliderPrimitive.Thumb
-                        className="slider-thumb"
-                        title="Drag to set baseline end"
-                        style={{
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          width:36, height:36, borderRadius:"50%",
-                          background:"white",
-                          border:"3px solid #60a5fa",
-                          boxShadow:"0 3px 12px rgba(96,165,250,0.5)",
+                      <SliderPrimitive.Thumb className="slider-thumb" title="Drag to set baseline end"
+                        style={{ display:"flex", alignItems:"center", justifyContent:"center",
+                          width:36, height:36, borderRadius:"50%", background:"white",
+                          border:"3px solid #60a5fa", boxShadow:"0 3px 12px rgba(96,165,250,0.5)",
                           cursor:"grab", fontSize:16, outline:"none", zIndex:10,
-                          transition:"transform 0.15s ease, box-shadow 0.15s ease",
-                        }}
-                      >🐢</SliderPrimitive.Thumb>
+                          transition:"transform 0.15s ease, box-shadow 0.15s ease" }}>🐢</SliderPrimitive.Thumb>
                     </SliderPrimitive.Root>
                   </div>
 
-                  {/* Date axis labels */}
                   <div style={{ display:"flex", justifyContent:"space-between",
                     fontSize:11, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
                     <span>⏮ {fmtSliderDate(merged[0]?.weekKey)}</span>
@@ -428,9 +469,7 @@ export default function Dashboard() {
                     <span>{fmtSliderDate(lastDate)} ⏭</span>
                   </div>
 
-                  {/* Stats comparison tiles */}
                   <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"stretch" }}>
-                    {/* Baseline tile */}
                     <div style={{ flex:"1 1 160px", background:"linear-gradient(135deg,#d1fae5,#a7f3d0)",
                       borderRadius:14, padding:"10px 14px" }}>
                       <p style={{ fontSize:11, fontWeight:700, textTransform:"uppercase",
@@ -439,34 +478,28 @@ export default function Dashboard() {
                       </p>
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800,
                         fontSize:26, lineHeight:1, color:"#1e293b", marginBottom:2 }}>
-                        {baselineSpeed || "—"} <span style={{ fontSize:13, fontWeight:600 }}>km/h</span>
+                        {baselineSpeed||"—"}<span style={{ fontSize:13, fontWeight:600 }}> km/h</span>
                       </p>
-                      <p style={{ fontSize:11, color:"#065f46" }}>
-                        avg duration: {fmtDuration(baselineDuration)}
-                      </p>
+                      <p style={{ fontSize:11, color:"#065f46" }}>avg duration: {fmtDuration(baselineDuration)}</p>
                       <p style={{ fontSize:10, color:"#065f46", opacity:0.7, marginTop:2 }}>
-                        {baselineWeeks.length} week{baselineWeeks.length !== 1 ? "s" : ""} · {baselineWeeks.reduce((a,b) => a+b.count, 0)} trips
+                        {baselineWeeks.length} wk · {baselineWeeks.reduce((a,b)=>a+b.count,0)} trips
                       </p>
                     </div>
 
-                    {/* Arrow + delta */}
                     <div style={{ display:"flex", flexDirection:"column",
                       alignItems:"center", justifyContent:"center", padding:"0 4px" }}>
                       <span style={{ fontSize:22 }}>→</span>
                       {recentSpeed > 0 && baselineSpeed > 0 && (
-                        <span style={{
-                          fontFamily:"var(--app-font-display)", fontWeight:800,
+                        <span style={{ fontFamily:"var(--app-font-display)", fontWeight:800,
                           fontSize:13, marginTop:2,
-                          color: speedDiff > 0 ? "#059669" : speedDiff < 0 ? "#dc2626" : "#92400e",
-                        }}>
-                          {speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "="}
-                          {" "}{Math.abs(Math.round(speedDiff * 10) / 10)} km/h
+                          color: speedDiff > 0 ? "#059669" : speedDiff < 0 ? "#dc2626" : "#92400e" }}>
+                          {speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "="}{" "}
+                          {Math.abs(Math.round(speedDiff*10)/10)} km/h
                           {" "}({speedPct > 0 ? "+" : ""}{speedPct}%)
                         </span>
                       )}
                     </div>
 
-                    {/* Recent tile */}
                     <div style={{ flex:"1 1 160px",
                       background: recentSpeed > baselineSpeed
                         ? "linear-gradient(135deg,#dbeafe,#bfdbfe)"
@@ -476,7 +509,7 @@ export default function Dashboard() {
                       borderRadius:14, padding:"10px 14px" }}>
                       <p style={{ fontSize:11, fontWeight:700, textTransform:"uppercase",
                         letterSpacing:"0.06em", color:"#1e3a5f", marginBottom:4 }}>
-                        🐢 Recent · {recentStartDate ? fmtSliderDate(recentStartDate) + " → now" : "—"}
+                        🐢 Recent · {recentStartDate ? fmtSliderDate(recentStartDate)+" → now" : "—"}
                       </p>
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800,
                         fontSize:26, lineHeight:1, marginBottom:2,
@@ -492,7 +525,7 @@ export default function Dashboard() {
                       </p>
                       {recentWeeks.length > 0 && (
                         <p style={{ fontSize:10, color:"#1e3a5f", opacity:0.7, marginTop:2 }}>
-                          {recentWeeks.length} week{recentWeeks.length !== 1 ? "s" : ""} · {recentWeeks.reduce((a,b) => a+b.count, 0)} trips
+                          {recentWeeks.length} wk · {recentWeeks.reduce((a,b)=>a+b.count,0)} trips
                         </p>
                       )}
                     </div>
@@ -500,19 +533,22 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* ── Verdict bubble ───────────────────────────── */}
+              {/* ── Verdict ──────────────────────────────────── */}
               <div className="animate-fade-in" style={{
                 background: dark ? "rgba(30,40,60,0.8)" : v.bg,
                 border:`2px solid ${v.border}`,
                 borderRadius:"1.5rem",
-                padding:"1.25rem 1.5rem",
+                padding:"1.5rem 2rem",
                 maxWidth:640, margin:"0 auto", textAlign:"center",
               }}>
-                <p style={{ fontSize:36, marginBottom:8, lineHeight:1 }}>{v.emoji}</p>
-                <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-                  color: dark ? "#f1f5f9" : v.tc }}>{v.msg}</p>
-                {sliderTrend !== "insufficient" && (
-                  <p style={{ marginTop:6, fontSize:12, color: dark ? "#94a3b8" : v.tc, opacity:0.8 }}>
+                <div className="animate-bounce-in" key={verdictTrend}
+                  style={{ fontSize:"4rem", lineHeight:1, marginBottom:10 }}>
+                  {v.face}
+                </div>
+                <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
+                  color: dark?"#f1f5f9":v.tc }}>{v.msg}</p>
+                {verdictTrend !== "insufficient" && (
+                  <p style={{ marginTop:6, fontSize:12, color:dark?"#94a3b8":v.tc, opacity:0.8 }}>
                     Baseline {fmtSliderDate(baselineStartDate)}–{fmtSliderDate(baselineEndDate)}
                     {" "}({baselineSpeed} km/h) vs recent {fmtSliderDate(recentStartDate)}–{fmtSliderDate(lastDate)}
                     {" "}({recentSpeed} km/h) on <strong>{selectedRoute}</strong>
@@ -526,43 +562,43 @@ export default function Dashboard() {
                   {[
                     { cls:"kpi-card-speed",  emoji:"⚡", label:"Avg Speed (full period)",
                       value: selectedStats.avgSpeed ? `${selectedStats.avgSpeed} km/h` : "—",
-                      sub: baselineStats.avgSpeed ? `Route baseline: ${baselineStats.avgSpeed} km/h` : "No route baseline",
+                      sub: baselineStats.avgSpeed ? `Route baseline: ${baselineStats.avgSpeed} km/h` : "No baseline",
                       good: selectedStats.avgSpeed > 0 && baselineStats.avgSpeed > 0
                         ? selectedStats.avgSpeed >= baselineStats.avgSpeed : null },
                     { cls:"kpi-card-median", emoji:"🐌", label:"Median Trip",
                       value: fmtDuration(selectedStats.median),
-                      sub:`Mean: ${fmtDuration(selectedStats.mean)}`, good: null },
+                      sub:`Mean: ${fmtDuration(selectedStats.mean)}`, good:null },
                     { cls:"kpi-card-p95",    emoji:"🔥", label:"p95 Worst Case",
                       value: fmtDuration(selectedStats.p95),
-                      sub:"1-in-20 trips take this long", good: null },
+                      sub:"1-in-20 trips take this long", good:null },
                     { cls:"kpi-card-count",  emoji:"📊", label:"Data Points",
                       value: selectedStats.count.toLocaleString(),
-                      sub:`${merged.length} weeks · ${period} window`, good: null },
+                      sub:`${merged.length} weeks · ${period} window`, good:null },
                   ].map(card => (
                     <div key={card.label} className={`kpi-card ${card.cls}`}>
                       <div style={{ fontSize:28, marginBottom:6 }}>{card.emoji}</div>
                       <p style={{ fontSize:11, fontWeight:700, textTransform:"uppercase",
-                        letterSpacing:"0.08em", color: dark?"#94a3b8":"#64748b", marginBottom:2 }}>
+                        letterSpacing:"0.08em", color:dark?"#94a3b8":"#64748b", marginBottom:2 }}>
                         {card.label}
                       </p>
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:26,
                         lineHeight:1.1, marginBottom:4,
                         color: card.good === true ? "#059669"
                           : card.good === false ? "#dc2626"
-                          : dark ? "#f1f5f9" : "#1e293b" }}>
+                          : dark?"#f1f5f9":"#1e293b" }}>
                         {card.value}
                       </p>
-                      <p style={{ fontSize:11, color: dark?"#94a3b8":"#64748b" }}>{card.sub}</p>
+                      <p style={{ fontSize:11, color:dark?"#94a3b8":"#64748b" }}>{card.sub}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ background: dark?"rgba(30,40,60,0.8)":"rgba(255,255,255,0.8)",
+                <div style={{ background:dark?"rgba(30,40,60,0.8)":"rgba(255,255,255,0.8)",
                   border:"1px solid hsl(var(--border))", borderRadius:16, padding:"2.5rem", textAlign:"center" }}>
                   <p style={{ fontSize:36, marginBottom:8 }}>🔍</p>
-                  <p style={{ fontWeight:700, color: dark?"#f1f5f9":"#1e293b" }}>No data for these filters</p>
+                  <p style={{ fontWeight:700, color:dark?"#f1f5f9":"#1e293b" }}>No data for these filters</p>
                   <p style={{ fontSize:13, color:"hsl(var(--muted-foreground))", marginTop:4 }}>
-                    Click the chips above to try a different route, period, or time window.
+                    Click chips to try a different combination.
                   </p>
                 </div>
               )}
@@ -572,15 +608,14 @@ export default function Dashboard() {
                 <>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))", gap:16 }}>
 
-                    {/* Speed chart with baseline region shading */}
                     <div className="chart-card animate-fade-in">
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>⚡ Speed Over Time</p>
+                        color:dark?"#f1f5f9":"#1e293b" }}>⚡ Speed Over Time</p>
                       <p style={{ fontSize:12, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
-                        Weekly avg km/h · 🟢 baseline window highlighted
+                        Weekly avg km/h — higher is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
-                        <AreaChart data={merged} margin={{ top:4, right:8, left:-16, bottom:0 }}>
+                        <AreaChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
                           <defs>
                             <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor={colors.teal} stopOpacity={0.25}/>
@@ -593,12 +628,10 @@ export default function Dashboard() {
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
                           <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
-                            tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }}
-                            tickLine={false} axisLine={false}/>
-                          <YAxis tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }}
-                            tickLine={false} axisLine={false} unit=" km/h"/>
+                            tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false}/>
+                          <YAxis tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false} unit=" km/h"/>
                           <Tooltip content={<CustomTooltip/>}/>
-                          <Legend wrapperStyle={{ fontSize:12, paddingTop:8 }}/>
+                          <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
                             stroke={colors.teal} strokeWidth={2.5} fill="url(#sg)" dot={false} connectNulls/>
                           {merged.some(m => m.baselineSpeed != null) && (
@@ -610,23 +643,20 @@ export default function Dashboard() {
                       </ResponsiveContainer>
                     </div>
 
-                    {/* Duration chart */}
                     <div className="chart-card animate-fade-in">
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>🐌 Trip Duration Over Time</p>
+                        color:dark?"#f1f5f9":"#1e293b" }}>🐌 Trip Duration Over Time</p>
                       <p style={{ fontSize:12, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
                         Weekly median + p95 (min) — lower is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
-                        <LineChart data={merged} margin={{ top:4, right:8, left:-16, bottom:0 }}>
+                        <LineChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
                           <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
-                            tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }}
-                            tickLine={false} axisLine={false}/>
-                          <YAxis tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }}
-                            tickLine={false} axisLine={false} unit=" min"/>
+                            tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false}/>
+                          <YAxis tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false} unit=" min"/>
                           <Tooltip content={<CustomTooltip/>}/>
-                          <Legend wrapperStyle={{ fontSize:12, paddingTop:8 }}/>
+                          <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Line type="monotone" dataKey="avgDuration" name="Avg Duration"
                             stroke={colors.purple} strokeWidth={2.5} dot={false} connectNulls/>
                           <Line type="monotone" dataKey="p95Duration" name="p95 Duration"
@@ -635,38 +665,36 @@ export default function Dashboard() {
                       </ResponsiveContainer>
                     </div>
 
-                    {/* Sample count */}
                     <div className="chart-card animate-fade-in">
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>📅 Weekly Sample Count</p>
+                        color:dark?"#f1f5f9":"#1e293b" }}>📅 Weekly Sample Count</p>
                       <p style={{ fontSize:12, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
                         Trips recorded per week
                       </p>
                       <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={merged} margin={{ top:4, right:8, left:-16, bottom:0 }}>
+                        <BarChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
                           <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
-                            tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false}/>
-                          <YAxis tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false}/>
+                            tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false}/>
+                          <YAxis tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false}/>
                           <Tooltip content={<CustomTooltip/>}/>
                           <Bar dataKey="count" name="Trips" fill={colors.primary} radius={[5,5,0,0]} opacity={0.85}/>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
 
-                    {/* Hourly distribution */}
                     <div className="chart-card animate-fade-in">
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>⏰ Hourly Distribution</p>
+                        color:dark?"#f1f5f9":"#1e293b" }}>⏰ Hourly Distribution</p>
                       <p style={{ fontSize:12, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
                         When are trips recorded?
                       </p>
                       <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={hourDist} margin={{ top:4, right:8, left:-16, bottom:0 }}>
+                        <BarChart data={hourDist} margin={{top:4,right:8,left:-16,bottom:0}}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
-                          <XAxis dataKey="hour" tick={{ fontSize:10, fill:"hsl(var(--muted-foreground))" }}
+                          <XAxis dataKey="hour" tick={{fontSize:10,fill:"hsl(var(--muted-foreground))"}}
                             tickLine={false} axisLine={false} interval={3}/>
-                          <YAxis tick={{ fontSize:11, fill:"hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false}/>
+                          <YAxis tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}} tickLine={false} axisLine={false}/>
                           <Tooltip content={<CustomTooltip/>}/>
                           <Bar dataKey="count" name="Trips" fill={colors.purple} radius={[4,4,0,0]} opacity={0.8}/>
                         </BarChart>
@@ -678,14 +706,14 @@ export default function Dashboard() {
                   <div>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-                        color: dark?"#f1f5f9":"#1e293b" }}>📋 Weekly Breakdown</p>
+                        color:dark?"#f1f5f9":"#1e293b" }}>📋 Weekly Breakdown</p>
                       <span style={{ fontSize:12, color:"hsl(var(--muted-foreground))" }}>
                         {merged.length} weeks · most recent first
                       </span>
                     </div>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(185px,1fr))", gap:10 }}>
                       {[...merged].reverse().map((row, i) => {
-                        const idx  = merged.length - 1 - i;
+                        const idx  = merged.length-1-i;
                         const isBaseline = idx >= safeLeft && idx <= safeRight;
                         const isRecent   = idx > safeRight;
                         const speedVsBaseline = row.baselineSpeed
@@ -697,7 +725,7 @@ export default function Dashboard() {
                               : "3px solid transparent",
                           }}>
                             <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700,
-                              fontSize:13, color: dark?"#f1f5f9":"#1e293b", marginBottom:4,
+                              fontSize:13, color:dark?"#f1f5f9":"#1e293b", marginBottom:4,
                               display:"flex", alignItems:"center", gap:4 }}>
                               {speedVsBaseline} {fmtWeek(row.weekKey)}
                               {isBaseline && <span style={{ fontSize:10, background:"#d1fae5", color:"#065f46",
@@ -707,13 +735,13 @@ export default function Dashboard() {
                             </p>
                             <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                               {[
-                                ["⚡ Speed",   `${row.avgSpeed} km/h`],
-                                ["🕐 Median",  fmtDuration(row.medianDuration)],
-                                ["🔥 p95",     fmtDuration(row.p95Duration)],
-                              ].map(([label, val]) => (
+                                ["⚡ Speed", `${row.avgSpeed} km/h`],
+                                ["🕐 Median", fmtDuration(row.medianDuration)],
+                                ["🔥 p95", fmtDuration(row.p95Duration)],
+                              ].map(([label,val]) => (
                                 <div key={label} style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
                                   <span style={{ color:"hsl(var(--muted-foreground))" }}>{label}</span>
-                                  <span style={{ fontWeight:600, color: dark?"#f1f5f9":"#1e293b" }}>{val}</span>
+                                  <span style={{ fontWeight:600, color:dark?"#f1f5f9":"#1e293b" }}>{val}</span>
                                 </div>
                               ))}
                               <div style={{ display:"flex", justifyContent:"space-between", fontSize:11,
@@ -738,10 +766,9 @@ export default function Dashboard() {
           color:"hsl(var(--muted-foreground))" }}>
           Data:{" "}
           <a href="https://github.com/thecont1/blr-traffic-monitor" target="_blank" rel="noopener noreferrer"
-            style={{ color:colors.primary }}>
-            thecont1/blr-traffic-monitor
-          </a>{" "}
-          · Fetched live, no backend needed 🌐
+            style={{ color:colors.primary }}>thecont1/blr-traffic-monitor</a>{" "}
+          · Map: © <a href="https://openstreetmap.org" target="_blank" rel="noopener noreferrer"
+            style={{ color:colors.primary }}>OpenStreetMap</a> / CartoDB · No backend needed 🌐
         </footer>
       </div>
     </div>

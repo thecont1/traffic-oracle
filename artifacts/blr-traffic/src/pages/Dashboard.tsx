@@ -160,22 +160,25 @@ function NapkinChart({
   const totalH  = H + LABEL_H;
 
   const hasGap = bLen > 0 && rLen > 0;
-  const bFrac = bLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
-  const rFrac = rLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
-  const bXS = PX;
-  const bXE = PX + chartW * bFrac;
-  const rXS = hasGap ? W - PX - chartW * rFrac : PX;
+
+  // Date-to-x: full SVG width spans baseline-start → recent-end
+  const allWeeks = [...baselineWeeks, ...recentWeeks];
+  const t0 = new Date(allWeeks[0].weekKey).getTime();
+  const t1 = new Date(allWeeks[allWeeks.length - 1].weekKey).getTime();
+  const tSpan = t1 - t0 || 1;
+  const toX = (wk: string) => PX + ((new Date(wk).getTime() - t0) / tSpan) * chartW;
+
+  const bXS = toX(baselineWeeks[0].weekKey);
+  const bXE = toX(baselineWeeks[bLen - 1].weekKey);
+  const rXS = hasGap ? toX(recentWeeks[0].weekKey) : PX;
   const rXE = W - PX;
 
   const toY = (s: number) => PY + chartH - ((s - minS) / range) * chartH;
 
-  const pts = (weeks: WeeklyAggregate[], xs: number, xe: number) =>
+  const pts = (weeks: WeeklyAggregate[]) =>
     weeks.length === 1
-      ? `${xs},${toY(weeks[0].avgSpeed)} ${xe},${toY(weeks[0].avgSpeed)}`
-      : weeks.map((w, i) => {
-          const x = xs + (i / (weeks.length - 1)) * (xe - xs);
-          return `${x.toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`;
-        }).join(" ");
+      ? `${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)} ${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)}`
+      : weeks.map(w => `${toX(w.weekKey).toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`).join(" ");
 
   const muted  = dark ? "#475569" : "#cbd5e1";
   const labelY = H + 13;
@@ -190,12 +193,12 @@ function NapkinChart({
           stroke={muted} strokeWidth={1.5} strokeDasharray="4 3" />
       )}
       {bLen > 0 && (
-        <polyline points={pts(baselineWeeks, bXS, bXE)}
+        <polyline points={pts(baselineWeeks)}
           fill="none" stroke="#60a5fa" strokeWidth={3.5}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
       {rLen > 0 && (
-        <polyline points={pts(recentWeeks, rXS, rXE)}
+        <polyline points={pts(recentWeeks)}
           fill="none" stroke="#f472b6" strokeWidth={3.5}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
@@ -752,6 +755,16 @@ export default function Dashboard() {
   const recentStartDate   = recentWeeks[0]?.weekKey;
   const lastDate          = allRouteWeeks[allRouteWeeks.length - 1]?.weekKey;
 
+  /* Gap-centre % for delta badge — mirrors NapkinChart toX maths (PX=4, W=500, chartW=492) */
+  const gapCenterPct = (() => {
+    if (!baselineStartDate || !baselineEndDate || !recentStartDate || !lastDate) return 50;
+    const t0   = new Date(baselineStartDate).getTime();
+    const span = new Date(lastDate).getTime() - t0 || 1;
+    const bEndF   = (new Date(baselineEndDate).getTime()  - t0) / span;
+    const rStartF = (new Date(recentStartDate).getTime() - t0) / span;
+    return ((4 + ((bEndF + rStartF) / 2) * 492) / 500) * 100;
+  })();
+
   /* Slider change handler — also detects which thumb is moving */
   const handleSliderChange = useCallback((vals: number[]) => {
     const [l, r] = vals as [number, number];
@@ -1155,8 +1168,25 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {/* Centre: napkin chart with delta floating over the gap */}
-                    <div style={{ flex:1, position:"relative" }}>
+                    {/* Centre: napkin chart with delta pill above */}
+                    <div style={{ flex:1, position:"relative", paddingTop:30 }}>
+                      {recentSpeed > 0 && baselineSpeed > 0 && (
+                        <div style={{
+                          position:"absolute", top:4, left:`${gapCenterPct}%`,
+                          transform:"translateX(-50%)", zIndex:10, whiteSpace:"nowrap",
+                          display:"inline-flex", alignItems:"center", gap:4,
+                          color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8",
+                          fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:13,
+                          background: speedDiff > 0 ? "rgba(52,211,153,0.15)"
+                            : speedDiff < 0 ? "rgba(248,113,113,0.15)" : "rgba(148,163,184,0.15)",
+                          border:`1px solid ${speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8"}`,
+                          borderRadius:20, padding:"2px 10px",
+                          pointerEvents:"none",
+                        }}>
+                          <span>{speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "—"}</span>
+                          <span style={{ fontSize:12 }}>{Math.abs(Math.round(speedDiff * 10) / 10)} km/h</span>
+                        </div>
+                      )}
                       <NapkinChart
                         baselineWeeks={baselineWeeks}
                         recentWeeks={recentWeeks}
@@ -1169,25 +1199,6 @@ export default function Dashboard() {
                           rEnd:   fmtDate(lastDate),
                         }}
                       />
-                      {recentSpeed > 0 && baselineSpeed > 0 && (
-                        <div style={{
-                          position:"absolute", top:"50%", left:"50%",
-                          transform:"translate(-50%,-50%)",
-                          display:"flex", flexDirection:"column", alignItems:"center",
-                          color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8",
-                          fontFamily:"var(--app-font-display)", fontWeight:800,
-                          background:"rgba(18,20,40,0.82)", backdropFilter:"blur(4px)",
-                          borderRadius:8, padding:"4px 9px", lineHeight:1.2,
-                          pointerEvents:"none",
-                        }}>
-                          <span style={{ fontSize:17 }}>
-                            {speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "—"}
-                          </span>
-                          <span style={{ fontSize:10, marginTop:1 }}>
-                            {Math.abs(Math.round(speedDiff * 10) / 10)} km/h
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     {/* Right: Recent reading */}

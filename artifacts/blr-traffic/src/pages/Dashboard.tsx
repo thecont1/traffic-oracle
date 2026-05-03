@@ -197,7 +197,7 @@ function NapkinChart({
     <svg viewBox={`0 0 ${W} ${totalH}`}
       style={{ width:"100%", height:totalH, display:"block", overflow:"visible" }}
       overflow="visible"
-      preserveAspectRatio="xMidYMid meet">
+      preserveAspectRatio="none">
       {hasGap && (
         <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
           x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}

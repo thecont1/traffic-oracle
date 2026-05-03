@@ -142,7 +142,7 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "rgba(20,30,55,0.92)",
     cardBorder: "1px solid hsl(var(--border))",
     cardShadow: "none",
-    titleStyle: { background:"linear-gradient(90deg,#2563eb,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" },
+    titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#2563eb,#7c3aed)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
     chips: COLOUR_CHIPS,
     napkin: { baseline:"#60a5fa", recent:"#f472b6", gap:"#475569" },
     slider: {
@@ -186,7 +186,7 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "#ffffff",
     cardBorder: "1px solid #e0e0e0",
     cardShadow: "none",
-    titleStyle: { color:"#111111", WebkitTextFillColor:"#111111" },
+    titleStyle: { display:"inline-block", color:"#111111", WebkitTextFillColor:"#111111", background:"none" },
     chips: GRAY_CHIPS,
     napkin: { baseline:"#555555", recent:"#111111", gap:"#cccccc" },
     slider: {
@@ -225,7 +225,7 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "#ffffff",
     cardBorder: "1px solid rgba(236,72,153,0.18)",
     cardShadow: "0 2px 8px rgba(236,72,153,0.08)",
-    titleStyle: { background:"linear-gradient(90deg,#ec4899,#8b5cf6)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" },
+    titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#ec4899,#8b5cf6)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
     chips: PASTEL_CHIPS,
     napkin: { baseline:"#93c5fd", recent:"#f9a8d4", gap:"#e9d5ff" },
     slider: {

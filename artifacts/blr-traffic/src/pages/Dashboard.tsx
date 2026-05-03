@@ -34,14 +34,16 @@ const TOD_LIST: { value: TimeOfDay; label: string }[] = [
 function fmtWeek(s: string) {
   try { return new Date(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"}); } catch { return s; }
 }
-function fmtSliderDate(s?: string) {
+function fmtDate(s?: string) {
   if (!s) return "—";
-  try { return new Date(s).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"2-digit"}); } catch { return s; }
+  try {
+    const d = new Date(s);
+    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+    return `${d.getDate()} ${mon} '${String(d.getFullYear()).slice(2)}`;
+  } catch { return s; }
 }
-function fmtShortDate(s?: string) {
-  if (!s) return "—";
-  try { return new Date(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"}); } catch { return s; }
-}
+const fmtSliderDate = fmtDate;
+const fmtShortDate  = fmtDate;
 function fmtDuration(min: number) {
   if (!min) return "—";
   if (min < 60) return `${min.toFixed(0)} min`;
@@ -159,8 +161,7 @@ function NapkinChart({
 
   const muted = dark ? "#475569" : "#cbd5e1";
   const labelColor = dark ? "#64748b" : "#94a3b8";
-  const fmtLabel = (s: string) =>
-    new Date(s).toLocaleDateString("en-IN", { day:"numeric", month:"short" });
+  const fmtLabel = (s: string) => fmtDate(s);
 
   return (
     <svg
@@ -786,60 +787,45 @@ export default function Dashboard() {
                       style={{ position:"relative", display:"flex",
                         alignItems:"center", height:40, userSelect:"none", touchAction:"none" }}
                     >
-                      {/* Left thumb date — always visible, highlights on drag */}
-                      {baselineStartDate && (
+                      {/* Left thumb date — on drag, friendly light style */}
+                      {dragThumb === 0 && baselineStartDate && (
                         <div style={{
-                          position:"absolute", left:`${leftPct}%`, top:-24,
+                          position:"absolute", left:`${leftPct}%`, top:-20,
                           transform:"translateX(-50%)",
-                          background: dragThumb === 0 ? "#1e293b" : "transparent",
-                          color: dragThumb === 0 ? "#f1f5f9" : (dark ? "#94a3b8" : "#64748b"),
-                          fontSize:10, fontWeight:700,
-                          padding: dragThumb === 0 ? "3px 8px" : "0",
-                          borderRadius:6, whiteSpace:"nowrap",
-                          pointerEvents:"none", zIndex:30,
-                          boxShadow: dragThumb === 0 ? "0 2px 8px rgba(0,0,0,0.35)" : "none",
-                          transition:"background 0.12s, color 0.12s, padding 0.12s, box-shadow 0.12s",
+                          fontSize:10, fontWeight:400,
+                          color: dark ? "#94a3b8" : "#64748b",
+                          whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
                         }}>
-                          {fmtShortDate(baselineStartDate)}
+                          {fmtDate(baselineStartDate)}
                         </div>
                       )}
-                      {/* Right thumb date — always visible, highlights on drag */}
-                      {baselineEndDate && (
+                      {/* Right thumb date — on drag, friendly light style */}
+                      {dragThumb === 1 && baselineEndDate && (
                         <div style={{
-                          position:"absolute", left:`${rightPct}%`, top:-24,
+                          position:"absolute", left:`${rightPct}%`, top:-20,
                           transform:"translateX(-50%)",
-                          background: dragThumb === 1 ? "#1e293b" : "transparent",
-                          color: dragThumb === 1 ? "#f1f5f9" : (dark ? "#94a3b8" : "#64748b"),
-                          fontSize:10, fontWeight:700,
-                          padding: dragThumb === 1 ? "3px 8px" : "0",
-                          borderRadius:6, whiteSpace:"nowrap",
-                          pointerEvents:"none", zIndex:30,
-                          boxShadow: dragThumb === 1 ? "0 2px 8px rgba(0,0,0,0.35)" : "none",
-                          transition:"background 0.12s, color 0.12s, padding 0.12s, box-shadow 0.12s",
+                          fontSize:10, fontWeight:400,
+                          color: dark ? "#94a3b8" : "#64748b",
+                          whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
                         }}>
-                          {fmtShortDate(baselineEndDate)}
+                          {fmtDate(baselineEndDate)}
                         </div>
                       )}
 
-                      {/* Full-width track: uniform base + diagonal-stripe baseline window */}
+                      {/* Full-width gradient track + stripe overlay clipped to baseline window */}
                       <SliderPrimitive.Track style={{
                         position:"relative", flexGrow:1,
                         height:10, borderRadius:9999, overflow:"hidden",
-                        background: dark ? "#1e293b" : "#e2e8f0",
+                        background:"linear-gradient(90deg,#34d399,#60a5fa,#a78bfa,#f472b6)",
                       }}>
-                        {/* Striped overlay — baseline window only */}
+                        {/* Stripe overlay — baseline window only, sits above gradient */}
                         <div style={{
                           position:"absolute", top:0,
                           left:`${leftPct}%`,
                           width:`${Math.max(0, rightPct - leftPct)}%`,
                           height:"100%",
-                          background:`repeating-linear-gradient(
-                            45deg,
-                            rgba(52,211,153,0.85) 0px,
-                            rgba(52,211,153,0.85) 5px,
-                            rgba(52,211,153,0.22) 5px,
-                            rgba(52,211,153,0.22) 10px
-                          )`,
+                          background:"repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.25) 4px,rgba(255,255,255,0.25) 8px)",
+                          pointerEvents:"none",
                         }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
@@ -882,9 +868,10 @@ export default function Dashboard() {
 
                   {/* Dataset boundary dates below track */}
                   <div style={{ display:"flex", justifyContent:"space-between",
-                    fontSize:11, color:"hsl(var(--muted-foreground))", marginTop:6 }}>
-                    <span>{fmtSliderDate(allRouteWeeks[0]?.weekKey)}</span>
-                    <span>{fmtSliderDate(lastDate)}</span>
+                    fontSize:10, fontWeight:400,
+                    color: dark ? "#64748b" : "#94a3b8", marginTop:6 }}>
+                    <span>{fmtDate(allRouteWeeks[0]?.weekKey)}</span>
+                    <span>{fmtDate(lastDate)}</span>
                   </div>
                 </div>
               )}

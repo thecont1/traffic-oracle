@@ -787,26 +787,32 @@ export default function Dashboard() {
                       style={{ position:"relative", display:"flex",
                         alignItems:"center", height:40, userSelect:"none", touchAction:"none" }}
                     >
-                      {/* Left thumb date — on drag, friendly light style */}
-                      {dragThumb === 0 && baselineStartDate && (
+                      {/* Left thumb date — always visible, brighter on drag */}
+                      {baselineStartDate && (
                         <div style={{
                           position:"absolute", left:`${leftPct}%`, top:-20,
                           transform:"translateX(-50%)",
-                          fontSize:10, fontWeight:400,
-                          color: dark ? "#94a3b8" : "#64748b",
+                          fontSize:10, fontWeight: dragThumb === 0 ? 600 : 400,
+                          color: dragThumb === 0
+                            ? (dark ? "#e2e8f0" : "#1e293b")
+                            : (dark ? "#64748b" : "#94a3b8"),
                           whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
+                          transition:"color 0.12s, font-weight 0.12s",
                         }}>
                           {fmtDate(baselineStartDate)}
                         </div>
                       )}
-                      {/* Right thumb date — on drag, friendly light style */}
-                      {dragThumb === 1 && baselineEndDate && (
+                      {/* Right thumb date — always visible, brighter on drag */}
+                      {baselineEndDate && (
                         <div style={{
                           position:"absolute", left:`${rightPct}%`, top:-20,
                           transform:"translateX(-50%)",
-                          fontSize:10, fontWeight:400,
-                          color: dark ? "#94a3b8" : "#64748b",
+                          fontSize:10, fontWeight: dragThumb === 1 ? 600 : 400,
+                          color: dragThumb === 1
+                            ? (dark ? "#e2e8f0" : "#1e293b")
+                            : (dark ? "#64748b" : "#94a3b8"),
                           whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
+                          transition:"color 0.12s, font-weight 0.12s",
                         }}>
                           {fmtDate(baselineEndDate)}
                         </div>

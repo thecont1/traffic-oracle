@@ -234,16 +234,19 @@ function NapkinChart({
   );
 }
 
-/* ── Speed → colour helper — route-relative normalisation ─────── */
-function speedColorNorm(kmh: number, minSpd: number, maxSpd: number): string {
-  const t  = maxSpd > minSpd ? (kmh - minSpd) / (maxSpd - minSpd) : 0.5;
+/* ── Speed → colour helper — p10/p90 percentile scale ─────────── */
+/* p10 → red #ef4444, midpoint → amber #f59e0b, p90 → green #22c55e */
+function speedColorPercentile(kmh: number, p10: number, p90: number): string {
+  const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
   const tc = Math.max(0, Math.min(1, t));
   if (tc < 0.5) {
     const s = tc * 2;
-    return `rgba(${Math.round(239+(234-239)*s)},${Math.round(68+(179-68)*s)},${Math.round(68+(8-68)*s)},0.92)`;
+    /* red(239,68,68) → amber(245,158,11) */
+    return `rgba(${Math.round(239+(245-239)*s)},${Math.round(68+(158-68)*s)},${Math.round(68+(11-68)*s)},0.92)`;
   }
   const s = (tc - 0.5) * 2;
-  return `rgba(${Math.round(234+(52-234)*s)},${Math.round(179+(211-179)*s)},${Math.round(8+(153-8)*s)},0.92)`;
+  /* amber(245,158,11) → green(34,197,94) */
+  return `rgba(${Math.round(245+(34-245)*s)},${Math.round(158+(197-158)*s)},${Math.round(11+(94-11)*s)},0.92)`;
 }
 
 /* ── KPI info icon + tooltip ──────────────────────────────────── */
@@ -322,13 +325,17 @@ function CalendarWidget({
     if (lastStr) { const { y, m } = parseYM(lastStr); setCalYear(y); setCalMonth(m); }
   }, [lastStr]);
 
-  /* Route-relative speed range — recomputed whenever route data changes */
-  const { minSpd, maxSpd } = useMemo(() => {
-    const speeds = Array.from(dailyStats.values()).map(d => d.avgSpeed).filter(s => s > 0);
-    if (!speeds.length) return { minSpd: 15, maxSpd: 50 };
-    const mn = Math.min(...speeds);
-    const mx = Math.max(...speeds);
-    return { minSpd: mn, maxSpd: mx > mn ? mx : mn + 1 };
+  /* p10 / p90 of the full route dataset — gives visible colour spread across any month */
+  const { p10, p90 } = useMemo(() => {
+    const speeds = Array.from(dailyStats.values())
+      .map(d => d.avgSpeed).filter(s => s > 0).sort((a, b) => a - b);
+    if (speeds.length < 2) return { p10: 15, p90: 50 };
+    const at = (pct: number) => {
+      const idx = (pct / 100) * (speeds.length - 1);
+      const lo  = Math.floor(idx), hi = Math.ceil(idx);
+      return speeds[lo] + (speeds[hi] - speeds[lo]) * (idx - lo);
+    };
+    return { p10: at(10), p90: at(90) };
   }, [dailyStats]);
 
   /* ── Imperative tooltip — zero grid re-renders on hover ─────── */
@@ -371,13 +378,19 @@ function CalendarWidget({
     const TW      = el.offsetWidth  || 200;
     const TH      = el.offsetHeight || 140;
     const TAIL    = 9;
-    const GAP     = 6;
+    const GAP     = 8;
     const vw      = window.innerWidth;
 
+    /* Horizontal: centre on cell; clamp to viewport edges */
     const rawLeft = rect.left + rect.width / 2 - TW / 2;
-    const left    = Math.max(8, Math.min(vw - TW - 8, rawLeft));
-    const isAbove = rect.top > TH + TAIL + GAP + 40;
-    const top     = isAbove ? rect.top - TH - TAIL - GAP : rect.bottom + TAIL + GAP;
+    const left    = rawLeft + TW > vw - 8
+      ? Math.max(8, rect.right - TW)
+      : Math.max(8, rawLeft);
+
+    /* Vertical: prefer above; flip below when not enough room */
+    const wouldTop = rect.top - TH - TAIL - GAP;
+    const isAbove  = wouldTop >= 0;
+    const top      = isAbove ? wouldTop : rect.bottom + TAIL + GAP;
 
     /* Tail — points toward the hovered cell */
     const tailLeft = Math.max(14, Math.min(TW - 14, rect.left + rect.width / 2 - left));
@@ -448,7 +461,7 @@ function CalendarWidget({
       const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
       const s       = dailyStats.get(dateKey);
       const bg      = s
-        ? speedColorNorm(s.avgSpeed, minSpd, maxSpd)
+        ? speedColorPercentile(s.avgSpeed, p10, p90)
         : dark ? "rgba(148,163,184,0.15)" : "rgba(100,116,139,0.15)";
       const txtClr  = s ? "#fff" : (dark ? "rgba(148,163,184,0.5)" : "rgba(100,116,139,0.45)");
       return (
@@ -471,7 +484,7 @@ function CalendarWidget({
     });
     return [...blanks, ...days];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, dark, minSpd, maxSpd]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, dark, p10, p90]);
 
   const navBtn = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} disabled={!active}

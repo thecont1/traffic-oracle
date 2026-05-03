@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { CSVLink } from "react-csv";
-import { Sun, Moon, Download } from "lucide-react";
+import { Sun, Moon, Download, Share2 } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats,
 } from "@/lib/useTrafficData";
@@ -29,6 +29,21 @@ const TOD_LIST: { value: TimeOfDay; label: string }[] = [
   { value:"weekends",          label:"weekends (all day)" },
   { value:"all",               label:"any time of day" },
 ];
+
+/* ── URL param helpers ────────────────────────────────────────── */
+function readUrlParams() {
+  if (typeof window === "undefined") return {} as Record<string, string | number>;
+  const p = new URLSearchParams(window.location.search);
+  const out: Record<string, string | number> = {};
+  if (p.has("route"))  out.route  = p.get("route")!;
+  if (p.has("tod"))    out.tod    = p.get("tod")!;
+  if (p.has("period")) out.period = p.get("period")!;
+  if (p.has("mode"))   out.mode   = p.get("mode")!;
+  if (p.has("bl"))     out.bl     = Number(p.get("bl"));
+  if (p.has("br"))     out.br     = Number(p.get("br"));
+  return out;
+}
+const URL_PARAMS = readUrlParams();
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 function fmtWeek(s: string) {
@@ -390,10 +405,18 @@ function CalendarWidget({
 export default function Dashboard() {
   /* UI state */
   const [dark,         setDark]         = useState(true);
-  const [periodIdx,    setPeriodIdx]    = useState(2);    // 6m
-  const [todIdx,       setTodIdx]       = useState(1);    // weekday afternoon
+  const [periodIdx,    setPeriodIdx]    = useState(() => {
+    const i = PERIOD_LIST.findIndex(p => p.value === URL_PARAMS.period);
+    return i >= 0 ? i : 2;
+  });
+  const [todIdx,       setTodIdx]       = useState(() => {
+    const i = TOD_LIST.findIndex(t => t.value === URL_PARAMS.tod);
+    return i >= 0 ? i : 1;
+  });
   const [routeIdx,     setRouteIdx]     = useState(0);
-  const [questionMode, setQuestionMode] = useState<"worsened"|"improved">("worsened");
+  const [questionMode, setQuestionMode] = useState<"worsened"|"improved">(
+    URL_PARAMS.mode === "improved" ? "improved" : "worsened"
+  );
 
   /* chip animation */
   const [chipAnim, setChipAnim] = useState<Record<string,boolean>>({});
@@ -418,6 +441,17 @@ export default function Dashboard() {
     return () => window.removeEventListener("pointerup", up);
   }, []);
 
+  /* Restore slider + route from URL params (used exactly once after data loads) */
+  const urlParamsRef = useRef<{ bl?: number; br?: number; routeApplied: boolean }>({
+    bl: typeof URL_PARAMS.bl === "number" ? URL_PARAMS.bl : undefined,
+    br: typeof URL_PARAMS.br === "number" ? URL_PARAMS.br : undefined,
+    routeApplied: false,
+  });
+
+  /* Share */
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>();
+
   /* data */
   const { routes, allRows, loading, error, rowCount } = useTrafficData();
 
@@ -425,6 +459,16 @@ export default function Dashboard() {
     const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
     return labels.length ? labels : ["Old Airport Road"];
   }, [allRows]);
+
+  /* Apply URL-param route once the route list has loaded */
+  useEffect(() => {
+    if (routeOptions.length === 0 || urlParamsRef.current.routeApplied) return;
+    if (URL_PARAMS.route) {
+      const idx = routeOptions.indexOf(URL_PARAMS.route as string);
+      if (idx >= 0) setRouteIdx(idx);
+    }
+    urlParamsRef.current.routeApplied = true;
+  }, [routeOptions]);
 
   const selectedRoute = routeOptions[routeIdx % routeOptions.length] ?? "Old Airport Road";
   const period        = PERIOD_LIST[periodIdx].value;
@@ -461,10 +505,21 @@ export default function Dashboard() {
      Snaps to config.json baseline_default_start / baseline_default_end. */
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
+    const maxI = allRouteWeeks.length - 1;
+    /* If URL params carry slider positions, restore them once then clear */
+    const p = urlParamsRef.current;
+    if (p.bl !== undefined && p.br !== undefined) {
+      setSliderVals([
+        Math.max(0, Math.min(p.bl, maxI)),
+        Math.min(maxI, Math.max(p.br, 0)),
+      ]);
+      urlParamsRef.current = { ...p, bl: undefined, br: undefined };
+      return;
+    }
     const cfgStart = (appConfig as Record<string,string>).baseline_default_start;
     const cfgEnd   = (appConfig as Record<string,string>).baseline_default_end;
     let leftIdx  = 0;
-    let rightIdx = Math.max(0, Math.floor((allRouteWeeks.length - 1) * 0.5));
+    let rightIdx = Math.max(0, Math.floor(maxI * 0.5));
     if (cfgStart) {
       const idx = allRouteWeeks.findIndex(w => w.weekKey >= cfgStart);
       if (idx >= 0) leftIdx = idx;
@@ -490,6 +545,24 @@ export default function Dashboard() {
     () => allRouteWeeks.slice(safeLeft, safeRight + 1),
     [allRouteWeeks, safeLeft, safeRight],
   );
+
+  /* Share — encode current view into a URL and copy to clipboard */
+  const handleShare = useCallback(() => {
+    const p = new URLSearchParams({
+      route:  selectedRoute,
+      tod,
+      period,
+      mode:   questionMode,
+      bl:     String(safeLeft),
+      br:     String(safeRight),
+    });
+    const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    });
+  }, [selectedRoute, tod, period, questionMode, safeLeft, safeRight]);
 
   /* Recent = weeks after slider right handle AND within period window
      (period is measured back from the last available data point) */
@@ -683,6 +756,19 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              {!loading && rowCount > 0 && (
+                <button onClick={handleShare} style={{
+                  display:"flex", alignItems:"center", gap:5, fontSize:12,
+                  border:"1px solid hsl(var(--border))", borderRadius:9999,
+                  padding:"5px 12px",
+                  color: copied ? "#34d399" : "hsl(var(--muted-foreground))",
+                  background: copied ? "rgba(52,211,153,0.1)" : "transparent",
+                  cursor:"pointer", transition:"color 0.2s, background 0.2s",
+                }} title="Copy shareable link">
+                  <Share2 size={13} />
+                  {copied ? "Copied!" : "Share"}
+                </button>
+              )}
               {!loading && merged.length > 0 && (
                 <CSVLink
                   data={merged} headers={csvHeaders}

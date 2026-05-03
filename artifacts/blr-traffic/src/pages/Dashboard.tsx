@@ -1168,25 +1168,8 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {/* Centre: napkin chart with delta pill above */}
-                    <div style={{ flex:1, position:"relative", paddingTop:30 }}>
-                      {recentSpeed > 0 && baselineSpeed > 0 && (
-                        <div style={{
-                          position:"absolute", top:4, left:`${gapCenterPct}%`,
-                          transform:"translateX(-50%)", zIndex:10, whiteSpace:"nowrap",
-                          display:"inline-flex", alignItems:"center", gap:4,
-                          color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8",
-                          fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:13,
-                          background: speedDiff > 0 ? "rgba(52,211,153,0.15)"
-                            : speedDiff < 0 ? "rgba(248,113,113,0.15)" : "rgba(148,163,184,0.15)",
-                          border:`1px solid ${speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8"}`,
-                          borderRadius:20, padding:"2px 10px",
-                          pointerEvents:"none",
-                        }}>
-                          <span>{speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "—"}</span>
-                          <span style={{ fontSize:12 }}>{Math.abs(Math.round(speedDiff * 10) / 10)} km/h</span>
-                        </div>
-                      )}
+                    {/* Centre: napkin chart */}
+                    <div style={{ flex:1, position:"relative" }}>
                       <NapkinChart
                         baselineWeeks={baselineWeeks}
                         recentWeeks={recentWeeks}

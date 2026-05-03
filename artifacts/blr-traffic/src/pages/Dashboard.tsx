@@ -145,6 +145,22 @@ function NapkinChart({
 }) {
   const { theme: thm } = useTheme();
 
+  /* measure actual rendered width so coordinates scale to fit exactly */
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [W, setW] = useState(500);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setW(Math.round(w));
+    });
+    obs.observe(el);
+    const init = el.getBoundingClientRect().width;
+    if (init > 0) setW(Math.round(init));
+    return () => obs.disconnect();
+  }, []);
+
   const bLen = baselineWeeks.length;
   const rLen = recentWeeks.length;
   if (bLen + rLen < 2) return null;
@@ -159,7 +175,7 @@ function NapkinChart({
   const maxS = Math.max(...allSpeeds);
   const range = maxS - minS || 1;
 
-  const W = 500, H = height;
+  const H = height;
   const PX = 0, PY = 8;
   const chartW = W - PX * 2;
   const chartH = H - PY * 2;
@@ -194,10 +210,11 @@ function NapkinChart({
   const recentW   = thm.key === "gray" ? 3.5 : 3.5;
 
   return (
-    <svg viewBox={`0 0 ${W} ${totalH}`}
+    <svg ref={svgRef}
+      viewBox={`0 0 ${W} ${totalH}`}
       style={{ width:"100%", height:totalH, display:"block", overflow:"visible" }}
       overflow="visible"
-      preserveAspectRatio="none">
+      preserveAspectRatio="xMidYMid meet">
       {hasGap && (
         <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
           x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}

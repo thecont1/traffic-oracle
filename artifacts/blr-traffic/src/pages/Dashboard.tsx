@@ -772,23 +772,13 @@ export default function Dashboard() {
                 }}>
                   {showSparkle && <Sparkles />}
 
-                  <div style={{ display:"flex", alignItems:"center",
-                    justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-                    <div>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>📏 Baseline Window</p>
-                      <p style={{ fontSize:11, color:"hsl(var(--muted-foreground))", marginTop:2 }}>
-                        Full history · {allRouteWeeks.length} weeks · drag handles to set comparison range
-                      </p>
-                    </div>
-                    <span style={{ fontSize:11, color:"hsl(var(--muted-foreground))",
-                      background:"hsl(var(--muted))", borderRadius:9999, padding:"3px 10px" }}>
-                      period chip filters "recent" only
-                    </span>
-                  </div>
+                  <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                    color: dark?"#f1f5f9":"#1e293b", marginBottom:14 }}>
+                    Compare with this earlier period ↔
+                  </p>
 
-                  {/* Slider + floating date tooltips */}
-                  <div style={{ padding:"16px 0 4px", position:"relative" }}>
+                  {/* Slider — always-visible date labels above thumbs + full-width track */}
+                  <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}
@@ -796,49 +786,61 @@ export default function Dashboard() {
                       style={{ position:"relative", display:"flex",
                         alignItems:"center", height:40, userSelect:"none", touchAction:"none" }}
                     >
-                      {/* Left thumb floating date */}
-                      {dragThumb === 0 && baselineStartDate && (
+                      {/* Left thumb date — always visible, highlights on drag */}
+                      {baselineStartDate && (
                         <div style={{
-                          position:"absolute", left:`${leftPct}%`, top:-22,
+                          position:"absolute", left:`${leftPct}%`, top:-24,
                           transform:"translateX(-50%)",
-                          background:"#1e293b", color:"#f1f5f9",
-                          fontSize:11, fontWeight:700, padding:"3px 8px",
+                          background: dragThumb === 0 ? "#1e293b" : "transparent",
+                          color: dragThumb === 0 ? "#f1f5f9" : (dark ? "#94a3b8" : "#64748b"),
+                          fontSize:10, fontWeight:700,
+                          padding: dragThumb === 0 ? "3px 8px" : "0",
                           borderRadius:6, whiteSpace:"nowrap",
                           pointerEvents:"none", zIndex:30,
-                          boxShadow:"0 2px 8px rgba(0,0,0,0.35)",
+                          boxShadow: dragThumb === 0 ? "0 2px 8px rgba(0,0,0,0.35)" : "none",
+                          transition:"background 0.12s, color 0.12s, padding 0.12s, box-shadow 0.12s",
                         }}>
                           {fmtShortDate(baselineStartDate)}
                         </div>
                       )}
-                      {/* Right thumb floating date */}
-                      {dragThumb === 1 && baselineEndDate && (
+                      {/* Right thumb date — always visible, highlights on drag */}
+                      {baselineEndDate && (
                         <div style={{
-                          position:"absolute", left:`${rightPct}%`, top:-22,
+                          position:"absolute", left:`${rightPct}%`, top:-24,
                           transform:"translateX(-50%)",
-                          background:"#1e293b", color:"#f1f5f9",
-                          fontSize:11, fontWeight:700, padding:"3px 8px",
+                          background: dragThumb === 1 ? "#1e293b" : "transparent",
+                          color: dragThumb === 1 ? "#f1f5f9" : (dark ? "#94a3b8" : "#64748b"),
+                          fontSize:10, fontWeight:700,
+                          padding: dragThumb === 1 ? "3px 8px" : "0",
                           borderRadius:6, whiteSpace:"nowrap",
                           pointerEvents:"none", zIndex:30,
-                          boxShadow:"0 2px 8px rgba(0,0,0,0.35)",
+                          boxShadow: dragThumb === 1 ? "0 2px 8px rgba(0,0,0,0.35)" : "none",
+                          transition:"background 0.12s, color 0.12s, padding 0.12s, box-shadow 0.12s",
                         }}>
                           {fmtShortDate(baselineEndDate)}
                         </div>
                       )}
 
+                      {/* Full-width track: uniform base + diagonal-stripe baseline window */}
                       <SliderPrimitive.Track style={{
                         position:"relative", flexGrow:1,
                         height:10, borderRadius:9999, overflow:"hidden",
                         background: dark ? "#1e293b" : "#e2e8f0",
                       }}>
-                        <div style={{ position:"absolute", top:0, left:0,
-                          width:`${leftPct}%`, height:"100%",
-                          background: dark ? "#0f172a" : "#cbd5e1" }} />
-                        <div style={{ position:"absolute", top:0, left:`${leftPct}%`,
-                          width:`${Math.max(0,rightPct-leftPct)}%`, height:"100%",
-                          background:"linear-gradient(90deg,#34d399,#60a5fa)" }} />
-                        <div style={{ position:"absolute", top:0, left:`${rightPct}%`,
-                          width:`${100-rightPct}%`, height:"100%",
-                          background:"linear-gradient(90deg,#a78bfa,#f472b6)" }} />
+                        {/* Striped overlay — baseline window only */}
+                        <div style={{
+                          position:"absolute", top:0,
+                          left:`${leftPct}%`,
+                          width:`${Math.max(0, rightPct - leftPct)}%`,
+                          height:"100%",
+                          background:`repeating-linear-gradient(
+                            45deg,
+                            rgba(52,211,153,0.85) 0px,
+                            rgba(52,211,153,0.85) 5px,
+                            rgba(52,211,153,0.22) 5px,
+                            rgba(52,211,153,0.22) 10px
+                          )`,
+                        }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
 
@@ -878,23 +880,11 @@ export default function Dashboard() {
                     </SliderPrimitive.Root>
                   </div>
 
-                  {/* Track date labels + legend */}
+                  {/* Dataset boundary dates below track */}
                   <div style={{ display:"flex", justifyContent:"space-between",
                     fontSize:11, color:"hsl(var(--muted-foreground))", marginTop:6 }}>
-                    <span style={{ fontWeight:600 }}>{fmtSliderDate(allRouteWeeks[0]?.weekKey)}</span>
-                    <span style={{ display:"flex", gap:8, alignItems:"center" }}>
-                      <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
-                        <span style={{ display:"inline-block", width:20, height:3,
-                          borderRadius:2, background:"linear-gradient(90deg,#34d399,#60a5fa)" }} />
-                        baseline
-                      </span>
-                      <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
-                        <span style={{ display:"inline-block", width:20, height:3,
-                          borderRadius:2, background:"linear-gradient(90deg,#a78bfa,#f472b6)" }} />
-                        recent ({periodLabel})
-                      </span>
-                    </span>
-                    <span style={{ fontWeight:600 }}>{fmtSliderDate(lastDate)}</span>
+                    <span>{fmtSliderDate(allRouteWeeks[0]?.weekKey)}</span>
+                    <span>{fmtSliderDate(lastDate)}</span>
                   </div>
                 </div>
               )}

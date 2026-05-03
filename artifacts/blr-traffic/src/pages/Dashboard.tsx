@@ -824,14 +824,26 @@ export default function Dashboard() {
                         height:10, borderRadius:9999, overflow:"hidden",
                         background:"linear-gradient(90deg,#34d399,#60a5fa,#a78bfa,#f472b6)",
                       }}>
-                        {/* Stripe overlay — baseline window only, sits above gradient */}
+                        {/* Dim overlay on left non-baseline section */}
+                        <div style={{
+                          position:"absolute", top:0, left:0,
+                          width:`${leftPct}%`, height:"100%",
+                          background:"rgba(0,0,0,0.45)", pointerEvents:"none",
+                        }} />
+                        {/* Stripe overlay — baseline window, high-contrast shimmer */}
                         <div style={{
                           position:"absolute", top:0,
                           left:`${leftPct}%`,
                           width:`${Math.max(0, rightPct - leftPct)}%`,
                           height:"100%",
-                          background:"repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.25) 4px,rgba(255,255,255,0.25) 8px)",
+                          background:"repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.55) 4px,rgba(255,255,255,0.55) 8px)",
                           pointerEvents:"none",
+                        }} />
+                        {/* Dim overlay on right non-baseline section */}
+                        <div style={{
+                          position:"absolute", top:0, left:`${rightPct}%`,
+                          width:`${100 - rightPct}%`, height:"100%",
+                          background:"rgba(0,0,0,0.45)", pointerEvents:"none",
                         }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>

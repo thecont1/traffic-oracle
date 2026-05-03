@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
   AreaChart, Area, LineChart, Line,
@@ -454,7 +455,8 @@ function CalendarWidget({
   );
 
   return (
-    <div style={{ position:"relative" }}>
+    <>
+      <div style={{ position:"relative" }}>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
@@ -494,15 +496,18 @@ function CalendarWidget({
         <span>Fast (km/h)</span>
       </div>
 
-      {/* Tooltip — always mounted; content + tail set imperatively via innerHTML */}
-      <div ref={tooltipRef} style={{
-        position:"fixed", pointerEvents:"none",
-        opacity:0, transition:"opacity 0.15s ease",
-        zIndex:1000, overflow:"visible",
-        fontFamily:"var(--app-font)", fontSize:12,
-        top:0, left:0,
-      }} />
-    </div>
+      </div>
+      {createPortal(
+        <div ref={tooltipRef} style={{
+          position:"fixed", pointerEvents:"none",
+          opacity:0, transition:"opacity 0.15s ease",
+          zIndex:9999, overflow:"visible",
+          fontFamily:"var(--app-font)", fontSize:12,
+          top:0, left:0,
+        }} />,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -826,8 +831,8 @@ export default function Dashboard() {
     gap: 4,
   };
   const kpiLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.08em", color: dark ? "#94a3b8" : "#64748b",
+    fontSize: 11, fontWeight: 600,
+    color: dark ? "#94a3b8" : "#64748b",
     display: "flex", alignItems: "center",
   };
   const kpiValue: React.CSSProperties = {
@@ -1115,7 +1120,7 @@ export default function Dashboard() {
 
                     {/* Left: Baseline reading */}
                     {baselineSpeed > 0 && (
-                      <div style={{ width:86, flexShrink:0, textAlign:"center", paddingRight:8 }}>
+                      <div style={{ width:64, flexShrink:0, textAlign:"center", paddingRight:8 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>Baseline</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
@@ -1156,7 +1161,7 @@ export default function Dashboard() {
 
                     {/* Right: Recent reading */}
                     {recentSpeed > 0 && (
-                      <div style={{ width:86, flexShrink:0, textAlign:"center", paddingLeft:8 }}>
+                      <div style={{ width:64, flexShrink:0, textAlign:"center", paddingLeft:8 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>Recent</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
@@ -1208,7 +1213,7 @@ export default function Dashboard() {
                   {/* Sample count */}
                   <div style={kpiCard}>
                     <span style={{ fontSize:28 }}>📊</span>
-                    <div style={kpiLabel}>Data Points <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
+                    <div style={kpiLabel}>Readings <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{merged.length} weeks · {periodLabel} window</p>
                   </div>

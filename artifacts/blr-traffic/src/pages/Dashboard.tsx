@@ -1120,7 +1120,7 @@ export default function Dashboard() {
 
                     {/* Left: Baseline reading */}
                     {baselineSpeed > 0 && (
-                      <div style={{ width:64, flexShrink:0, textAlign:"center", paddingRight:8 }}>
+                      <div style={{ width:52, flexShrink:0, textAlign:"center", paddingRight:2 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>Baseline</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
@@ -1161,7 +1161,7 @@ export default function Dashboard() {
 
                     {/* Right: Recent reading */}
                     {recentSpeed > 0 && (
-                      <div style={{ width:64, flexShrink:0, textAlign:"center", paddingLeft:8 }}>
+                      <div style={{ width:52, flexShrink:0, textAlign:"center", paddingLeft:2 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>Recent</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,

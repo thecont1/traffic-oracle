@@ -1217,10 +1217,11 @@ function DashboardInner() {
                     fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:16,
                     display:"inline-block",
                     ...(thm.key === "gray" ? { color:"#111111" } : {
-                      background: thm.key === "pastel"
+                      backgroundImage: thm.key === "pastel"
                         ? "linear-gradient(90deg,#ec4899,#8b5cf6)"
                         : "linear-gradient(90deg,#2563eb,#7c3aed)",
                       WebkitBackgroundClip:"text",
+                      backgroundClip:"text" as React.CSSProperties["backgroundClip"],
                       WebkitTextFillColor:"transparent",
                       color:"transparent",
                     }),

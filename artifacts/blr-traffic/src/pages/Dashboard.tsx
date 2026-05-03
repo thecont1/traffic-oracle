@@ -435,6 +435,16 @@ export default function Dashboard() {
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
   sliderValsRef.current = sliderVals;
+  /* Measure track width so stripe overlays align with Radix thumb centres */
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [trackW, setTrackW] = useState(0);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setTrackW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const up = () => setDragThumb(-1);
     window.addEventListener("pointerup", up);
@@ -539,6 +549,16 @@ export default function Dashboard() {
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
   const leftPct   = (safeLeft / maxIdx) * 100;
   const rightPct  = (safeRight / maxIdx) * 100;
+  /* Corrected percentages for Track-internal overlays — Radix applies a
+     translateX in-bounds offset so the thumb visual centre sits at:
+     px = (idx/maxIdx) * (trackW - thumbW) + thumbW/2               */
+  const THUMB_W = 22;
+  const adjPct = (idx: number) =>
+    trackW > 0
+      ? ((idx / maxIdx) * (trackW - THUMB_W) + THUMB_W / 2) / trackW * 100
+      : (idx / maxIdx) * 100;
+  const leftTrackPct  = adjPct(safeLeft);
+  const rightTrackPct = adjPct(safeRight);
 
   /* Baseline = slider selection from full history */
   const baselineWeeks = useMemo(
@@ -905,30 +925,30 @@ export default function Dashboard() {
                       )}
 
                       {/* Full-width gradient track + stripe overlay clipped to baseline window */}
-                      <SliderPrimitive.Track style={{
+                      <SliderPrimitive.Track ref={trackRef} style={{
                         position:"relative", flexGrow:1,
                         height:10, borderRadius:9999, overflow:"hidden",
                         background:"linear-gradient(90deg,#34d399,#60a5fa,#a78bfa,#f472b6)",
                       }}>
-                        {/* Dim overlay on left non-baseline section */}
+                        {/* Dim left — thumb-centre-corrected so no stripe leaks left */}
                         <div style={{
                           position:"absolute", top:0, left:0,
-                          width:`${leftPct}%`, height:"100%",
+                          width:`${leftTrackPct}%`, height:"100%",
                           background:"rgba(0,0,0,0.45)", pointerEvents:"none",
                         }} />
-                        {/* Stripe overlay — baseline window, high-contrast shimmer */}
+                        {/* Stripe — baseline window only */}
                         <div style={{
                           position:"absolute", top:0,
-                          left:`${leftPct}%`,
-                          width:`${Math.max(0, rightPct - leftPct)}%`,
+                          left:`${leftTrackPct}%`,
+                          width:`${Math.max(0, rightTrackPct - leftTrackPct)}%`,
                           height:"100%",
                           background:"repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.55) 4px,rgba(255,255,255,0.55) 8px)",
                           pointerEvents:"none",
                         }} />
-                        {/* Dim overlay on right non-baseline section */}
+                        {/* Dim right — thumb-centre-corrected */}
                         <div style={{
-                          position:"absolute", top:0, left:`${rightPct}%`,
-                          width:`${100 - rightPct}%`, height:"100%",
+                          position:"absolute", top:0, left:`${rightTrackPct}%`,
+                          width:`${100 - rightTrackPct}%`, height:"100%",
                           background:"rgba(0,0,0,0.45)", pointerEvents:"none",
                         }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />

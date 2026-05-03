@@ -570,6 +570,8 @@ export default function Dashboard() {
   const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [overlapWarning, setOverlapWarning] = useState(false);
+  const overlapTimer = useRef<ReturnType<typeof setTimeout>>();
   /* thumb drag/hover tracking for date tooltips */
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
@@ -738,6 +740,15 @@ export default function Dashboard() {
     return d;
   }, [lastDataMs, period]);
 
+  /* Index of the first week that belongs to the recent window — used to guard the slider */
+  const recentWindowStartIdx = useMemo(
+    () => {
+      const idx = allRouteWeeks.findIndex(w => w.weekStart >= periodCutoffDate);
+      return idx >= 0 ? idx : allRouteWeeks.length;
+    },
+    [allRouteWeeks, periodCutoffDate],
+  );
+
   const recentWeeks = useMemo(
     () => allRouteWeeks.filter((w, i) => i > safeRight && w.weekStart >= periodCutoffDate),
     [allRouteWeeks, safeRight, periodCutoffDate],
@@ -768,10 +779,18 @@ export default function Dashboard() {
 
   /* Slider change handler — also detects which thumb is moving */
   const handleSliderChange = useCallback((vals: number[]) => {
-    const [l, r] = vals as [number, number];
+    let [l, r] = vals as [number, number];
     const [prevL, prevR] = sliderValsRef.current;
     if (l !== prevL) setDragThumb(0);
     else if (r !== prevR) setDragThumb(1);
+    /* Guard: baseline end must stay at least 1 week before the recent window */
+    const maxR = recentWindowStartIdx > 0 ? recentWindowStartIdx - 1 : maxIdx;
+    if (r > maxR) {
+      r = maxR;
+      setOverlapWarning(true);
+      clearTimeout(overlapTimer.current);
+      overlapTimer.current = setTimeout(() => setOverlapWarning(false), 3000);
+    }
     setSliderVals([l, r]);
     const win = r - l;
     if ((win <= 1 || win >= allRouteWeeks.length * 0.85) && !showSparkle) {
@@ -779,7 +798,7 @@ export default function Dashboard() {
       clearTimeout(sparkleTimer.current);
       sparkleTimer.current = setTimeout(() => setShowSparkle(false), 1600);
     }
-  }, [allRouteWeeks.length, showSparkle]);
+  }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
   /* ── Daily stats for calendar — all-day aggregate, ignores ToD filter ── */
   const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
@@ -1126,6 +1145,17 @@ export default function Dashboard() {
                     <span>{fmtDate(allRouteWeeks[0]?.weekKey)}</span>
                     <span>{fmtDate(lastDate)}</span>
                   </div>
+
+                  {/* Overlap warning — fades out after 3 s */}
+                  {overlapWarning && (
+                    <p key={String(overlapWarning)} style={{
+                      fontSize:11, color:"#f87171", textAlign:"center",
+                      marginTop:8, animation:"overlap-warning 3s ease forwards",
+                      pointerEvents:"none",
+                    }}>
+                      Baseline can't overlap with the recent period 🙅
+                    </p>
+                  )}
                 </div>
               )}
 

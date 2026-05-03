@@ -395,6 +395,12 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes overlap-warning {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 @media print {
   @page { margin: 0; }
   body { margin: 0.5in; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

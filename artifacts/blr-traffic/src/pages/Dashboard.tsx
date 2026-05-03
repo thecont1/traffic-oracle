@@ -130,12 +130,13 @@ function Sparkles() {
 
 /* ── Napkin chart — baseline (blue) / gap / recent (pink) ─────── */
 function NapkinChart({
-  baselineWeeks, recentWeeks, dark, height = 120,
+  baselineWeeks, recentWeeks, dark, height = 120, dateLabels,
 }: {
   baselineWeeks: WeeklyAggregate[];
   recentWeeks:   WeeklyAggregate[];
   dark: boolean;
   height?: number;
+  dateLabels?: { bStart: string; bEnd: string; rStart: string; rEnd: string };
 }) {
   const bLen = baselineWeeks.length;
   const rLen = recentWeeks.length;
@@ -152,9 +153,11 @@ function NapkinChart({
   const range = maxS - minS || 1;
 
   const W = 500, H = height;
-  const PX = 14, PY = 8;
+  const PX = 4, PY = 8;
   const chartW = W - PX * 2;
   const chartH = H - PY * 2;
+  const LABEL_H = dateLabels ? 18 : 0;
+  const totalH  = H + LABEL_H;
 
   const hasGap = bLen > 0 && rLen > 0;
   const bFrac = bLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
@@ -174,11 +177,12 @@ function NapkinChart({
           return `${x.toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`;
         }).join(" ");
 
-  const muted = dark ? "#475569" : "#cbd5e1";
+  const muted  = dark ? "#475569" : "#cbd5e1";
+  const labelY = H + 13;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`}
-      style={{ width:"100%", height:H, display:"block" }}
+    <svg viewBox={`0 0 ${W} ${totalH}`}
+      style={{ width:"100%", height:totalH, display:"block" }}
       preserveAspectRatio="xMidYMid meet">
       {hasGap && (
         <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
@@ -201,6 +205,27 @@ function NapkinChart({
       {hasGap && rLen > 0 && (
         <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill="#f472b6" />
       )}
+      {/* Date markers: dashed verticals + bottom-aligned labels */}
+      {dateLabels && bLen > 0 && (<>
+        <line x1={bXS} y1={toY(baselineWeeks[0].avgSpeed)} x2={bXS} y2={H}
+          stroke="#60a5fa" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={bXS} y={labelY} fontSize={9} fill="#60a5fa" opacity={0.8}
+          textAnchor="start">{dateLabels.bStart}</text>
+        <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)} x2={bXE} y2={H}
+          stroke="#60a5fa" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={bXE} y={labelY} fontSize={9} fill="#60a5fa" opacity={0.8}
+          textAnchor="end">{dateLabels.bEnd}</text>
+      </>)}
+      {dateLabels && rLen > 0 && (<>
+        <line x1={rXS} y1={toY(recentWeeks[0].avgSpeed)} x2={rXS} y2={H}
+          stroke="#f472b6" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={rXS} y={labelY} fontSize={9} fill="#f472b6" opacity={0.8}
+          textAnchor="start">{dateLabels.rStart}</text>
+        <line x1={rXE} y1={toY(recentWeeks[rLen - 1].avgSpeed)} x2={rXE} y2={H}
+          stroke="#f472b6" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={rXE} y={labelY} fontSize={9} fill="#f472b6" opacity={0.8}
+          textAnchor="end">{dateLabels.rEnd}</text>
+      </>)}
     </svg>
   );
 }
@@ -1120,7 +1145,7 @@ export default function Dashboard() {
 
                     {/* Left: Baseline reading */}
                     {baselineSpeed > 0 && (
-                      <div style={{ width:52, flexShrink:0, textAlign:"center", paddingRight:2 }}>
+                      <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>Baseline</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
@@ -1137,6 +1162,12 @@ export default function Dashboard() {
                         recentWeeks={recentWeeks}
                         dark={dark}
                         height={120}
+                        dateLabels={{
+                          bStart: fmtDate(baselineStartDate),
+                          bEnd:   fmtDate(baselineEndDate),
+                          rStart: fmtDate(recentStartDate),
+                          rEnd:   fmtDate(lastDate),
+                        }}
                       />
                       {recentSpeed > 0 && baselineSpeed > 0 && (
                         <div style={{
@@ -1161,7 +1192,7 @@ export default function Dashboard() {
 
                     {/* Right: Recent reading */}
                     {recentSpeed > 0 && (
-                      <div style={{ width:52, flexShrink:0, textAlign:"center", paddingLeft:2 }}>
+                      <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingLeft:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>Recent</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,

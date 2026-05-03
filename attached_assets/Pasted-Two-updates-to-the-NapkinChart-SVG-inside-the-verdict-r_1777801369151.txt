@@ -1,0 +1,26 @@
+Two updates to the NapkinChart SVG inside the verdict/result box:
+
+1. STRETCH CHART TO FULL WIDTH
+The SVG chart currently has margins that leave dead space between it and the BASELINE label on the left and RECENT label on the right.
+
+Fix:
+- Set the SVG width to 100% of its container.
+- Reduce left and right SVG margins to 4px maximum — just enough to avoid clipping the polyline stroke.
+- The three-column layout inside the verdict box is [BASELINE label] [SVG chart] [RECENT label]. Set the middle column (the SVG wrapper div) to flex: 1 so it expands to fill all remaining horizontal space.
+- The BASELINE and RECENT label columns should be width: auto, shrinking to fit their content only.
+- Do not change chart height — horizontal stretching only.
+
+After this fix: the chart polyline spans nearly the full width of the verdict box, BASELINE number is flush left, RECENT number flush right.
+
+2. DATE MARKERS ON THE CHART
+Add four date markers to the SVG at the exact x-positions corresponding to:
+- Baseline start (e.g. "20 Oct '25") — leftmost point of the blue line
+- Baseline end (e.g. "15 Dec '25") — rightmost point of the blue line
+- Recent start (e.g. "22 Dec '25") — leftmost point of the pink line
+- Recent end (e.g. "27 Apr '26") — rightmost point of the pink line
+
+Try first: place small date labels directly ON the chart, just above the corresponding point on the line (using SVG <text> elements, font-size 9px, muted colour, rotated 0°). If the labels overlap or are too cramped, fall back to:
+
+Fallback: place the four date labels along the x-axis below the chart (as SVG <text> at the bottom), and draw a thin dashed vertical e> from each date label up to the corresponding point on the polyline. Use stroke-dasharray="3 3", opacity 0.4, same colour as the respective line (blue for baseline dates, pink for recent dates).
+
+Keep the labels in the same "20 Oct '25" format used elsewhere in the app. Do not add any other axis labels, gridlines, or tick marks — only these four date markers.

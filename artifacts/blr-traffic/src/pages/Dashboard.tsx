@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
   AreaChart, Area, LineChart, Line,
@@ -435,16 +435,16 @@ export default function Dashboard() {
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
   sliderValsRef.current = sliderVals;
-  /* Measure track width so stripe overlays align with Radix thumb centres */
-  const trackRef = useRef<HTMLDivElement>(null);
+  /* Measure track width so stripe overlays align with Radix thumb centres.
+     useLayoutEffect (no deps) reads the DOM after every render and bails out
+     when the value is unchanged — safe even if it fires when Track is hidden. */
+  const trackRef = useRef<HTMLElement>(null);
   const [trackW, setTrackW] = useState(0);
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setTrackW(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  useLayoutEffect(() => {
+    if (trackRef.current) {
+      setTrackW(trackRef.current.getBoundingClientRect().width);
+    }
+  });
   useEffect(() => {
     const up = () => setDragThumb(-1);
     window.addEventListener("pointerup", up);

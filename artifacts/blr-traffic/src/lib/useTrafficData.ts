@@ -233,6 +233,48 @@ export function useTrafficData() {
   return { routes, allRows, loading, error, rowCount };
 }
 
+export interface DayStats {
+  dateKey: string;
+  avgSpeed: number;
+  medianDuration: number;
+  p95Duration: number;
+  count: number;
+}
+
+/** Daily aggregates for a route + tod — used by the calendar widget. */
+export function useDailyStats(
+  allRows: TrafficRow[],
+  selectedRoute: string,
+  tod: TimeOfDay,
+): Map<string, DayStats> {
+  return useMemo(() => {
+    const rows = allRows.filter(
+      (r) => r.label_short === selectedRoute && matchesToD(r.hour, r.dayOfWeek, tod),
+    );
+    const byDay = new Map<string, TrafficRow[]>();
+    for (const r of rows) {
+      const d = r.timestamp;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const arr = byDay.get(key) ?? [];
+      arr.push(r);
+      byDay.set(key, arr);
+    }
+    const result = new Map<string, DayStats>();
+    for (const [dateKey, dayRows] of byDay.entries()) {
+      const speeds    = dayRows.map((r) => r.speed_kmh);
+      const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
+      result.set(dateKey, {
+        dateKey,
+        avgSpeed:        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        medianDuration:  Math.round(percentile(durations, 50) * 10) / 10,
+        p95Duration:     Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+        count: dayRows.length,
+      });
+    }
+    return result;
+  }, [allRows, selectedRoute, tod]);
+}
+
 /** Full dataset weekly aggregates for a route + tod — no period cutoff.
  *  Used by the baseline slider so it always spans all available history. */
 export function useAllRouteWeeks(

@@ -7,9 +7,9 @@ import {
 import { CSVLink } from "react-csv";
 import { Sun, Moon, Download } from "lucide-react";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, WeeklyAggregate } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats } from "@/lib/useTrafficData";
 
 /* ── Colours ──────────────────────────────────────────────────── */
 const LC = { primary:"#2563eb", teal:"#0d9488", purple:"#7c3aed", pink:"#db2777" };
@@ -210,6 +210,181 @@ function NapkinChart({
   );
 }
 
+/* ── Speed → colour helper (15 km/h=red … 50 km/h=green) ─────── */
+function speedColor(kmh: number): string {
+  const t = Math.max(0, Math.min(1, (kmh - 15) / 35));
+  if (t < 0.5) {
+    const s = t * 2;
+    return `rgba(${Math.round(239+(234-239)*s)},${Math.round(68+(179-68)*s)},${Math.round(68+(8-68)*s)},0.88)`;
+  }
+  const s = (t - 0.5) * 2;
+  return `rgba(${Math.round(234+(52-234)*s)},${Math.round(179+(211-179)*s)},${Math.round(8+(153-8)*s)},0.88)`;
+}
+
+/* ── Calendar widget ──────────────────────────────────────────── */
+function CalendarWidget({
+  dailyStats, dark, fmtDur,
+}: {
+  dailyStats: Map<string, DayStats>;
+  dark: boolean;
+  fmtDur: (n: number) => string;
+}) {
+  const allDates  = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
+  const lastStr   = allDates[allDates.length - 1] ?? "";
+  const firstStr  = allDates[0] ?? "";
+
+  const parseYM   = (s: string) => {
+    const d = new Date(s + "T12:00:00");
+    return { y: d.getFullYear(), m: d.getMonth() };
+  };
+
+  const initYM = lastStr ? parseYM(lastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
+  const [calYear,  setCalYear]  = useState(initYM.y);
+  const [calMonth, setCalMonth] = useState(initYM.m);
+
+  useEffect(() => {
+    if (lastStr) {
+      const { y, m } = parseYM(lastStr);
+      setCalYear(y); setCalMonth(m);
+    }
+  }, [lastStr]);
+
+  const [tooltip, setTooltip] = useState<{ dateKey: string; x: number; y: number } | null>(null);
+  const tipData = tooltip ? dailyStats.get(tooltip.dateKey) : null;
+
+  const prefixStr  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+  const firstDay   = new Date(calYear, calMonth, 1).getDay();
+  const daysInMo   = new Date(calYear, calMonth + 1, 0).getDate();
+  const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString("en-IN", { month:"long", year:"numeric" });
+
+  const minMonthStr = firstStr ? firstStr.slice(0, 7) : prefixStr;
+  const { y: ly, m: lm } = lastStr ? parseYM(lastStr) : { y: calYear, m: calMonth };
+  const maxMonthStr = `${ly}-${String(lm + 1).padStart(2, "0")}`;
+  const canBack    = prefixStr > minMonthStr;
+  const canFwd     = prefixStr < maxMonthStr;
+
+  const prevMo = () => {
+    if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
+    else setCalMonth(m => m - 1);
+  };
+  const nextMo = () => {
+    if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
+    else setCalMonth(m => m + 1);
+  };
+
+  const DAY_HDR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const muted   = "hsl(var(--muted-foreground))";
+  const cellBg  = dark ? "#0f172a" : "#f8fafc";
+
+  return (
+    <div style={{ position:"relative" }}>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
+          color: dark?"#f1f5f9":"#1e293b" }}>📅 Daily Speed Calendar</p>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {(["‹","›"] as const).map((arrow, ai) => {
+            const active = ai === 0 ? canBack : canFwd;
+            return (
+              <button key={arrow} onClick={ai === 0 ? prevMo : nextMo} disabled={!active}
+                style={{ background:"none", border:"1px solid hsl(var(--border))", borderRadius:8,
+                  padding:"3px 12px", fontSize:18, lineHeight:1,
+                  cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
+                  color: dark?"#f1f5f9":"#1e293b" }}>
+                {arrow}
+              </button>
+            );
+          })}
+          <span style={{ fontWeight:700, fontSize:14, color:dark?"#f1f5f9":"#1e293b",
+            minWidth:150, textAlign:"center" }}>
+            {monthLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:4 }}>
+        {DAY_HDR.map(d => (
+          <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
+            textTransform:"uppercase", letterSpacing:"0.06em", color:muted, padding:"4px 0" }}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Date cells */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: daysInMo }).map((_, i) => {
+          const day     = i + 1;
+          const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
+          const s       = dailyStats.get(dateKey);
+          const bg      = s ? speedColor(s.avgSpeed) : cellBg;
+          const textClr = s ? "#1a2535" : muted;
+
+          return (
+            <div key={dateKey}
+              onMouseEnter={e => { if (s) setTooltip({ dateKey, x:e.clientX, y:e.clientY }); }}
+              onMouseLeave={() => setTooltip(null)}
+              onMouseMove={e  => { if (s) setTooltip(t => t ? {...t, x:e.clientX, y:e.clientY} : null); }}
+              style={{ background:bg, borderRadius:10, padding:"6px 2px",
+                minHeight:56, display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent:"center",
+                cursor: s ? "pointer" : "default",
+                opacity: s ? 1 : (dark ? 0.25 : 0.4),
+                boxShadow: s ? "0 1px 4px rgba(0,0,0,0.14)" : "none",
+                transition:"transform 0.1s",
+              }}
+            >
+              <span style={{ fontSize:12, fontWeight:700, color:textClr }}>{day}</span>
+              {s
+                ? <span style={{ fontSize:10, fontWeight:600, color:"#1a2535", marginTop:2 }}>{s.avgSpeed}</span>
+                : <span style={{ fontSize:10, color:muted }}>–</span>
+              }
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Speed legend */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
+        justifyContent:"flex-end", fontSize:11, color:muted }}>
+        <span>Slow</span>
+        <div style={{ width:88, height:7, borderRadius:4,
+          background:"linear-gradient(90deg,rgba(239,68,68,0.88),rgba(234,179,8,0.88),rgba(52,211,153,0.88))" }} />
+        <span>Fast (km/h)</span>
+      </div>
+
+      {/* Hover tooltip */}
+      {tooltip && tipData && (
+        <div style={{ position:"fixed", left:tooltip.x+14, top:tooltip.y-8,
+          background: dark?"#1e293b":"white",
+          border:"1px solid hsl(var(--border))",
+          borderRadius:12, padding:"10px 14px",
+          boxShadow:"0 8px 24px rgba(0,0,0,0.22)",
+          zIndex:1000, pointerEvents:"none", minWidth:168 }}>
+          <p style={{ fontWeight:700, fontSize:13, color:dark?"#f1f5f9":"#1e293b", marginBottom:8 }}>
+            {new Date(tooltip.dateKey + "T12:00:00")
+              .toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}
+          </p>
+          {([
+            ["⚡ Avg Speed",    `${tipData.avgSpeed} km/h`],
+            ["🕐 Median Trip",  fmtDur(tipData.medianDuration)],
+            ["🔥 Bad Day Trip", fmtDur(tipData.p95Duration)],
+            ["📊 Trips",        String(tipData.count)],
+          ] as [string,string][]).map(([lbl, val]) => (
+            <div key={lbl} style={{ display:"flex", justifyContent:"space-between",
+              gap:16, fontSize:12, marginBottom:3 }}>
+              <span style={{ color:muted }}>{lbl}</span>
+              <span style={{ fontWeight:600, color:dark?"#f1f5f9":"#1e293b" }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Dashboard ────────────────────────────────────────────────── */
 export default function Dashboard() {
   /* UI state */
@@ -362,6 +537,9 @@ export default function Dashboard() {
       sparkleTimer.current = setTimeout(() => setShowSparkle(false), 1600);
     }
   }, [allRouteWeeks.length, showSparkle]);
+
+  /* ── Daily stats for calendar widget ────────────────────────── */
+  const dailyStats = useDailyStats(allRows, selectedRoute, tod);
 
   /* ── Period-filtered data for charts & KPI cards ─────────── */
   const { merged, selectedStats } = useFilteredData(
@@ -540,22 +718,22 @@ export default function Dashboard() {
               display:"flex", flexWrap:"wrap", alignItems:"center",
               justifyContent:"center", gap:"0.3em",
             }}>
-              <span>On</span>
-              <Chip icon="🛣️" variant="route"
-                onClick={nextRoute} animate={!!chipAnim.route}>{selectedRoute}</Chip>
-              <span>, have things</span>
+              <span>Has traffic</span>
               <Chip
                 icon={questionMode === "worsened" ? "🚦" : "✅"}
                 variant={questionMode}
                 onClick={toggleMode} animate={!!chipAnim.mode}>
                 {questionMode}
               </Chip>
-              <span>over</span>
-              <Chip icon="📅" variant="period"
-                onClick={nextPeriod} animate={!!chipAnim.period}>{periodLabel}</Chip>
+              <span>on</span>
+              <Chip icon="🛣️" variant="route"
+                onClick={nextRoute} animate={!!chipAnim.route}>{selectedRoute}</Chip>
               <span>during</span>
               <Chip icon="⏰" variant="tod"
                 onClick={nextTod} animate={!!chipAnim.tod}>{todLabel}</Chip>
+              <span>over the past</span>
+              <Chip icon="📅" variant="period"
+                onClick={nextPeriod} animate={!!chipAnim.period}>{periodLabel}</Chip>
               <span>?</span>
             </h1>
             <p style={{ marginTop:"0.25rem", fontSize:12, color:"hsl(var(--muted-foreground))" }}>
@@ -939,73 +1117,13 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* ── Weekly card grid ──────────────────────── */}
-                  <div>
-                    <div style={{ display:"flex", alignItems:"center",
-                      justifyContent:"space-between", marginBottom:12 }}>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-                        color: dark?"#f1f5f9":"#1e293b" }}>📋 Weekly Breakdown</p>
-                      <span style={{ fontSize:12, color:"hsl(var(--muted-foreground))" }}>
-                        {merged.length} weeks · most recent first
-                      </span>
-                    </div>
-                    <div style={{ display:"grid",
-                      gridTemplateColumns:"repeat(auto-fill,minmax(185px,1fr))", gap:10 }}>
-                      {[...merged].reverse().map((row, i) => {
-                        const idx         = merged.length - 1 - i;
-                        const isBaseline  = allRouteWeeks.findIndex(w => w.weekKey === row.weekKey);
-                        const inBaseline  = isBaseline >= safeLeft && isBaseline <= safeRight;
-                        const inRecent    = recentWeeks.some(w => w.weekKey === row.weekKey);
-                        const speedVsBase = row.baselineSpeed
-                          ? row.avgSpeed >= row.baselineSpeed ? "🟢" : "🔴"
-                          : "⚪";
-                        return (
-                          <div key={row.weekKey} className="week-card" style={{
-                            borderLeft: inBaseline ? "3px solid #34d399"
-                              : inRecent ? "3px solid #a78bfa"
-                              : "3px solid transparent",
-                          }}>
-                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700,
-                              fontSize:13, color: dark?"#f1f5f9":"#1e293b",
-                              marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
-                              {speedVsBase} {fmtWeek(row.weekKey)}
-                              {inBaseline && (
-                                <span style={{ fontSize:10, background:"#d1fae5", color:"#065f46",
-                                  borderRadius:9999, padding:"1px 5px", fontWeight:600 }}>
-                                  baseline
-                                </span>
-                              )}
-                              {inRecent && (
-                                <span style={{ fontSize:10, background:"#ede9fe", color:"#5b21b6",
-                                  borderRadius:9999, padding:"1px 5px", fontWeight:600 }}>
-                                  recent
-                                </span>
-                              )}
-                            </p>
-                            <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                              {([
-                                ["⚡ Speed",   `${row.avgSpeed} km/h`],
-                                ["🕐 Median",  fmtDuration(row.medianDuration)],
-                                ["🔥 Bad day", fmtDuration(row.p95Duration)],
-                              ] as [string,string][]).map(([label, val]) => (
-                                <div key={label} style={{ display:"flex",
-                                  justifyContent:"space-between", fontSize:12 }}>
-                                  <span style={{ color:"hsl(var(--muted-foreground))" }}>{label}</span>
-                                  <span style={{ fontWeight:600,
-                                    color: dark?"#f1f5f9":"#1e293b" }}>{val}</span>
-                                </div>
-                              ))}
-                              <div style={{ display:"flex", justifyContent:"space-between",
-                                fontSize:11, marginTop:2, paddingTop:4,
-                                borderTop:"1px solid hsl(var(--border))" }}>
-                                <span style={{ color:"hsl(var(--muted-foreground))" }}>Samples</span>
-                                <span style={{ color:"hsl(var(--muted-foreground))" }}>{row.count}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {/* ── Daily calendar ────────────────────────── */}
+                  <div className="chart-card animate-fade-in" style={{ padding:"1.25rem 1.5rem" }}>
+                    <CalendarWidget
+                      dailyStats={dailyStats}
+                      dark={dark}
+                      fmtDur={fmtDuration}
+                    />
                   </div>
                 </>
               )}

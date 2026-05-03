@@ -778,7 +778,7 @@ function AllRoadsPanel({
       }}>
         <span style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
           color: thm.textPrimary }}>
-          🗺️ How are all roads doing?
+          🗺️ Speed Snapshot by Route
         </span>
         <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
           transform: expanded ? "rotate(180deg)" : "rotate(0deg)",

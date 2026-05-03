@@ -310,13 +310,28 @@ function CalendarWidget({
   const lastStr  = allDates[allDates.length - 1] ?? "";
   const firstStr = allDates[0] ?? "";
 
-  const initYM = lastStr ? parseYM(lastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
+  const initYM = (() => {
+    const base = lastStr ? parseYM(lastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
+    /* if today is before the 10th, default to the month before the most-recent data month */
+    if (new Date().getDate() < 10) {
+      if (base.m === 0) return { y: base.y - 1, m: 11 };
+      return { y: base.y, m: base.m - 1 };
+    }
+    return base;
+  })();
   const [calYear,  setCalYear]  = useState(initYM.y);
   const [calMonth, setCalMonth] = useState(initYM.m);
   const [fadeKey,  setFadeKey]  = useState(0);
 
   useEffect(() => {
-    if (lastStr) { const { y, m } = parseYM(lastStr); setCalYear(y); setCalMonth(m); }
+    if (!lastStr) return;
+    const base = parseYM(lastStr);
+    if (new Date().getDate() < 10) {
+      if (base.m === 0) { setCalYear(base.y - 1); setCalMonth(11); }
+      else              { setCalYear(base.y);      setCalMonth(base.m - 1); }
+    } else {
+      setCalYear(base.y); setCalMonth(base.m);
+    }
   }, [lastStr]);
 
   /* p10/p90 of full route dataset — gives visible colour spread across any month */
@@ -536,7 +551,7 @@ function CalendarWidget({
       <div style={{ position:"relative" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
           <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-            color: thm.textPrimary }}>📅 Daily Speed Calendar</p>
+            color: thm.textPrimary }}>📅 Daily Speeds by Month</p>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             {navBtn("‹", canBack, prevMo)}
             <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,

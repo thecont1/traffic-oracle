@@ -1,0 +1,32 @@
+Redesign the Daily Speed Calendar widget with the following changes:
+
+1. CELL DESIGN — circles not rectangles
+Replace the current large rectangular colour-coded cells with a compact design:
+- Each date cell is a fixed small square (same size for all days, no stretching).
+- Inside: a coloured circle (approx 36–40px diameter) centred in the cell, colour-coded by avg speed (red → yellow → green gradient, same as the legend). Grey circle if no data.
+- The date digit is large and bold, displayed IN the centre of the circle in white (or dark if circle is light).
+- No speed number shown on the cell itself — speed is revealed only on hover via tooltip.
+- Empty/no-data days: grey muted circle, date still visible, no tooltip.
+
+2. TOOLTIP — fixed and smart-positioned
+The tooltip on hover must:
+- Appear above the hovered cell (not below, to avoid going off-screen).
+- If the cell is in the top row, appear below instead.
+- If the cell is near the right edge, align tooltip to the right.
+- Use position: fixed (not absolute) with JS-calculated coordinates from the mouse event to prevent clipping.
+- Content: date (e.g. "Wed, 1 Apr '26"), avg speed, median trip, bad day trip, data points count.
+- Friendly styling: rounded, dark background, soft shadow, same font as rest of app.
+
+3. DATA — ignore Question filters, show all-day data
+The calendar must always aggregate data across ALL time-of-day slots for the selected route only (ignore the time-of-day chip from the Question). Each day shows the full-day average. This makes the calendar a holistic daily snapshot, not a filtered slice.
+
+4. JUMPINESS FIX
+The jumpiness is caused by re-rendering the entire calendar on every hover state change. Fix by:
+- Storing tooltip state (visible, x, y, data) in a single useRef or a stable useState outside the cell render loop.
+- Using CSS transitions (opacity + transform) rather than conditional mounting for the tooltip so it fades in/out smoothly without layout shifts.
+- Never re-render the calendar grid on tooltip show/hide — only the tooltip element itself updates.
+
+5. MONTH NAVIGATION
+Keep the ← → arrows. Ensure they don't cause the whole calendar to jump/re-layout — animate with a simple fade transition on month change.
+
+Incremental: circle cells + grey empties first, checkpoint. Tooltip rewrite, checkpoint. Data filter fix, checkpoint.

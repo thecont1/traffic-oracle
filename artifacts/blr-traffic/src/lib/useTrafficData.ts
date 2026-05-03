@@ -275,6 +275,39 @@ export function useDailyStats(
   }, [allRows, selectedRoute, tod]);
 }
 
+/** Daily aggregates for a route across ALL time-of-day slots — used by the
+ *  calendar widget so it shows a holistic daily snapshot independent of the
+ *  Question's ToD filter. */
+export function useDailyStatsAllDay(
+  allRows: TrafficRow[],
+  selectedRoute: string,
+): Map<string, DayStats> {
+  return useMemo(() => {
+    const rows = allRows.filter((r) => r.label_short === selectedRoute);
+    const byDay = new Map<string, TrafficRow[]>();
+    for (const r of rows) {
+      const d = r.timestamp;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const arr = byDay.get(key) ?? [];
+      arr.push(r);
+      byDay.set(key, arr);
+    }
+    const result = new Map<string, DayStats>();
+    for (const [dateKey, dayRows] of byDay.entries()) {
+      const speeds    = dayRows.map((r) => r.speed_kmh);
+      const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
+      result.set(dateKey, {
+        dateKey,
+        avgSpeed:        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        medianDuration:  Math.round(percentile(durations, 50) * 10) / 10,
+        p95Duration:     Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+        count: dayRows.length,
+      });
+    }
+    return result;
+  }, [allRows, selectedRoute]);
+}
+
 /** Full dataset weekly aggregates for a route + tod — no period cutoff.
  *  Used by the baseline slider so it always spans all available history. */
 export function useAllRouteWeeks(

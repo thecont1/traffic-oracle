@@ -7,7 +7,7 @@ import {
 import { CSVLink } from "react-csv";
 import { Sun, Moon, Download, Share2 } from "lucide-react";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats } from "@/lib/useTrafficData";
 
@@ -238,6 +238,15 @@ function speedColor(kmh: number): string {
 }
 
 /* ── Calendar widget ──────────────────────────────────────────── */
+const CIRCLE_D = 38;
+const CAL_MUTED = "hsl(var(--muted-foreground))";
+const DAY_HDR   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function parseYM(s: string) {
+  const d = new Date(s + "T12:00:00");
+  return { y: d.getFullYear(), m: d.getMonth() };
+}
+
 function CalendarWidget({
   dailyStats, dark, fmtDur,
 }: {
@@ -245,29 +254,80 @@ function CalendarWidget({
   dark: boolean;
   fmtDur: (n: number) => string;
 }) {
-  const allDates  = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
-  const lastStr   = allDates[allDates.length - 1] ?? "";
-  const firstStr  = allDates[0] ?? "";
-
-  const parseYM   = (s: string) => {
-    const d = new Date(s + "T12:00:00");
-    return { y: d.getFullYear(), m: d.getMonth() };
-  };
+  const allDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
+  const lastStr  = allDates[allDates.length - 1] ?? "";
+  const firstStr = allDates[0] ?? "";
 
   const initYM = lastStr ? parseYM(lastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
   const [calYear,  setCalYear]  = useState(initYM.y);
   const [calMonth, setCalMonth] = useState(initYM.m);
+  const [fadeKey,  setFadeKey]  = useState(0);
 
   useEffect(() => {
-    if (lastStr) {
-      const { y, m } = parseYM(lastStr);
-      setCalYear(y); setCalMonth(m);
-    }
+    if (lastStr) { const { y, m } = parseYM(lastStr); setCalYear(y); setCalMonth(m); }
   }, [lastStr]);
 
-  const [tooltip, setTooltip] = useState<{ dateKey: string; x: number; y: number } | null>(null);
-  const tipData = tooltip ? dailyStats.get(tooltip.dateKey) : null;
+  /* ── Imperative tooltip — zero grid re-renders on hover ─────── */
+  const tooltipRef    = useRef<HTMLDivElement>(null);
+  const lastKeyRef    = useRef<string | null>(null);
 
+  const hideTip = useCallback(() => {
+    if (tooltipRef.current) tooltipRef.current.style.opacity = "0";
+    lastKeyRef.current = null;
+  }, []);
+
+  const showTip = useCallback((dateKey: string, cellEl: HTMLElement) => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const s = dailyStats.get(dateKey);
+    if (!s) { hideTip(); return; }
+
+    const date    = new Date(dateKey + "T12:00:00");
+    const dayStr  = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
+    const hdrClr  = dark ? "#f1f5f9" : "#1e293b";
+    const mutClr  = dark ? "#94a3b8" : "#64748b";
+    const rows = ([
+      ["⚡ Avg Speed",    `${s.avgSpeed} km/h`],
+      ["🕐 Median Trip",  fmtDur(s.medianDuration)],
+      ["🔥 Bad Day Trip", fmtDur(s.p95Duration)],
+      ["📊 Trips",        String(s.count)],
+    ] as [string,string][]).map(([lbl, val]) =>
+      `<div style="display:flex;justify-content:space-between;gap:16px;font-size:12px;margin-bottom:3px">` +
+      `<span style="color:${mutClr}">${lbl}</span>` +
+      `<span style="font-weight:600;color:${hdrClr}">${val}</span></div>`
+    ).join("");
+
+    el.innerHTML =
+      `<div style="font-weight:700;font-size:13px;margin-bottom:8px;color:${hdrClr}">${dayStr}</div>` + rows;
+
+    /* Smart positioning: above by default, below if cell is in top third */
+    const rect = cellEl.getBoundingClientRect();
+    const TW   = el.offsetWidth  || 188;
+    const TH   = el.offsetHeight || 130;
+    const GAP  = 8;
+    const vw   = window.innerWidth;
+
+    const top  = rect.top > TH + GAP + 50
+      ? rect.top - TH - GAP
+      : rect.bottom + GAP;
+    const left = Math.max(8, Math.min(vw - TW - 8, rect.left + rect.width / 2 - TW / 2));
+
+    el.style.left    = left + "px";
+    el.style.top     = top  + "px";
+    el.style.opacity = "1";
+  }, [dailyStats, dark, fmtDur, hideTip]);
+
+  /* Event delegation — cells carry no React event handlers */
+  const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
+    if (!cell) { hideTip(); return; }
+    const dk = cell.dataset.dk!;
+    if (dk === lastKeyRef.current) return;
+    lastKeyRef.current = dk;
+    showTip(dk, cell);
+  }, [showTip, hideTip]);
+
+  /* ── Calendar math ──────────────────────────────────────────── */
   const prefixStr  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
   const firstDay   = new Date(calYear, calMonth, 1).getDay();
   const daysInMo   = new Date(calYear, calMonth + 1, 0).getDate();
@@ -276,127 +336,116 @@ function CalendarWidget({
   const minMonthStr = firstStr ? firstStr.slice(0, 7) : prefixStr;
   const { y: ly, m: lm } = lastStr ? parseYM(lastStr) : { y: calYear, m: calMonth };
   const maxMonthStr = `${ly}-${String(lm + 1).padStart(2, "0")}`;
-  const canBack    = prefixStr > minMonthStr;
-  const canFwd     = prefixStr < maxMonthStr;
+  const canBack = prefixStr > minMonthStr;
+  const canFwd  = prefixStr < maxMonthStr;
 
   const prevMo = () => {
+    setFadeKey(k => k + 1);
     if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
     else setCalMonth(m => m - 1);
   };
   const nextMo = () => {
+    setFadeKey(k => k + 1);
     if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
     else setCalMonth(m => m + 1);
   };
 
-  const DAY_HDR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const muted   = "hsl(var(--muted-foreground))";
-  const cellBg  = dark ? "#0f172a" : "#f8fafc";
+  /* Memoised cells — only rebuilds on data/month change, not on tooltip */
+  const cells = useMemo(() => {
+    const blanks = Array.from({ length: firstDay }, (_, i) => <div key={`b${i}`} />);
+    const days   = Array.from({ length: daysInMo }, (_, i) => {
+      const day     = i + 1;
+      const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
+      const s       = dailyStats.get(dateKey);
+      const bg      = s
+        ? speedColor(s.avgSpeed)
+        : dark ? "rgba(148,163,184,0.15)" : "rgba(100,116,139,0.15)";
+      const txtClr  = s ? "#fff" : (dark ? "rgba(148,163,184,0.5)" : "rgba(100,116,139,0.45)");
+      return (
+        <div
+          key={dateKey}
+          data-dk={s ? dateKey : undefined}
+          style={{ display:"flex", alignItems:"center", justifyContent:"center",
+            padding:"5px 0", cursor: s ? "pointer" : "default" }}
+        >
+          <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%", background:bg,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            boxShadow: s ? "0 2px 8px rgba(0,0,0,0.2)" : "none",
+            transition:"transform 0.13s, box-shadow 0.13s",
+          }}>
+            <span style={{ fontSize:13, fontWeight:800, color:txtClr,
+              lineHeight:1, userSelect:"none" }}>{day}</span>
+          </div>
+        </div>
+      );
+    });
+    return [...blanks, ...days];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailyStats, firstDay, daysInMo, prefixStr, dark]);
+
+  const navBtn = (label: string, active: boolean, onClick: () => void) => (
+    <button onClick={onClick} disabled={!active}
+      style={{ background:"none", border:"1px solid hsl(var(--border))", borderRadius:8,
+        padding:"3px 11px", fontSize:18, lineHeight:1,
+        cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
+        color: dark ? "#f1f5f9" : "#1e293b" }}>
+      {label}
+    </button>
+  );
 
   return (
     <div style={{ position:"relative" }}>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-          color: dark?"#f1f5f9":"#1e293b" }}>📅 Daily Speed Calendar</p>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          {(["‹","›"] as const).map((arrow, ai) => {
-            const active = ai === 0 ? canBack : canFwd;
-            return (
-              <button key={arrow} onClick={ai === 0 ? prevMo : nextMo} disabled={!active}
-                style={{ background:"none", border:"1px solid hsl(var(--border))", borderRadius:8,
-                  padding:"3px 12px", fontSize:18, lineHeight:1,
-                  cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
-                  color: dark?"#f1f5f9":"#1e293b" }}>
-                {arrow}
-              </button>
-            );
-          })}
-          <span style={{ fontWeight:700, fontSize:14, color:dark?"#f1f5f9":"#1e293b",
-            minWidth:150, textAlign:"center" }}>
-            {monthLabel}
-          </span>
+          color: dark ? "#f1f5f9" : "#1e293b" }}>📅 Daily Speed Calendar</p>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {navBtn("‹", canBack, prevMo)}
+          <span style={{ fontWeight:700, fontSize:14, color: dark ? "#f1f5f9" : "#1e293b",
+            minWidth:150, textAlign:"center" }}>{monthLabel}</span>
+          {navBtn("›", canFwd, nextMo)}
         </div>
       </div>
 
       {/* Day-of-week headers */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:4 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
         {DAY_HDR.map(d => (
           <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
-            textTransform:"uppercase", letterSpacing:"0.06em", color:muted, padding:"4px 0" }}>
-            {d}
-          </div>
+            textTransform:"uppercase", letterSpacing:"0.06em",
+            color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
         ))}
       </div>
 
-      {/* Date cells */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
-        {Array.from({ length: daysInMo }).map((_, i) => {
-          const day     = i + 1;
-          const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
-          const s       = dailyStats.get(dateKey);
-          const bg      = s ? speedColor(s.avgSpeed) : cellBg;
-          const textClr = s ? "#1a2535" : muted;
-
-          return (
-            <div key={dateKey}
-              onMouseEnter={e => { if (s) setTooltip({ dateKey, x:e.clientX, y:e.clientY }); }}
-              onMouseLeave={() => setTooltip(null)}
-              onMouseMove={e  => { if (s) setTooltip(t => t ? {...t, x:e.clientX, y:e.clientY} : null); }}
-              style={{ background:bg, borderRadius:10, padding:"6px 2px",
-                minHeight:56, display:"flex", flexDirection:"column",
-                alignItems:"center", justifyContent:"center",
-                cursor: s ? "pointer" : "default",
-                opacity: s ? 1 : (dark ? 0.25 : 0.4),
-                boxShadow: s ? "0 1px 4px rgba(0,0,0,0.14)" : "none",
-                transition:"transform 0.1s",
-              }}
-            >
-              <span style={{ fontSize:12, fontWeight:700, color:textClr }}>{day}</span>
-              {s
-                ? <span style={{ fontSize:10, fontWeight:600, color:"#1a2535", marginTop:2 }}>{s.avgSpeed}</span>
-                : <span style={{ fontSize:10, color:muted }}>–</span>
-              }
-            </div>
-          );
-        })}
+      {/* Date cells — event delegation; cells have no React handlers */}
+      <div key={fadeKey}
+        onMouseMove={handleGridMove}
+        onMouseLeave={hideTip}
+        style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+          animation:"cal-fade-in 0.2s ease" }}>
+        {cells}
       </div>
 
       {/* Speed legend */}
       <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
-        justifyContent:"flex-end", fontSize:11, color:muted }}>
+        justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
         <span>Slow</span>
         <div style={{ width:88, height:7, borderRadius:4,
           background:"linear-gradient(90deg,rgba(239,68,68,0.88),rgba(234,179,8,0.88),rgba(52,211,153,0.88))" }} />
         <span>Fast (km/h)</span>
       </div>
 
-      {/* Hover tooltip */}
-      {tooltip && tipData && (
-        <div style={{ position:"fixed", left:tooltip.x+14, top:tooltip.y-8,
-          background: dark?"#1e293b":"white",
-          border:"1px solid hsl(var(--border))",
-          borderRadius:12, padding:"10px 14px",
-          boxShadow:"0 8px 24px rgba(0,0,0,0.22)",
-          zIndex:1000, pointerEvents:"none", minWidth:168 }}>
-          <p style={{ fontWeight:700, fontSize:13, color:dark?"#f1f5f9":"#1e293b", marginBottom:8 }}>
-            {new Date(tooltip.dateKey + "T12:00:00")
-              .toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}
-          </p>
-          {([
-            ["⚡ Avg Speed",    `${tipData.avgSpeed} km/h`],
-            ["🕐 Median Trip",  fmtDur(tipData.medianDuration)],
-            ["🔥 Bad Day Trip", fmtDur(tipData.p95Duration)],
-            ["📊 Trips",        String(tipData.count)],
-          ] as [string,string][]).map(([lbl, val]) => (
-            <div key={lbl} style={{ display:"flex", justifyContent:"space-between",
-              gap:16, fontSize:12, marginBottom:3 }}>
-              <span style={{ color:muted }}>{lbl}</span>
-              <span style={{ fontWeight:600, color:dark?"#f1f5f9":"#1e293b" }}>{val}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Tooltip — always mounted, positioned imperatively, fades via CSS */}
+      <div ref={tooltipRef} style={{
+        position:"fixed", pointerEvents:"none",
+        opacity:0, transition:"opacity 0.14s ease",
+        background: dark ? "#1e293b" : "white",
+        border:"1px solid hsl(var(--border))",
+        borderRadius:12, padding:"10px 14px",
+        boxShadow:"0 8px 28px rgba(0,0,0,0.22)",
+        zIndex:1000, minWidth:188,
+        fontFamily:"var(--app-font)", fontSize:12,
+        top:0, left:0,
+      }} />
     </div>
   );
 }
@@ -632,8 +681,8 @@ export default function Dashboard() {
     }
   }, [allRouteWeeks.length, showSparkle]);
 
-  /* ── Daily stats for calendar widget ────────────────────────── */
-  const dailyStats = useDailyStats(allRows, selectedRoute, tod);
+  /* ── Daily stats for calendar — all-day aggregate, ignores ToD filter ── */
+  const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
 
   /* ── Period-filtered data for charts & KPI cards ─────────── */
   const { merged, selectedStats } = useFilteredData(

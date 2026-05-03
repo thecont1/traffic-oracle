@@ -291,7 +291,7 @@ function KpiInfo({ text }: { text: string }) {
 
 /* ── Calendar widget ──────────────────────────────────────────── */
 const CIRCLE_D = 38;
-const DAY_HDR  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 function parseYM(s: string) {
   const d = new Date(s + "T12:00:00");
@@ -418,7 +418,7 @@ function CalendarWidget({
 
   /* ── Calendar math ──────────────────────────────────────────── */
   const prefixStr  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-  const firstDay   = new Date(calYear, calMonth, 1).getDay();
+  const firstDay   = (new Date(calYear, calMonth, 1).getDay() + 6) % 7; // Monday = 0
   const daysInMo   = new Date(calYear, calMonth + 1, 0).getDate();
   const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString("en-IN", { month:"long", year:"numeric" });
 
@@ -439,46 +439,85 @@ function CalendarWidget({
     else setCalMonth(m => m + 1);
   };
 
-  /* Memoised cells — rebuilds only on data/month/theme change */
+  /* Memoised cells — always 42 cells (6 rows × 7 cols), no height jumping */
   const cells = useMemo(() => {
-    const blanks = Array.from({ length: firstDay }, (_, i) => <div key={`b${i}`} />);
-    const days   = Array.from({ length: daysInMo }, (_, i) => {
-      const day     = i + 1;
-      const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
-      const s       = dailyStats.get(dateKey);
+    const todayD   = new Date();
+    const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
+    const isCurrentMo = calYear === todayD.getFullYear() && calMonth === todayD.getMonth();
 
-      let bg: string;
+    /* reduce rgba/rgb color to 0.5 alpha for the stripe overlay */
+    const fadeColor = (c: string) =>
+      c.startsWith("rgba") ? c.replace(/,\s*[\d.]+\)$/, ", 0.5)")
+      : c.startsWith("rgb(") ? c.replace("rgb(", "rgba(").replace(")", ", 0.5)")
+      : c;
+
+    const stripePattern = "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.4) 4px,rgba(255,255,255,0.4) 8px)";
+
+    return Array.from({ length: 42 }, (_, i) => {
+      const dayNum = i - firstDay + 1;
+
+      /* outside the month — blank spacer cell */
+      if (dayNum < 1 || dayNum > daysInMo) {
+        return <div key={`e${i}`} style={{ padding:"5px 0" }} />;
+      }
+
+      const dateKey  = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;
+      const s        = dailyStats.get(dateKey);
+      const isFuture = isCurrentMo && dateKey > todayStr;
+      const isPast   = isCurrentMo && dateKey <= todayStr;
+
+      let circleStyle: React.CSSProperties;
       let txtClr: string;
-      if (s) {
-        bg = thm.calColor(s.avgSpeed, p10, p90);
-        const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
-        txtClr = thm.calTextColor(t);
+
+      if (isCurrentMo) {
+        if (isFuture) {
+          /* future date — dashed outline, no fill */
+          circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+          txtClr = thm.textMuted;
+        } else if (isPast && s) {
+          /* past date with data — diagonal stripes over faded speed colour */
+          const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
+          circleStyle = { background:`${stripePattern}, ${fadeColor(thm.calColor(s.avgSpeed, p10, p90))}` };
+          txtClr = thm.calTextColor(t);
+        } else {
+          /* past date with no data — dashed grey outline */
+          circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+          txtClr = thm.textMuted;
+        }
       } else {
-        bg     = thm.emptyCalCircle;
-        txtClr = thm.textMuted;
+        /* any other month — existing solid behaviour */
+        if (s) {
+          const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
+          circleStyle = { background: thm.calColor(s.avgSpeed, p10, p90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
+          txtClr = thm.calTextColor(t);
+        } else {
+          circleStyle = { background: thm.emptyCalCircle };
+          txtClr = thm.textMuted;
+        }
       }
 
       return (
         <div
           key={dateKey}
-          data-dk={s ? dateKey : undefined}
+          data-dk={s && !isFuture ? dateKey : undefined}
           style={{ display:"flex", alignItems:"center", justifyContent:"center",
-            padding:"5px 0", cursor: s ? "pointer" : "default" }}
+            padding:"5px 0", cursor:(s && !isFuture) ? "pointer" : "default" }}
         >
-          <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%", background:bg,
+          <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%",
             display:"flex", alignItems:"center", justifyContent:"center",
-            boxShadow: s ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
             transition:"transform 0.13s, box-shadow 0.13s",
+            ...circleStyle,
           }}>
             <span style={{ fontSize:13, fontWeight:800, color:txtClr,
-              lineHeight:1, userSelect:"none" }}>{day}</span>
+              lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1 }}>
+              {dayNum}
+            </span>
           </div>
         </div>
       );
     });
-    return [...blanks, ...days];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, calYear, calMonth]);
 
   const navBtn = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} disabled={!active}

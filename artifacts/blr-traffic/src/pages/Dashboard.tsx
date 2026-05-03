@@ -1314,6 +1314,20 @@ function DashboardInner() {
           )}
         </main>
 
+        <footer style={{
+          borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+          marginTop:"2rem", padding:"1rem 1.5rem",
+          textAlign:"center", fontSize:12, color: thm.textMuted,
+        }}>
+          Data:{" "}
+          <a href="https://github.com/thecont1/blr-traffic-monitor"
+            target="_blank" rel="noopener noreferrer"
+            style={{ color: thm.chart.line4 }}>
+            thecont1/blr-traffic-monitor
+          </a>
+          {" "} · No backend needed 🌐
+        </footer>
+
       </div>
     </div>
   );

@@ -4,8 +4,7 @@ import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { CSVLink } from "react-csv";
-import { Sun, Moon, Download, Share2 } from "lucide-react";
+import { Sun, Moon, Share2 } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
 } from "@/lib/useTrafficData";
@@ -759,16 +758,6 @@ export default function Dashboard() {
     ? `Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${fmtShortDate(lastDate)}) · ${routeEndpoints} · ${todLabel}`
     : undefined;
 
-  /* CSV export */
-  const csvHeaders = [
-    {label:"Week",            key:"weekKey"},
-    {label:"Avg Speed km/h",  key:"avgSpeed"},
-    {label:"Avg Duration min",key:"avgDuration"},
-    {label:"Median min",      key:"medianDuration"},
-    {label:"p95 min",         key:"p95Duration"},
-    {label:"Samples",         key:"count"},
-  ];
-
   /* Neutral card style — shared by all 4 KPI cards */
   const kpiCard: React.CSSProperties = {
     background: dark ? "rgba(20,30,55,0.92)" : "rgba(248,250,252,0.96)",
@@ -838,17 +827,6 @@ export default function Dashboard() {
                   {copied ? "Copied!" : "Share"}
                 </button>
               )}
-              {!loading && merged.length > 0 && (
-                <CSVLink
-                  data={merged} headers={csvHeaders}
-                  filename={`traffi-${selectedRoute.replace(/\s+/g,"-")}-${period}.csv`}
-                  style={{ display:"flex", alignItems:"center", gap:5, fontSize:12,
-                    border:"1px solid hsl(var(--border))", borderRadius:9999,
-                    padding:"5px 12px", color:"hsl(var(--muted-foreground))",
-                    background:"transparent", textDecoration:"none" }}>
-                  <Download size={13} /> Export CSV
-                </CSVLink>
-              )}
               <button onClick={() => setDark(d => !d)} style={{
                 width:34, height:34, borderRadius:"50%",
                 border:"1px solid hsl(var(--border))",
@@ -893,7 +871,7 @@ export default function Dashboard() {
               <span>?</span>
             </h1>
             <p style={{ marginTop:"0.25rem", fontSize:12, color:"hsl(var(--muted-foreground))" }}>
-              Tap any highlighted word to explore differently.
+              Tap any highlighted word to explore a different question.
             </p>
           </div>
 
@@ -1281,15 +1259,6 @@ export default function Dashboard() {
           )}
         </main>
 
-        <footer style={{ borderTop:"1px solid hsl(var(--border))", marginTop:"2rem",
-          padding:"1rem 1.5rem", textAlign:"center", fontSize:12,
-          color:"hsl(var(--muted-foreground))" }}>
-          Data:{" "}
-          <a href="https://github.com/thecont1/blr-traffic-monitor"
-            target="_blank" rel="noopener noreferrer"
-            style={{ color:colors.primary }}>thecont1/blr-traffic-monitor</a>
-          {" "} · No backend needed 🌐
-        </footer>
       </div>
     </div>
   );

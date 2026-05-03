@@ -9,7 +9,7 @@ import { Share2 } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant } from "@/lib/theme";
@@ -617,6 +617,263 @@ function CalendarWidget({
         document.body
       )}
     </>
+  );
+}
+
+/* ── All-roads overview panel ──────────────────────────────────── */
+interface RouteCardData {
+  label: string;
+  sparkPoints: number[];
+  delta: number | null;
+  isBaseline: boolean;
+  isTop3Worst: boolean;
+}
+
+function computeAllRouteCards(
+  allRows: TrafficRow[],
+  routeOptions: string[],
+  baselineStartDate: string | undefined,
+  baselineEndDate: string | undefined,
+): RouteCardData[] {
+  const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
+  const lastDataDate = lastTs ? new Date(lastTs) : new Date();
+  const fourWkAgo = new Date(lastDataDate.getTime() - 28 * 24 * 60 * 60 * 1000);
+  const sixMoAgo  = new Date(lastDataDate);
+  sixMoAgo.setMonth(sixMoAgo.getMonth() - 6);
+
+  const cards = routeOptions.map((label): RouteCardData => {
+    const routeRows = allRows.filter(r => r.label_short === label);
+
+    /* sparkline: weekly avg speeds over last 6 months */
+    const byWeek = new Map<string, number[]>();
+    for (const r of routeRows) {
+      if (r.timestamp < sixMoAgo) continue;
+      const arr = byWeek.get(r.weekKey) ?? [];
+      arr.push(r.speed_kmh);
+      byWeek.set(r.weekKey, arr);
+    }
+    const sparkPoints = Array.from(byWeek.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, speeds]) => speeds.reduce((s, v) => s + v, 0) / speeds.length);
+
+    /* baseline avg speed (slider window) */
+    let baselineAvg = 0;
+    if (baselineStartDate && baselineEndDate) {
+      const bRows = routeRows.filter(
+        r => r.weekKey >= baselineStartDate && r.weekKey <= baselineEndDate,
+      );
+      if (bRows.length > 0)
+        baselineAvg = bRows.reduce((s, r) => s + r.speed_kmh, 0) / bRows.length;
+    }
+
+    /* recent 4-week avg speed */
+    const recentRows = routeRows.filter(r => r.timestamp >= fourWkAgo);
+    const recentAvg  = recentRows.length > 0
+      ? recentRows.reduce((s, r) => s + r.speed_kmh, 0) / recentRows.length
+      : 0;
+
+    const delta = baselineAvg > 0 && recentAvg > 0
+      ? Math.round((recentAvg - baselineAvg) * 10) / 10
+      : null;
+
+    const isBaseline = label.toLowerCase().includes("airport expy");
+    return { label, sparkPoints, delta, isBaseline, isTop3Worst: false };
+  });
+
+  /* sort: worst delta first; null after; baseline always last */
+  cards.sort((a, b) => {
+    if (a.isBaseline) return 1;
+    if (b.isBaseline) return -1;
+    if (a.delta === null && b.delta === null) return 0;
+    if (a.delta === null) return 1;
+    if (b.delta === null) return -1;
+    return a.delta - b.delta;
+  });
+
+  /* mark top 3 genuinely worsened cards */
+  let worstCount = 0;
+  for (const c of cards) {
+    if (c.isBaseline || c.delta === null || c.delta >= -0.5) continue;
+    if (worstCount < 3) { c.isTop3Worst = true; worstCount++; }
+  }
+  return cards;
+}
+
+function MiniSparkline({ points, color }: { points: number[]; color: string }) {
+  if (points.length < 2) return <div style={{ width: 60, height: 28, flexShrink: 0 }} />;
+  const W = 60, H = 28, PY = 3;
+  const minV  = Math.min(...points), maxV = Math.max(...points);
+  const range = maxV - minV || 1;
+  const toX = (i: number) => (i / (points.length - 1)) * W;
+  const toY = (v: number) => PY + (H - PY * 2) * (1 - (v - minV) / range);
+  const pts  = points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  return (
+    <svg width={W} height={H} style={{ display: "block", overflow: "visible", flexShrink: 0 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5}
+        strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AllRoadsPanel({
+  allRows, routeOptions, baselineStartDate, baselineEndDate, selectedRoute, setRouteIdx,
+}: {
+  allRows: TrafficRow[];
+  routeOptions: string[];
+  baselineStartDate: string | undefined;
+  baselineEndDate: string | undefined;
+  selectedRoute: string;
+  setRouteIdx: (i: number) => void;
+}) {
+  const { theme: thm } = useTheme();
+  const [expanded, setExpanded]   = useState(false);
+  const cardsRef                  = useRef<RouteCardData[] | null>(null);
+  const [cards, setCards]         = useState<RouteCardData[] | null>(null);
+  const prevBaselineKey           = useRef("");
+
+  const toggle = useCallback(() => {
+    setExpanded(prev => {
+      const next = !prev;
+      if (next && !cardsRef.current && allRows.length > 0) {
+        const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
+        cardsRef.current = computed;
+        setCards(computed);
+        prevBaselineKey.current = `${baselineStartDate}|${baselineEndDate}`;
+      }
+      return next;
+    });
+  }, [allRows, routeOptions, baselineStartDate, baselineEndDate]);
+
+  /* recompute deltas whenever baseline slider changes while panel is open */
+  useEffect(() => {
+    const key = `${baselineStartDate}|${baselineEndDate}`;
+    if (!expanded || key === prevBaselineKey.current || allRows.length === 0) return;
+    prevBaselineKey.current = key;
+    const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
+    cardsRef.current = computed;
+    setCards(computed);
+  }, [expanded, baselineStartDate, baselineEndDate, allRows, routeOptions]);
+
+  const handleCardClick = useCallback((label: string) => {
+    const idx = routeOptions.indexOf(label);
+    if (idx >= 0) setRouteIdx(idx);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [routeOptions, setRouteIdx]);
+
+  const THRESHOLD = 0.5;
+
+  return (
+    <div style={{
+      background: thm.sectionBg,
+      border: thm.cardBorder,
+      boxShadow: thm.cardShadow,
+      borderRadius: "1.5rem",
+      overflow: "hidden",
+    }}>
+      {/* ── Collapse/expand header ── */}
+      <button onClick={toggle} style={{
+        width: "100%", display: "flex", alignItems: "center",
+        justifyContent: "space-between", padding: "1.25rem 1.5rem",
+        background: "none", border: "none", cursor: "pointer", textAlign: "left",
+      }}>
+        <span style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
+          color: thm.textPrimary }}>
+          🗺️ How are all roads doing?
+        </span>
+        <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+          transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform 0.2s ease" }}>▾</span>
+      </button>
+
+      {expanded && (
+        <div style={{ padding: "0 1.5rem 1.5rem" }}>
+          {!cards ? (
+            <p style={{ color: thm.textMuted, fontSize: 13, padding: "0.5rem 0" }}>
+              Computing route summaries…
+            </p>
+          ) : (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(195px, 1fr))",
+              gap: 12,
+            }}>
+              {cards.map(card => {
+                const dir = card.delta !== null && !card.isBaseline
+                  ? card.delta >  THRESHOLD ? "up"
+                  : card.delta < -THRESHOLD ? "down"
+                  : "flat"
+                  : "flat";
+                const sparkColor = card.isBaseline
+                  ? (thm.key === "colour" ? "#60a5fa" : "#888888")
+                  : dir === "up"   ? "#34d399"
+                  : dir === "down" ? "#f87171"
+                  : "#94a3b8";
+
+                let cardBg: string = thm.key === "colour" ? "rgba(20,30,55,0.92)" : (thm.cardBg as string);
+                if (card.isTop3Worst) {
+                  cardBg = thm.key === "colour" ? "rgba(239,68,68,0.09)"
+                         : thm.key === "gray"   ? "rgba(0,0,0,0.04)"
+                         : "rgba(239,100,68,0.07)";
+                }
+                const cardBorder = card.isBaseline
+                  ? "1px solid rgba(52,211,153,0.35)"
+                  : card.label === selectedRoute
+                  ? `1px solid ${thm.chart.line4}`
+                  : thm.cardBorder as string;
+
+                return (
+                  <div key={card.label}
+                    onClick={() => handleCardClick(card.label)}
+                    style={{
+                      background: cardBg, border: cardBorder,
+                      boxShadow: thm.cardShadow as string,
+                      borderRadius: 14, padding: "12px 14px",
+                      cursor: "pointer", display: "flex", flexDirection: "column", gap: 8,
+                      transition: "transform 0.12s, box-shadow 0.12s",
+                    }}
+                    onMouseEnter={e => {
+                      const el = e.currentTarget as HTMLDivElement;
+                      el.style.transform = "translateY(-2px)";
+                      el.style.boxShadow = "0 6px 20px rgba(0,0,0,0.22)";
+                    }}
+                    onMouseLeave={e => {
+                      const el = e.currentTarget as HTMLDivElement;
+                      el.style.transform = "";
+                      el.style.boxShadow = thm.cardShadow as string;
+                    }}
+                  >
+                    <p style={{ fontSize: 13, fontWeight: 700, color: thm.textPrimary,
+                      lineHeight: 1.3, margin: 0 }}>
+                      {card.label}
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center",
+                      justifyContent: "space-between", gap: 8 }}>
+                      <MiniSparkline points={card.sparkPoints} color={sparkColor} />
+                      {card.isBaseline ? (
+                        <span style={{ fontSize: 11, fontWeight: 700,
+                          color: "#34d399", whiteSpace: "nowrap" }}>
+                          🟢 Baseline
+                        </span>
+                      ) : card.delta === null ? (
+                        <span style={{ fontSize: 11, color: thm.textMuted }}>— no data</span>
+                      ) : Math.abs(card.delta) < THRESHOLD ? (
+                        <span style={{ fontSize: 11, color: thm.textMuted }}>— steady</span>
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 700,
+                          color: card.delta > 0 ? "#34d399" : "#f87171",
+                          whiteSpace: "nowrap" }}>
+                          {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)} km/h
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1378,6 +1635,16 @@ function DashboardInner() {
                   </div>
                 </>
               )}
+
+              {/* ── All-roads overview panel ───────────────── */}
+              <AllRoadsPanel
+                allRows={allRows}
+                routeOptions={routeOptions}
+                baselineStartDate={baselineStartDate}
+                baselineEndDate={baselineEndDate}
+                selectedRoute={selectedRoute}
+                setRouteIdx={setRouteIdx}
+              />
             </>
           )}
         </main>

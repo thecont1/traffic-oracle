@@ -339,6 +339,7 @@ function CalendarWidget({
   const [calYear,  setCalYear]  = useState(initYM.y);
   const [calMonth, setCalMonth] = useState(initYM.m);
   const [fadeKey,  setFadeKey]  = useState(0);
+  const [calOpen,  setCalOpen]  = useState(true);
 
   useEffect(() => {
     if (!lastStr) return;
@@ -571,45 +572,61 @@ function CalendarWidget({
   return (
     <>
       <div style={{ position:"relative" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-            color: thm.textPrimary }}>📅 Daily Speeds by Month</p>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {navBtn("‹", canBack, prevMo)}
-            <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
-              minWidth:150, textAlign:"center" }}>{monthLabel}</span>
-            {navBtn("›", canFwd, nextMo)}
-          </div>
+        {/* ── Header row: title + chevron + (when open) month nav ── */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+          marginBottom: calOpen ? 14 : 0 }}>
+          <button onClick={() => setCalOpen(o => !o)} style={{
+            display:"flex", alignItems:"center", gap:8,
+            background:"none", border:"none", cursor:"pointer", padding:0,
+          }}>
+            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
+              color: thm.textPrimary, margin:0 }}>📅 Daily Speeds by Month</p>
+            <span style={{ fontSize:16, color: thm.textMuted, display:"inline-block",
+              transform: calOpen ? "rotate(180deg)" : "rotate(0deg)",
+              transition:"transform 0.2s ease" }}>▾</span>
+          </button>
+          {calOpen && (
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              {navBtn("‹", canBack, prevMo)}
+              <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
+                minWidth:150, textAlign:"center" }}>{monthLabel}</span>
+              {navBtn("›", canFwd, nextMo)}
+            </div>
+          )}
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
-          {DAY_HDR.map(d => (
-            <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
-              textTransform:"uppercase", letterSpacing:"0.06em",
-              color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
-          ))}
-        </div>
+        {calOpen && (
+          <>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
+              {DAY_HDR.map(d => (
+                <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
+                  textTransform:"uppercase", letterSpacing:"0.06em",
+                  color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
+              ))}
+            </div>
 
-        <div key={fadeKey}
-          onMouseMove={handleGridMove}
-          onMouseLeave={hideTip}
-          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
-            animation:"cal-fade-in 0.2s ease" }}>
-          {cells}
-        </div>
+            <div key={fadeKey}
+              onMouseMove={handleGridMove}
+              onMouseLeave={hideTip}
+              style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+                animation:"cal-fade-in 0.2s ease" }}>
+              {cells}
+            </div>
 
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
-          justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
-          <span>Slow</span>
-          <div style={{ width:88, height:7, borderRadius:4,
-            background: thm.key === "gray"
-              ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
-              : thm.key === "pastel"
-              ? "linear-gradient(90deg,rgba(248,187,208,0.9),rgba(254,215,170,0.9),rgba(187,247,208,0.9))"
-              : "linear-gradient(90deg,rgba(239,68,68,0.88),rgba(245,158,11,0.88),rgba(34,197,94,0.88))"
-          }} />
-          <span>Fast (km/h)</span>
-        </div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
+              justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
+              <span>Slow</span>
+              <div style={{ width:88, height:7, borderRadius:4,
+                background: thm.key === "gray"
+                  ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
+                  : thm.key === "pastel"
+                  ? "linear-gradient(90deg,rgba(248,187,208,0.9),rgba(254,215,170,0.9),rgba(187,247,208,0.9))"
+                  : "linear-gradient(90deg,rgba(239,68,68,0.88),rgba(245,158,11,0.88),rgba(34,197,94,0.88))"
+              }} />
+              <span>Fast (km/h)</span>
+            </div>
+          </>
+        )}
       </div>
       {createPortal(
         <div ref={tooltipRef} style={{
@@ -731,33 +748,23 @@ function AllRoadsPanel({
   setRouteIdx: (i: number) => void;
 }) {
   const { theme: thm } = useTheme();
-  const [expanded, setExpanded]   = useState(false);
+  const [expanded, setExpanded]   = useState(true);
   const cardsRef                  = useRef<RouteCardData[] | null>(null);
   const [cards, setCards]         = useState<RouteCardData[] | null>(null);
   const prevBaselineKey           = useRef("");
 
-  const toggle = useCallback(() => {
-    setExpanded(prev => {
-      const next = !prev;
-      if (next && !cardsRef.current && allRows.length > 0) {
-        const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
-        cardsRef.current = computed;
-        setCards(computed);
-        prevBaselineKey.current = `${baselineStartDate}|${baselineEndDate}`;
-      }
-      return next;
-    });
-  }, [allRows, routeOptions, baselineStartDate, baselineEndDate]);
+  const toggle = useCallback(() => setExpanded(e => !e), []);
 
-  /* recompute deltas whenever baseline slider changes while panel is open */
+  /* compute on mount (expanded by default) + recompute when baseline changes */
   useEffect(() => {
+    if (!expanded || allRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
-    if (!expanded || key === prevBaselineKey.current || allRows.length === 0) return;
-    prevBaselineKey.current = key;
+    if (cardsRef.current && key === prevBaselineKey.current) return;
     const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
     cardsRef.current = computed;
     setCards(computed);
-  }, [expanded, baselineStartDate, baselineEndDate, allRows, routeOptions]);
+    prevBaselineKey.current = key;
+  }, [expanded, allRows, routeOptions, baselineStartDate, baselineEndDate]);
 
   const handleCardClick = useCallback((label: string) => {
     const idx = routeOptions.indexOf(label);
@@ -1206,7 +1213,18 @@ function DashboardInner() {
               <span style={{ fontSize:26 }}>🚦</span>
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>
-                  <span style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:16, ...thm.titleStyle }}>
+                  <span style={{
+                    fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:16,
+                    display:"inline-block",
+                    ...(thm.key === "gray" ? { color:"#111111" } : {
+                      background: thm.key === "pastel"
+                        ? "linear-gradient(90deg,#ec4899,#8b5cf6)"
+                        : "linear-gradient(90deg,#2563eb,#7c3aed)",
+                      WebkitBackgroundClip:"text",
+                      WebkitTextFillColor:"transparent",
+                      color:"transparent",
+                    }),
+                  }}>
                     TraffiCoracle
                   </span>
                   <Chip icon="📍" variant="city" onClick={() => {}} inert>Bangalore</Chip>

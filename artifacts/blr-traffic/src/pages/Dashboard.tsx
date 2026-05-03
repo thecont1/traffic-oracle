@@ -816,7 +816,7 @@ function AllRoadsPanel({
                          : "rgba(239,100,68,0.07)";
                 }
                 const cardBorder = card.isBaseline
-                  ? "1px solid rgba(52,211,153,0.35)"
+                  ? "1.5px solid #f59e0b"
                   : card.label === selectedRoute
                   ? `1px solid ${thm.chart.line4}`
                   : thm.cardBorder as string;
@@ -824,6 +824,9 @@ function AllRoadsPanel({
                 return (
                   <div key={card.label}
                     onClick={() => handleCardClick(card.label)}
+                    title={card.isBaseline
+                      ? "The fastest road in Bangalore — sets the upper bound for what's achievable without breaking traffic laws."
+                      : undefined}
                     style={{
                       background: cardBg, border: cardBorder,
                       boxShadow: thm.cardShadow as string,
@@ -851,8 +854,8 @@ function AllRoadsPanel({
                       <MiniSparkline points={card.sparkPoints} color={sparkColor} />
                       {card.isBaseline ? (
                         <span style={{ fontSize: 11, fontWeight: 700,
-                          color: "#34d399", whiteSpace: "nowrap" }}>
-                          🟢 Baseline
+                          color: "#f59e0b", whiteSpace: "nowrap" }}>
+                          ⚡ Speed benchmark
                         </span>
                       ) : card.delta === null ? (
                         <span style={{ fontSize: 11, color: thm.textMuted }}>— no data</span>

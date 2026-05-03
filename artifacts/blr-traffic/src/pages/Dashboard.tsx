@@ -5,15 +5,14 @@ import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Sun, Moon, Share2 } from "lucide-react";
+import { Share2 } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats } from "@/lib/useTrafficData";
-
-/* ── Colours ──────────────────────────────────────────────────── */
-const LC = { primary:"#2563eb", teal:"#0d9488", purple:"#7c3aed", pink:"#db2777" };
-const DC = { primary:"#60a5fa", teal:"#2dd4bf", purple:"#a78bfa", pink:"#f472b6" };
+import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
+import { THEME_META, THEME_CYCLE } from "@/lib/theme";
+import type { ChipVariant } from "@/lib/theme";
 
 /* ── Filter options ───────────────────────────────────────────── */
 const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
@@ -95,18 +94,25 @@ function ChartTooltip({ active, payload, label }: {
 }
 
 /* ── Chips ─────────────────────────────────────────────────────── */
-type ChipVariant = "route"|"period"|"tod"|"worsened"|"improved"|"city";
-
 function Chip({ children, icon, variant, onClick, animate, inert }: {
   children:React.ReactNode; icon:string; variant:ChipVariant;
   onClick:()=>void; animate?:boolean; inert?:boolean;
 }) {
+  const { theme: thm } = useTheme();
+  const tok = thm.chips[variant];
+  const styleOverride: React.CSSProperties | undefined = thm.key !== "colour" ? {
+    background: tok.bg,
+    color:      tok.color,
+    border:     `1.5px solid ${tok.border}`,
+    boxShadow:  tok.shadow,
+  } : undefined;
+
   return (
     <button
       className={`chip chip-${variant} ${animate?"animate-pop":""}`}
       onClick={inert ? undefined : onClick}
       title={inert ? "Multi-city support coming soon" : "Tap to explore differently"}
-      style={inert ? { cursor:"default", opacity:0.9 } : undefined}
+      style={inert ? { cursor:"default", opacity:0.9, ...styleOverride } : styleOverride}
     >
       <span>{icon}</span>{children}
     </button>
@@ -128,16 +134,17 @@ function Sparkles() {
   );
 }
 
-/* ── Napkin chart — baseline (blue) / gap / recent (pink) ─────── */
+/* ── Napkin chart — baseline / gap / recent ───────────────────── */
 function NapkinChart({
-  baselineWeeks, recentWeeks, dark, height = 120, dateLabels,
+  baselineWeeks, recentWeeks, height = 120, dateLabels,
 }: {
   baselineWeeks: WeeklyAggregate[];
   recentWeeks:   WeeklyAggregate[];
-  dark: boolean;
   height?: number;
   dateLabels?: { bStart: string; bEnd: string; rStart: string; rEnd: string };
 }) {
+  const { theme: thm } = useTheme();
+
   const bLen = baselineWeeks.length;
   const rLen = recentWeeks.length;
   if (bLen + rLen < 2) return null;
@@ -161,7 +168,6 @@ function NapkinChart({
 
   const hasGap = bLen > 0 && rLen > 0;
 
-  // Date-to-x: full SVG width spans baseline-start → recent-end
   const allWeeks = [...baselineWeeks, ...recentWeeks];
   const t0 = new Date(allWeeks[0].weekKey).getTime();
   const t1 = new Date(allWeeks[allWeeks.length - 1].weekKey).getTime();
@@ -180,8 +186,12 @@ function NapkinChart({
       ? `${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)} ${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)}`
       : weeks.map(w => `${toX(w.weekKey).toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`).join(" ");
 
-  const muted  = dark ? "#475569" : "#cbd5e1";
+  const { baseline: BL, recent: RC, gap: GAP } = thm.napkin;
   const labelY = H + 13;
+
+  /* stroke weight: gray theme uses weight to distinguish avg vs baseline */
+  const baselineW = thm.key === "gray" ? 2 : 3.5;
+  const recentW   = thm.key === "gray" ? 3.5 : 3.5;
 
   return (
     <svg viewBox={`0 0 ${W} ${totalH}`}
@@ -191,62 +201,46 @@ function NapkinChart({
       {hasGap && (
         <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
           x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}
-          stroke={muted} strokeWidth={1.5} strokeDasharray="4 3" />
+          stroke={GAP} strokeWidth={1.5} strokeDasharray="4 3" />
       )}
       {bLen > 0 && (
         <polyline points={pts(baselineWeeks)}
-          fill="none" stroke="#60a5fa" strokeWidth={3.5}
+          fill="none" stroke={BL} strokeWidth={baselineW}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
       {rLen > 0 && (
         <polyline points={pts(recentWeeks)}
-          fill="none" stroke="#f472b6" strokeWidth={3.5}
+          fill="none" stroke={RC} strokeWidth={recentW}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
       {hasGap && bLen > 0 && (
-        <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill="#60a5fa" />
+        <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill={BL} />
       )}
       {hasGap && rLen > 0 && (
-        <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill="#f472b6" />
+        <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill={RC} />
       )}
-      {/* Date markers: dashed verticals + bottom-aligned labels */}
       {dateLabels && bLen > 0 && (<>
         <line x1={bXS} y1={toY(baselineWeeks[0].avgSpeed)} x2={bXS} y2={H}
-          stroke="#60a5fa" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={bXS} y={labelY} fontSize={9} fill="#60a5fa" opacity={0.8}
+          stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={bXS} y={labelY} fontSize={9} fill={BL} opacity={0.8}
           textAnchor="start">{dateLabels.bStart}</text>
         <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)} x2={bXE} y2={H}
-          stroke="#60a5fa" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={bXE} y={labelY} fontSize={9} fill="#60a5fa" opacity={0.8}
+          stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={bXE} y={labelY} fontSize={9} fill={BL} opacity={0.8}
           textAnchor="end">{dateLabels.bEnd}</text>
       </>)}
       {dateLabels && rLen > 0 && (<>
         <line x1={rXS} y1={toY(recentWeeks[0].avgSpeed)} x2={rXS} y2={H}
-          stroke="#f472b6" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={rXS} y={labelY} fontSize={9} fill="#f472b6" opacity={0.8}
+          stroke={RC} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={rXS} y={labelY} fontSize={9} fill={RC} opacity={0.8}
           textAnchor="start">{dateLabels.rStart}</text>
         <line x1={rXE} y1={toY(recentWeeks[rLen - 1].avgSpeed)} x2={rXE} y2={H}
-          stroke="#f472b6" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={rXE} y={labelY} fontSize={9} fill="#f472b6" opacity={0.8}
+          stroke={RC} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+        <text x={rXE} y={labelY} fontSize={9} fill={RC} opacity={0.8}
           textAnchor="end">{dateLabels.rEnd}</text>
       </>)}
     </svg>
   );
-}
-
-/* ── Speed → colour helper — p10/p90 percentile scale ─────────── */
-/* p10 → red #ef4444, midpoint → amber #f59e0b, p90 → green #22c55e */
-function speedColorPercentile(kmh: number, p10: number, p90: number): string {
-  const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
-  const tc = Math.max(0, Math.min(1, t));
-  if (tc < 0.5) {
-    const s = tc * 2;
-    /* red(239,68,68) → amber(245,158,11) */
-    return `rgba(${Math.round(239+(245-239)*s)},${Math.round(68+(158-68)*s)},${Math.round(68+(11-68)*s)},0.92)`;
-  }
-  const s = (tc - 0.5) * 2;
-  /* amber(245,158,11) → green(34,197,94) */
-  return `rgba(${Math.round(245+(34-245)*s)},${Math.round(158+(197-158)*s)},${Math.round(11+(94-11)*s)},0.92)`;
 }
 
 /* ── KPI info icon + tooltip ──────────────────────────────────── */
@@ -297,8 +291,7 @@ function KpiInfo({ text }: { text: string }) {
 
 /* ── Calendar widget ──────────────────────────────────────────── */
 const CIRCLE_D = 38;
-const CAL_MUTED = "hsl(var(--muted-foreground))";
-const DAY_HDR   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DAY_HDR  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 function parseYM(s: string) {
   const d = new Date(s + "T12:00:00");
@@ -306,12 +299,13 @@ function parseYM(s: string) {
 }
 
 function CalendarWidget({
-  dailyStats, dark, fmtDur,
+  dailyStats, fmtDur,
 }: {
   dailyStats: Map<string, DayStats>;
-  dark: boolean;
   fmtDur: (n: number) => string;
 }) {
+  const { theme: thm } = useTheme();
+
   const allDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
   const lastStr  = allDates[allDates.length - 1] ?? "";
   const firstStr = allDates[0] ?? "";
@@ -325,7 +319,7 @@ function CalendarWidget({
     if (lastStr) { const { y, m } = parseYM(lastStr); setCalYear(y); setCalMonth(m); }
   }, [lastStr]);
 
-  /* p10 / p90 of the full route dataset — gives visible colour spread across any month */
+  /* p10/p90 of full route dataset — gives visible colour spread across any month */
   const { p10, p90 } = useMemo(() => {
     const speeds = Array.from(dailyStats.values())
       .map(d => d.avgSpeed).filter(s => s > 0).sort((a, b) => a - b);
@@ -338,9 +332,9 @@ function CalendarWidget({
     return { p10: at(10), p90: at(90) };
   }, [dailyStats]);
 
-  /* ── Imperative tooltip — zero grid re-renders on hover ─────── */
-  const tooltipRef    = useRef<HTMLDivElement>(null);
-  const lastKeyRef    = useRef<string | null>(null);
+  /* ── Imperative tooltip ─────────────────────────────────────── */
+  const tooltipRef  = useRef<HTMLDivElement>(null);
+  const lastKeyRef  = useRef<string | null>(null);
 
   const hideTip = useCallback(() => {
     if (tooltipRef.current) tooltipRef.current.style.opacity = "0";
@@ -366,7 +360,6 @@ function CalendarWidget({
       `<span style="font-weight:600;color:#f1f5f9">${val}</span></div>`
     ).join("");
 
-    /* Comic-book callout: dark bubble + triangular tail */
     el.innerHTML =
       `<div style="background:#1e1e2e;border-radius:12px;padding:11px 14px;` +
       `box-shadow:0 8px 32px rgba(0,0,0,0.55);">` +
@@ -374,25 +367,19 @@ function CalendarWidget({
       rows + `</div>` +
       `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
 
-    const rect    = cellEl.getBoundingClientRect();
-    const TW      = el.offsetWidth  || 200;
-    const TH      = el.offsetHeight || 140;
-    const TAIL    = 9;
-    const GAP     = 8;
-    const vw      = window.innerWidth;
+    const rect   = cellEl.getBoundingClientRect();
+    const TW     = el.offsetWidth  || 200;
+    const TH     = el.offsetHeight || 140;
+    const TAIL   = 9;
+    const GAP    = 8;
+    const vw     = window.innerWidth;
 
-    /* Horizontal: centre on cell; clamp to viewport edges */
-    const rawLeft = rect.left + rect.width / 2 - TW / 2;
-    const left    = rawLeft + TW > vw - 8
-      ? Math.max(8, rect.right - TW)
-      : Math.max(8, rawLeft);
-
-    /* Vertical: prefer above; flip below when not enough room */
+    const rawLeft  = rect.left + rect.width / 2 - TW / 2;
+    const left     = rawLeft + TW > vw - 8 ? Math.max(8, rect.right - TW) : Math.max(8, rawLeft);
     const wouldTop = rect.top - TH - TAIL - GAP;
     const isAbove  = wouldTop >= 0;
     const top      = isAbove ? wouldTop : rect.bottom + TAIL + GAP;
 
-    /* Tail — points toward the hovered cell */
     const tailLeft = Math.max(14, Math.min(TW - 14, rect.left + rect.width / 2 - left));
     const tail = el.querySelector("#cal-tip-tail") as HTMLElement | null;
     if (tail) {
@@ -420,7 +407,6 @@ function CalendarWidget({
     el.style.opacity = "1";
   }, [dailyStats, fmtDur, hideTip]);
 
-  /* Event delegation — cells carry no React event handlers */
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
     if (!cell) { hideTip(); return; }
@@ -453,17 +439,25 @@ function CalendarWidget({
     else setCalMonth(m => m + 1);
   };
 
-  /* Memoised cells — only rebuilds on data/month change, not on tooltip */
+  /* Memoised cells — rebuilds only on data/month/theme change */
   const cells = useMemo(() => {
     const blanks = Array.from({ length: firstDay }, (_, i) => <div key={`b${i}`} />);
     const days   = Array.from({ length: daysInMo }, (_, i) => {
       const day     = i + 1;
       const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
       const s       = dailyStats.get(dateKey);
-      const bg      = s
-        ? speedColorPercentile(s.avgSpeed, p10, p90)
-        : dark ? "rgba(148,163,184,0.15)" : "rgba(100,116,139,0.15)";
-      const txtClr  = s ? "#fff" : (dark ? "rgba(148,163,184,0.5)" : "rgba(100,116,139,0.45)");
+
+      let bg: string;
+      let txtClr: string;
+      if (s) {
+        bg = thm.calColor(s.avgSpeed, p10, p90);
+        const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
+        txtClr = thm.calTextColor(t);
+      } else {
+        bg     = thm.emptyCalCircle;
+        txtClr = thm.textMuted;
+      }
+
       return (
         <div
           key={dateKey}
@@ -473,7 +467,7 @@ function CalendarWidget({
         >
           <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%", background:bg,
             display:"flex", alignItems:"center", justifyContent:"center",
-            boxShadow: s ? "0 2px 8px rgba(0,0,0,0.2)" : "none",
+            boxShadow: s ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
             transition:"transform 0.13s, box-shadow 0.13s",
           }}>
             <span style={{ fontSize:13, fontWeight:800, color:txtClr,
@@ -484,60 +478,62 @@ function CalendarWidget({
     });
     return [...blanks, ...days];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, dark, p10, p90]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90]);
 
   const navBtn = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} disabled={!active}
-      style={{ background:"none", border:"1px solid hsl(var(--border))", borderRadius:8,
-        padding:"3px 11px", fontSize:18, lineHeight:1,
+      style={{ background:"none", border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+        borderRadius:8, padding:"3px 11px", fontSize:18, lineHeight:1,
         cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
-        color: dark ? "#f1f5f9" : "#1e293b" }}>
+        color: thm.textPrimary }}>
       {label}
     </button>
   );
 
+  const CAL_MUTED = thm.textMuted;
+
   return (
     <>
       <div style={{ position:"relative" }}>
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-          color: dark ? "#f1f5f9" : "#1e293b" }}>📅 Daily Speed Calendar</p>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          {navBtn("‹", canBack, prevMo)}
-          <span style={{ fontWeight:700, fontSize:14, color: dark ? "#f1f5f9" : "#1e293b",
-            minWidth:150, textAlign:"center" }}>{monthLabel}</span>
-          {navBtn("›", canFwd, nextMo)}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
+            color: thm.textPrimary }}>📅 Daily Speed Calendar</p>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {navBtn("‹", canBack, prevMo)}
+            <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
+              minWidth:150, textAlign:"center" }}>{monthLabel}</span>
+            {navBtn("›", canFwd, nextMo)}
+          </div>
         </div>
-      </div>
 
-      {/* Day-of-week headers */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
-        {DAY_HDR.map(d => (
-          <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
-            textTransform:"uppercase", letterSpacing:"0.06em",
-            color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
-        ))}
-      </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
+          {DAY_HDR.map(d => (
+            <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
+              textTransform:"uppercase", letterSpacing:"0.06em",
+              color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
+          ))}
+        </div>
 
-      {/* Date cells — event delegation; cells have no React handlers */}
-      <div key={fadeKey}
-        onMouseMove={handleGridMove}
-        onMouseLeave={hideTip}
-        style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
-          animation:"cal-fade-in 0.2s ease" }}>
-        {cells}
-      </div>
+        <div key={fadeKey}
+          onMouseMove={handleGridMove}
+          onMouseLeave={hideTip}
+          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+            animation:"cal-fade-in 0.2s ease" }}>
+          {cells}
+        </div>
 
-      {/* Speed legend */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
-        justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
-        <span>Slow</span>
-        <div style={{ width:88, height:7, borderRadius:4,
-          background:"linear-gradient(90deg,rgba(239,68,68,0.88),rgba(234,179,8,0.88),rgba(52,211,153,0.88))" }} />
-        <span>Fast (km/h)</span>
-      </div>
-
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
+          justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
+          <span>Slow</span>
+          <div style={{ width:88, height:7, borderRadius:4,
+            background: thm.key === "gray"
+              ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
+              : thm.key === "pastel"
+              ? "linear-gradient(90deg,rgba(248,187,208,0.9),rgba(254,215,170,0.9),rgba(187,247,208,0.9))"
+              : "linear-gradient(90deg,rgba(239,68,68,0.88),rgba(245,158,11,0.88),rgba(34,197,94,0.88))"
+          }} />
+          <span>Fast (km/h)</span>
+        </div>
       </div>
       {createPortal(
         <div ref={tooltipRef} style={{
@@ -553,10 +549,11 @@ function CalendarWidget({
   );
 }
 
-/* ── Dashboard ────────────────────────────────────────────────── */
-export default function Dashboard() {
+/* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
+function DashboardInner() {
+  const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
+
   /* UI state */
-  const [dark,         setDark]         = useState(true);
   const [periodIdx,    setPeriodIdx]    = useState(() => {
     const i = PERIOD_LIST.findIndex(p => p.value === URL_PARAMS.period);
     return i >= 0 ? i : 2;
@@ -585,13 +582,9 @@ export default function Dashboard() {
   const sparkleTimer = useRef<ReturnType<typeof setTimeout>>();
   const [overlapWarning, setOverlapWarning] = useState(false);
   const overlapTimer = useRef<ReturnType<typeof setTimeout>>();
-  /* thumb drag/hover tracking for date tooltips */
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
   sliderValsRef.current = sliderVals;
-  /* Measure track width so stripe overlays align with Radix thumb centres.
-     useLayoutEffect (no deps) reads the DOM after every render and bails out
-     when the value is unchanged — safe even if it fires when Track is hidden. */
   const trackRef = useRef<HTMLElement>(null);
   const [trackW, setTrackW] = useState(0);
   useLayoutEffect(() => {
@@ -605,7 +598,6 @@ export default function Dashboard() {
     return () => window.removeEventListener("pointerup", up);
   }, []);
 
-  /* Restore slider + route from URL params (used exactly once after data loads) */
   const urlParamsRef = useRef<{ bl?: number; br?: number; routeApplied: boolean }>({
     bl: typeof URL_PARAMS.bl === "number" ? URL_PARAMS.bl : undefined,
     br: typeof URL_PARAMS.br === "number" ? URL_PARAMS.br : undefined,
@@ -624,7 +616,6 @@ export default function Dashboard() {
     return labels.length ? labels : ["Old Airport Road"];
   }, [allRows]);
 
-  /* Apply URL-param route once the route list has loaded */
   useEffect(() => {
     if (routeOptions.length === 0 || urlParamsRef.current.routeApplied) return;
     if (URL_PARAMS.route) {
@@ -640,7 +631,6 @@ export default function Dashboard() {
   const periodLabel   = PERIOD_LIST[periodIdx].label;
   const todLabel      = TOD_LIST[todIdx].label;
 
-  /* route label_full for verdict sentence */
   const selectedRouteInfo = useMemo(
     () => routes.find(r => r.label_short === selectedRoute),
     [routes, selectedRoute],
@@ -649,11 +639,8 @@ export default function Dashboard() {
   const arrowIdx  = labelFull.indexOf("→");
   const routeOrigin      = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim()      : labelFull;
   const routeDestination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
-  const routeEndpoints   = routeDestination
-    ? `${routeOrigin} → ${routeDestination}`
-    : routeOrigin;
+  const routeEndpoints   = routeDestination ? `${routeOrigin} → ${routeDestination}` : routeOrigin;
 
-  /* chip actions */
   const nextRoute  = () => { setRouteIdx(i => (i+1)%routeOptions.length); popChip("route"); };
   const nextPeriod = () => { setPeriodIdx(i => (i+1)%PERIOD_LIST.length);  popChip("period"); };
   const nextTod    = () => { setTodIdx(i => (i+1)%TOD_LIST.length);         popChip("tod"); };
@@ -662,15 +649,12 @@ export default function Dashboard() {
     popChip("mode");
   };
 
-  /* ── Slider — full dataset, independent of period chip ─────── */
+  /* ── Slider ─────────────────────────────────────────────────── */
   const allRouteWeeks = useAllRouteWeeks(allRows, selectedRoute, tod);
 
-  /* Reset slider when route or tod changes (NOT on period change).
-     Snaps to config.json baseline_default_start / baseline_default_end. */
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
     const maxI = allRouteWeeks.length - 1;
-    /* If URL params carry slider positions, restore them once then clear */
     const p = urlParamsRef.current;
     if (p.bl !== undefined && p.br !== undefined) {
       setSliderVals([
@@ -703,9 +687,6 @@ export default function Dashboard() {
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
   const leftPct   = (safeLeft / maxIdx) * 100;
   const rightPct  = (safeRight / maxIdx) * 100;
-  /* Corrected percentages for Track-internal overlays — Radix applies a
-     translateX in-bounds offset so the thumb visual centre sits at:
-     px = (idx/maxIdx) * (trackW - thumbW) + thumbW/2               */
   const THUMB_W = 22;
   const adjPct = (idx: number) =>
     trackW > 0
@@ -714,13 +695,11 @@ export default function Dashboard() {
   const leftTrackPct  = adjPct(safeLeft);
   const rightTrackPct = adjPct(safeRight);
 
-  /* Baseline = slider selection from full history */
   const baselineWeeks = useMemo(
     () => allRouteWeeks.slice(safeLeft, safeRight + 1),
     [allRouteWeeks, safeLeft, safeRight],
   );
 
-  /* Share — encode current view into a URL and copy to clipboard */
   const handleShare = useCallback(() => {
     const p = new URLSearchParams({
       route:  selectedRoute,
@@ -738,8 +717,6 @@ export default function Dashboard() {
     });
   }, [selectedRoute, tod, period, questionMode, safeLeft, safeRight]);
 
-  /* Recent = weeks after slider right handle AND within period window
-     (period is measured back from the last available data point) */
   const lastDataMs = useMemo(
     () => allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
     [allRows],
@@ -753,7 +730,6 @@ export default function Dashboard() {
     return d;
   }, [lastDataMs, period]);
 
-  /* Index of the first week that belongs to the recent window — used to guard the slider */
   const recentWindowStartIdx = useMemo(
     () => {
       const idx = allRouteWeeks.findIndex(w => w.weekStart >= periodCutoffDate);
@@ -774,13 +750,11 @@ export default function Dashboard() {
   const speedDiff  = recentSpeed - baselineSpeed;
   const speedPct   = baselineSpeed > 0 ? Math.round((speedDiff / baselineSpeed) * 100) : 0;
 
-  /* Dates for display */
   const baselineStartDate = allRouteWeeks[safeLeft]?.weekKey;
   const baselineEndDate   = allRouteWeeks[safeRight]?.weekKey;
   const recentStartDate   = recentWeeks[0]?.weekKey;
   const lastDate          = allRouteWeeks[allRouteWeeks.length - 1]?.weekKey;
 
-  /* Gap-centre % for delta badge — mirrors NapkinChart toX maths (PX=4, W=500, chartW=492) */
   const gapCenterPct = (() => {
     if (!baselineStartDate || !baselineEndDate || !recentStartDate || !lastDate) return 50;
     const t0   = new Date(baselineStartDate).getTime();
@@ -790,13 +764,11 @@ export default function Dashboard() {
     return ((4 + ((bEndF + rStartF) / 2) * 492) / 500) * 100;
   })();
 
-  /* Slider change handler — also detects which thumb is moving */
   const handleSliderChange = useCallback((vals: number[]) => {
     let [l, r] = vals as [number, number];
     const [prevL, prevR] = sliderValsRef.current;
     if (l !== prevL) setDragThumb(0);
     else if (r !== prevR) setDragThumb(1);
-    /* Guard: baseline end must stay at least 1 week before the recent window */
     const maxR = recentWindowStartIdx > 0 ? recentWindowStartIdx - 1 : maxIdx;
     if (r > maxR) {
       r = maxR;
@@ -813,15 +785,10 @@ export default function Dashboard() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  /* ── Daily stats for calendar — all-day aggregate, ignores ToD filter ── */
   const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
+  const { merged, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
 
-  /* ── Period-filtered data for charts & KPI cards ─────────── */
-  const { merged, selectedStats } = useFilteredData(
-    allRows, selectedRoute, period, tod,
-  );
-
-  /* ── Data trend — absolute threshold from config ─────────── */
+  /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
     (appConfig as Record<string, number>).verdict_threshold_kmh ?? 0.5;
 
@@ -833,16 +800,10 @@ export default function Dashboard() {
       : "stable"
       : "insufficient";
 
-  /* ── Verdict: hypothesis (chip) × data result (2-D matrix) ── */
-  /* The chip is the USER'S HYPOTHESIS. The data either confirms
-     or contradicts it. These are fully independent. */
   type VerdictKey =
-    | "confirmed_good"      // asked improved, data improved
-    | "confirmed_bad"       // asked worsened, data worsened
-    | "contradicted_better" // asked worsened, data improved
-    | "contradicted_worse"  // asked improved, data worsened
-    | "no_change"           // data stable (either hypothesis)
-    | "insufficient";       // not enough data
+    | "confirmed_good" | "confirmed_bad"
+    | "contradicted_better" | "contradicted_worse"
+    | "no_change" | "insufficient";
 
   const verdictKey: VerdictKey =
     dataTrend === "insufficient" ? "insufficient"
@@ -852,79 +813,56 @@ export default function Dashboard() {
       : dataTrend === "worsened" ? "confirmed_bad"       : "contradicted_better";
 
   const VERDICT: Record<VerdictKey, {face:string; msg:string; border:string; bg:string; tc:string}> = {
-    confirmed_good: {
-      face: "🤩",
-      msg:  "Yes! It's gotten better — speed is up. 🎉",
-      border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46",
-    },
-    confirmed_bad: {
-      face: "🥵",
-      msg:  "Yep, it's gotten worse — traffic is heavier.",
-      border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b",
-    },
-    contradicted_better: {
-      face: "🤩",
-      msg:  "Actually, things have improved! Roads are faster.",
-      border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46",
-    },
-    contradicted_worse: {
-      face: "🥵",
-      msg:  "Actually, things have gotten worse — traffic is heavier.",
-      border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b",
-    },
-    no_change: {
-      face: "😐",
-      msg:  "Not really — no meaningful change either way.",
-      border:"#fcd34d", bg:"#fffbeb", tc:"#92400e",
-    },
-    insufficient: {
-      face: "🔍",
-      msg:  "Need more data — widen the baseline window.",
-      border:"#c4b5fd", bg:"#f5f3ff", tc:"#5b21b6",
-    },
+    confirmed_good:      { face:"🤩", msg:"Yes! It's gotten better — speed is up. 🎉",          border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46" },
+    confirmed_bad:       { face:"🥵", msg:"Yep, it's gotten worse — traffic is heavier.",         border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b" },
+    contradicted_better: { face:"🤩", msg:"Actually, things have improved! Roads are faster.",    border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46" },
+    contradicted_worse:  { face:"🥵", msg:"Actually, things have gotten worse — traffic is heavier.", border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b" },
+    no_change:           { face:"😐", msg:"Not really — no meaningful change either way.",         border:"#fcd34d", bg:"#fffbeb", tc:"#92400e" },
+    insufficient:        { face:"🔍", msg:"Need more data — widen the baseline window.",           border:"#c4b5fd", bg:"#f5f3ff", tc:"#5b21b6" },
   };
   const v      = VERDICT[verdictKey];
-  const colors = dark ? DC : LC;
+  const colors = thm.chart;
 
-  /* Verdict subtitle — friendly sentence with origin→destination */
   const verdictSubtext = verdictKey !== "insufficient" && baselineStartDate
     ? `Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${fmtShortDate(lastDate)}) · ${routeEndpoints} · ${todLabel}`
     : undefined;
 
-  /* Neutral card style — shared by all 4 KPI cards */
-  const kpiCard: React.CSSProperties = {
-    background: dark ? "rgba(20,30,55,0.92)" : "rgba(248,250,252,0.96)",
-    border: "1px solid hsl(var(--border))",
-    borderRadius: 18,
-    padding: "16px 18px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  };
+  /* ── Shared KPI card/label/value styles ─────────────────────── */
   const kpiLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600,
-    color: dark ? "#94a3b8" : "#64748b",
-    display: "flex", alignItems: "center",
+    fontSize:11, fontWeight:600,
+    color: thm.textSecondary,
+    display:"flex", alignItems:"center",
   };
   const kpiValue: React.CSSProperties = {
-    fontFamily: "var(--app-font-display)", fontWeight: 800,
-    fontSize: 26, lineHeight: 1.1, color: dark ? "#f1f5f9" : "#1e293b",
+    fontFamily:"var(--app-font-display)", fontWeight:800,
+    fontSize:26, lineHeight:1.1, color: thm.textPrimary,
   };
   const kpiSub: React.CSSProperties = {
-    fontSize: 11, color: dark ? "#94a3b8" : "#64748b",
+    fontSize:11, color: thm.textSecondary,
   };
+  const kpiCardBase: React.CSSProperties = {
+    border: thm.cardBorder,
+    boxShadow: thm.cardShadow,
+    borderRadius:18,
+    padding:"16px 18px",
+    display:"flex", flexDirection:"column", gap:4,
+  };
+
+  /* ── Theme toggle button style ──────────────────────────────── */
+  const nextMeta = THEME_META[nextThemeKey];
+  const curMeta  = THEME_META[themeKey];
 
   /* ── Render ─────────────────────────────────────────────────── */
   return (
-    <div className={dark ? "dark" : ""}>
-      <div className="min-h-screen fun-bg transition-colors">
+    <div className={thm.isDark ? "dark" : ""}>
+      <div className="min-h-screen transition-colors" style={{ background: thm.bodyBg }}>
 
         {/* ── Header ──────────────────────────────────────────── */}
         <header style={{
-          background: dark ? "rgba(15,18,40,0.88)" : "rgba(255,255,255,0.78)",
+          background: thm.headerBg,
           backdropFilter: "blur(12px)",
-          borderBottom: "1px solid hsl(var(--border))",
-          position: "sticky", top: 0, zIndex: 500,
+          borderBottom: `1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+          position:"sticky", top:0, zIndex:500,
         }}>
           <div style={{ maxWidth:1320, margin:"0 auto", padding:"0.75rem 1.5rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
@@ -932,16 +870,12 @@ export default function Dashboard() {
               <span style={{ fontSize:26 }}>🚦</span>
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>
-                  <span style={{
-                    fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:16,
-                    background:"linear-gradient(90deg,#2563eb,#7c3aed)",
-                    WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
-                  }}>
+                  <span style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:16, ...thm.titleStyle }}>
                     TraffiCoracle
                   </span>
                   <Chip icon="📍" variant="city" onClick={() => {}} inert>Bangalore</Chip>
                 </div>
-                <p style={{ fontSize:11, color:"hsl(var(--muted-foreground))" }}>
+                <p style={{ fontSize:11, color: thm.textMuted }}>
                   Live data · {rowCount > 0 ? `${rowCount.toLocaleString()} records` : "loading…"}
                 </p>
               </div>
@@ -951,9 +885,9 @@ export default function Dashboard() {
               {!loading && rowCount > 0 && (
                 <button onClick={handleShare} style={{
                   display:"flex", alignItems:"center", gap:5, fontSize:12,
-                  border:"1px solid hsl(var(--border))", borderRadius:9999,
-                  padding:"5px 12px",
-                  color: copied ? "#34d399" : "hsl(var(--muted-foreground))",
+                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  borderRadius:9999, padding:"5px 12px",
+                  color: copied ? "#34d399" : thm.textMuted,
                   background: copied ? "rgba(52,211,153,0.1)" : "transparent",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
@@ -961,14 +895,25 @@ export default function Dashboard() {
                   {copied ? "Copied!" : "Share"}
                 </button>
               )}
-              <button onClick={() => setDark(d => !d)} style={{
-                width:34, height:34, borderRadius:"50%",
-                border:"1px solid hsl(var(--border))",
-                background: dark ? "#1e293b" : "white",
-                color:"hsl(var(--muted-foreground))",
-                display:"flex", alignItems:"center", justifyContent:"center",
-              }} aria-label="Toggle dark mode">
-                {dark ? <Sun size={15}/> : <Moon size={15}/>}
+              {/* Three-way theme toggle */}
+              <button
+                onClick={cycleTheme}
+                title={`Switch to ${nextMeta.label}`}
+                style={{
+                  display:"flex", alignItems:"center", gap:6,
+                  height:34, borderRadius:9999, padding:"0 12px",
+                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  background: thm.key==="colour" ? "#1e293b" : thm.key==="gray" ? "#f5f5f5" : "#fce7f3",
+                  cursor:"pointer",
+                  transition:"background 0.2s",
+                }}
+                aria-label="Cycle theme"
+              >
+                <span style={{ fontSize:15 }}>{curMeta.icon}</span>
+                <span style={{ fontSize:10, fontWeight:600, color: thm.textSecondary,
+                  whiteSpace:"nowrap", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {curMeta.label}
+                </span>
               </button>
             </div>
           </div>
@@ -982,17 +927,13 @@ export default function Dashboard() {
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
               fontSize:"clamp(1.3rem,3.2vw,2rem)", lineHeight:1.7,
-              color: dark ? "#f1f5f9" : "#1e293b",
+              color: thm.textPrimary,
               display:"flex", flexWrap:"wrap", alignItems:"center",
               justifyContent:"center", gap:"0.3em",
             }}>
               <span>Has traffic</span>
-              <Chip
-                icon={questionMode === "worsened" ? "🚦" : "✅"}
-                variant={questionMode}
-                onClick={toggleMode} animate={!!chipAnim.mode}>
-                {questionMode}
-              </Chip>
+              <Chip icon={questionMode==="worsened"?"🚦":"✅"} variant={questionMode}
+                onClick={toggleMode} animate={!!chipAnim.mode}>{questionMode}</Chip>
               <span>on</span>
               <Chip icon="🛣️" variant="route"
                 onClick={nextRoute} animate={!!chipAnim.route}>{selectedRoute}</Chip>
@@ -1004,7 +945,7 @@ export default function Dashboard() {
                 onClick={nextPeriod} animate={!!chipAnim.period}>{periodLabel}</Chip>
               <span>?</span>
             </h1>
-            <p style={{ marginTop:"0.25rem", fontSize:12, color:"hsl(var(--muted-foreground))" }}>
+            <p style={{ marginTop:"0.25rem", fontSize:12, color: thm.textMuted }}>
               Tap any highlighted word to explore a different question.
             </p>
           </div>
@@ -1013,7 +954,7 @@ export default function Dashboard() {
           {loading && (
             <div style={{ textAlign:"center", padding:"4rem 0" }}>
               <div className="animate-float" style={{ fontSize:56, marginBottom:16 }}>🚗</div>
-              <p style={{ color:"hsl(var(--muted-foreground))", fontWeight:600 }}>
+              <p style={{ color: thm.textMuted, fontWeight:600 }}>
                 Fetching 60k traffic records from GitHub…
               </p>
             </div>
@@ -1033,19 +974,19 @@ export default function Dashboard() {
               {/* ── Baseline slider ──────────────────────────── */}
               {allRouteWeeks.length > 1 && (
                 <div className="animate-fade-in" style={{
-                  background: dark ? "rgba(20,28,50,0.85)" : "rgba(255,255,255,0.92)",
-                  border:"1px solid hsl(var(--border))",
+                  background: thm.sectionBg,
+                  border: thm.cardBorder,
+                  boxShadow: thm.cardShadow,
                   borderRadius:"1.5rem", padding:"1.25rem 1.5rem 1rem",
                   position:"relative", overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}
 
                   <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                    color: dark?"#f1f5f9":"#1e293b", marginBottom:14 }}>
+                    color: thm.textPrimary, marginBottom:14 }}>
                     Compare with this earlier period ↔
                   </p>
 
-                  {/* Slider — always-visible date labels above thumbs + full-width track */}
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
@@ -1054,30 +995,26 @@ export default function Dashboard() {
                       style={{ position:"relative", display:"flex",
                         alignItems:"center", height:40, userSelect:"none", touchAction:"none" }}
                     >
-                      {/* Left thumb date — always visible, brighter on drag */}
+                      {/* Left thumb date label */}
                       {baselineStartDate && (
                         <div style={{
                           position:"absolute", left:`${leftPct}%`, top:-20,
                           transform:"translateX(-50%)",
                           fontSize:10, fontWeight: dragThumb === 0 ? 600 : 400,
-                          color: dragThumb === 0
-                            ? (dark ? "#e2e8f0" : "#1e293b")
-                            : (dark ? "#64748b" : "#94a3b8"),
+                          color: dragThumb === 0 ? thm.textPrimary : thm.textMuted,
                           whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
                           transition:"color 0.12s, font-weight 0.12s",
                         }}>
                           {fmtDate(baselineStartDate)}
                         </div>
                       )}
-                      {/* Right thumb date — always visible, brighter on drag */}
+                      {/* Right thumb date label */}
                       {baselineEndDate && (
                         <div style={{
                           position:"absolute", left:`${rightPct}%`, top:-20,
                           transform:"translateX(-50%)",
                           fontSize:10, fontWeight: dragThumb === 1 ? 600 : 400,
-                          color: dragThumb === 1
-                            ? (dark ? "#e2e8f0" : "#1e293b")
-                            : (dark ? "#64748b" : "#94a3b8"),
+                          color: dragThumb === 1 ? thm.textPrimary : thm.textMuted,
                           whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
                           transition:"color 0.12s, font-weight 0.12s",
                         }}>
@@ -1085,81 +1022,75 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Full-width gradient track + stripe overlay clipped to baseline window */}
+                      {/* Track */}
                       <SliderPrimitive.Track ref={trackRef} style={{
                         position:"relative", flexGrow:1,
                         height:10, borderRadius:9999, overflow:"hidden",
-                        background:"linear-gradient(90deg,#34d399,#60a5fa,#a78bfa,#f472b6)",
+                        background: thm.slider.track,
                       }}>
-                        {/* Dim left — thumb-centre-corrected so no stripe leaks left */}
                         <div style={{
                           position:"absolute", top:0, left:0,
                           width:`${leftTrackPct}%`, height:"100%",
-                          background:"rgba(0,0,0,0.45)", pointerEvents:"none",
+                          background: thm.slider.dim, pointerEvents:"none",
                         }} />
-                        {/* Stripe — baseline window only */}
                         <div style={{
                           position:"absolute", top:0,
                           left:`${leftTrackPct}%`,
                           width:`${Math.max(0, rightTrackPct - leftTrackPct)}%`,
                           height:"100%",
-                          background:"repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.55) 4px,rgba(255,255,255,0.55) 8px)",
+                          background: thm.slider.stripe,
                           pointerEvents:"none",
                         }} />
-                        {/* Dim right — thumb-centre-corrected */}
                         <div style={{
                           position:"absolute", top:0, left:`${rightTrackPct}%`,
                           width:`${100 - rightTrackPct}%`, height:"100%",
-                          background:"rgba(0,0,0,0.45)", pointerEvents:"none",
+                          background: thm.slider.dim, pointerEvents:"none",
                         }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
 
-                      {/* Left thumb — clean pill lever */}
+                      {/* Left thumb */}
                       <SliderPrimitive.Thumb
                         className="slider-thumb"
                         onPointerDown={() => setDragThumb(0)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
                           width:22, height:40, background:"transparent",
-                          border:"none", outline:"none", cursor:"grab", zIndex:10,
-                          flexShrink:0 }}
+                          border:"none", outline:"none", cursor:"grab", zIndex:10, flexShrink:0 }}
                       >
                         <span style={{
                           display:"block", width:7, height:28, borderRadius:9999,
-                          background: dark ? "#e2e8f0" : "white",
-                          border:"2px solid #34d399",
-                          boxShadow:"0 2px 8px rgba(52,211,153,0.5), 0 1px 3px rgba(0,0,0,0.2)",
+                          background: thm.slider.thumbFg,
+                          border:`2px solid ${thm.slider.thumbLeftBorder}`,
+                          boxShadow: thm.slider.thumbLeftShadow,
                         }} />
                       </SliderPrimitive.Thumb>
 
-                      {/* Right thumb — clean pill lever */}
+                      {/* Right thumb */}
                       <SliderPrimitive.Thumb
                         className="slider-thumb"
                         onPointerDown={() => setDragThumb(1)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
                           width:22, height:40, background:"transparent",
-                          border:"none", outline:"none", cursor:"grab", zIndex:10,
-                          flexShrink:0 }}
+                          border:"none", outline:"none", cursor:"grab", zIndex:10, flexShrink:0 }}
                       >
                         <span style={{
                           display:"block", width:7, height:28, borderRadius:9999,
-                          background: dark ? "#e2e8f0" : "white",
-                          border:"2px solid #a78bfa",
-                          boxShadow:"0 2px 8px rgba(167,139,250,0.5), 0 1px 3px rgba(0,0,0,0.2)",
+                          background: thm.slider.thumbFg,
+                          border:`2px solid ${thm.slider.thumbRightBorder}`,
+                          boxShadow: thm.slider.thumbRightShadow,
                         }} />
                       </SliderPrimitive.Thumb>
                     </SliderPrimitive.Root>
                   </div>
 
-                  {/* Dataset boundary dates below track */}
+                  {/* Boundary dates */}
                   <div style={{ display:"flex", justifyContent:"space-between",
-                    fontSize:10, fontWeight:400,
-                    color: dark ? "#64748b" : "#94a3b8", marginTop:6 }}>
+                    fontSize:10, fontWeight:400, color: thm.textMuted, marginTop:6 }}>
                     <span>{fmtDate(allRouteWeeks[0]?.weekKey)}</span>
                     <span>{fmtDate(lastDate)}</span>
                   </div>
 
-                  {/* Overlap warning — fades out after 3 s */}
+                  {/* Overlap warning */}
                   {overlapWarning && (
                     <p key={String(overlapWarning)} style={{
                       fontSize:11, color:"#f87171", textAlign:"center",
@@ -1174,50 +1105,43 @@ export default function Dashboard() {
 
               {/* ── Verdict ──────────────────────────────────── */}
               <div className="animate-fade-in" style={{
-                background: dark ? "rgba(30,40,60,0.8)" : v.bg,
-                border:`2px solid ${v.border}`,
+                background: thm.verdictBg(v.bg),
+                border: `2px solid ${thm.verdictBorder(v.border)}`,
                 borderRadius:"1.5rem", padding:"1.5rem 2rem",
               }}>
-                {/* Headline */}
                 <div style={{ textAlign:"center" }}>
                   <div className="animate-bounce-in" key={verdictKey}
                     style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
                     {v.face}
                   </div>
                   <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
-                    color: dark?"#f1f5f9":v.tc }}>
+                    color: thm.verdictText(v.tc) }}>
                     {v.msg}
                   </p>
                   {verdictSubtext && (
                     <p style={{ marginTop:6, fontSize:12,
-                      color: dark?"#94a3b8":v.tc, opacity:0.85, lineHeight:1.6 }}>
+                      color: thm.verdictText(v.tc), opacity:0.85, lineHeight:1.6 }}>
                       {verdictSubtext}
                     </p>
                   )}
                 </div>
 
-                {/* Speed chart — baseline | taller chart + delta overlay | recent */}
                 {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
                   <div style={{ display:"flex", alignItems:"center", gap:0, marginTop:20, opacity:0.95 }}>
-
-                    {/* Left: Baseline reading */}
                     {baselineSpeed > 0 && (
                       <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>Baseline</p>
+                          letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>Baseline</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: dark ? "#f1f5f9" : v.tc, lineHeight:1 }}>
+                          color: thm.verdictText(v.tc), lineHeight:1 }}>
                           {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
                         </p>
                       </div>
                     )}
-
-                    {/* Centre: napkin chart */}
                     <div style={{ flex:1, position:"relative" }}>
                       <NapkinChart
                         baselineWeeks={baselineWeeks}
                         recentWeeks={recentWeeks}
-                        dark={dark}
                         height={120}
                         dateLabels={{
                           bStart: fmtDate(baselineStartDate),
@@ -1227,15 +1151,13 @@ export default function Dashboard() {
                         }}
                       />
                     </div>
-
-                    {/* Right: Recent reading */}
                     {recentSpeed > 0 && (
                       <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingLeft:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>Recent</p>
+                          letterSpacing:"0.08em", color: thm.recentLabel, marginBottom:4 }}>Recent</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171"
-                            : dark ? "#f1f5f9" : v.tc, lineHeight:1 }}>
+                          color: speedDiff > 0 ? thm.speedGood : speedDiff < 0 ? thm.speedBad
+                            : thm.verdictText(v.tc), lineHeight:1 }}>
                           {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
                         </p>
                       </div>
@@ -1244,43 +1166,37 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* ── KPI cards — unified neutral style ─────────── */}
+              {/* ── KPI cards ─────────────────────────────────── */}
               {selectedStats.count > 0 ? (
                 <div style={{ display:"grid",
                   gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>
 
-                  {/* Avg Speed */}
-                  <div style={kpiCard}>
+                  <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
                     <span style={{ fontSize:28 }}>⚡</span>
                     <div style={kpiLabel}>Avg Speed ({periodLabel}) <KpiInfo text="Average speed across all trips in the selected period and time slot, for this route." /></div>
                     <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
                       {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
                     </p>
                     <p style={kpiSub}>
-                      {baselineSpeed > 0
-                        ? `Baseline: ${baselineSpeed} km/h`
-                        : "Set baseline above"}
+                      {baselineSpeed > 0 ? `Baseline: ${baselineSpeed} km/h` : "Set baseline above"}
                     </p>
                   </div>
 
-                  {/* Median trip */}
-                  <div style={kpiCard}>
+                  <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[1] }}>
                     <span style={{ fontSize:28 }}>🕐</span>
                     <div style={kpiLabel}>Median Trip <KpiInfo text="Half of all trips were faster than this, half were slower. A better everyday estimate than the average." /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
                     <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
-                  {/* Bad day trip (p95) */}
-                  <div style={kpiCard}>
+                  <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
                     <span style={{ fontSize:28 }}>🔥</span>
                     <div style={kpiLabel}>Bad day trip <KpiInfo text="On a bad day, your trip could take this long. Specifically, 1 in every 20 trips (the 95th percentile) is at least this slow." /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-20 trips take this long</p>
                   </div>
 
-                  {/* Sample count */}
-                  <div style={kpiCard}>
+                  <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
                     <span style={{ fontSize:28 }}>📊</span>
                     <div style={kpiLabel}>Readings <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
@@ -1288,57 +1204,59 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <div style={{ background: dark?"rgba(30,40,60,0.8)":"rgba(255,255,255,0.8)",
-                  border:"1px solid hsl(var(--border))", borderRadius:16,
-                  padding:"2.5rem", textAlign:"center" }}>
+                <div style={{ background: thm.sectionBg, border: thm.cardBorder, boxShadow: thm.cardShadow,
+                  borderRadius:16, padding:"2.5rem", textAlign:"center" }}>
                   <p style={{ fontSize:36, marginBottom:8 }}>🔍</p>
-                  <p style={{ fontWeight:700, color: dark?"#f1f5f9":"#1e293b" }}>
-                    No data for these filters
-                  </p>
-                  <p style={{ fontSize:13, color:"hsl(var(--muted-foreground))", marginTop:4 }}>
+                  <p style={{ fontWeight:700, color: thm.textPrimary }}>No data for these filters</p>
+                  <p style={{ fontSize:13, color: thm.textMuted, marginTop:4 }}>
                     Tap any chip to try a different combination.
                   </p>
                 </div>
               )}
 
-              {/* ── Charts — speed & duration only ───────────── */}
+              {/* ── Charts ───────────────────────────────────── */}
               {merged.length > 0 && (
                 <>
                   <div style={{ display:"grid",
                     gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))", gap:16 }}>
 
                     {/* Speed over time */}
-                    <div className="chart-card animate-fade-in">
+                    <div className="chart-card animate-fade-in"
+                      style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>⚡ Speed Over Time</p>
-                      <p style={{ fontSize:12, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
+                        color: thm.textPrimary }}>⚡ Speed Over Time</p>
+                      <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
                         Weekly avg km/h — higher is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
                         <AreaChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
                           <defs>
                             <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={colors.teal} stopOpacity={0.25}/>
-                              <stop offset="95%" stopColor={colors.teal} stopOpacity={0}/>
+                              <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
+                              <stop offset="95%" stopColor={colors.line1} stopOpacity={0}/>
                             </linearGradient>
                             <linearGradient id="pbg" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={colors.pink} stopOpacity={0.15}/>
-                              <stop offset="95%" stopColor={colors.pink} stopOpacity={0}/>
+                              <stop offset="5%"  stopColor={colors.line2} stopOpacity={0.15}/>
+                              <stop offset="95%" stopColor={colors.line2} stopOpacity={0}/>
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
+                          <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
                           <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
-                            tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}}
+                            tick={{fontSize:11,fill:thm.textMuted}}
                             tickLine={false} axisLine={false}/>
-                          <YAxis tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}}
+                          <YAxis tick={{fontSize:11,fill:thm.textMuted}}
                             tickLine={false} axisLine={false} unit=" km/h"/>
                           <RCTooltip content={<ChartTooltip/>}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
-                            stroke={colors.teal} strokeWidth={2.5} fill="url(#sg)" dot={false} connectNulls/>
+                            stroke={colors.line1}
+                            strokeWidth={thm.key==="gray" ? 2 : 2.5}
+                            fill="url(#sg)" dot={false} connectNulls/>
                           {merged.some(m => m.baselineSpeed != null) && (
                             <Area type="monotone" dataKey="baselineSpeed" name="Route Baseline"
-                              stroke={colors.pink} strokeWidth={1.5} strokeDasharray="5 3"
+                              stroke={colors.line2}
+                              strokeWidth={thm.key==="gray" ? 1 : 1.5}
+                              strokeDasharray="5 3"
                               fill="url(#pbg)" dot={false} connectNulls/>
                           )}
                         </AreaChart>
@@ -1346,28 +1264,33 @@ export default function Dashboard() {
                     </div>
 
                     {/* Duration over time */}
-                    <div className="chart-card animate-fade-in">
+                    <div className="chart-card animate-fade-in"
+                      style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: dark?"#f1f5f9":"#1e293b" }}>🐌 Trip Duration Over Time</p>
-                      <p style={{ fontSize:12, color:"hsl(var(--muted-foreground))", marginBottom:14 }}>
+                        color: thm.textPrimary }}>🐌 Trip Duration Over Time</p>
+                      <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
                         Weekly median + bad-day (p{
                           (appConfig as Record<string,number>).worst_case_percentile
                         }) — lower is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
+                          <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
                           <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
-                            tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}}
+                            tick={{fontSize:11,fill:thm.textMuted}}
                             tickLine={false} axisLine={false}/>
-                          <YAxis tick={{fontSize:11,fill:"hsl(var(--muted-foreground))"}}
+                          <YAxis tick={{fontSize:11,fill:thm.textMuted}}
                             tickLine={false} axisLine={false} unit=" min"/>
                           <RCTooltip content={<ChartTooltip/>}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Line type="monotone" dataKey="avgDuration" name="Avg Duration"
-                            stroke={colors.purple} strokeWidth={2.5} dot={false} connectNulls/>
+                            stroke={colors.line3}
+                            strokeWidth={thm.key==="gray" ? 2 : 2.5}
+                            dot={false} connectNulls/>
                           <Line type="monotone" dataKey="p95Duration" name="Bad Day Trip"
-                            stroke={colors.primary} strokeWidth={1.5} strokeDasharray="5 3"
+                            stroke={colors.line4}
+                            strokeWidth={thm.key==="gray" ? 1 : 1.5}
+                            strokeDasharray="5 3"
                             dot={false} connectNulls/>
                         </LineChart>
                       </ResponsiveContainer>
@@ -1375,10 +1298,13 @@ export default function Dashboard() {
                   </div>
 
                   {/* ── Daily calendar ────────────────────────── */}
-                  <div className="chart-card animate-fade-in" style={{ padding:"1.25rem 1.5rem" }}>
+                  <div className="chart-card animate-fade-in"
+                    style={{
+                      padding:"1.25rem 1.5rem",
+                      ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
+                    }}>
                     <CalendarWidget
                       dailyStats={dailyStats}
-                      dark={dark}
                       fmtDur={fmtDuration}
                     />
                   </div>
@@ -1390,6 +1316,15 @@ export default function Dashboard() {
 
       </div>
     </div>
+  );
+}
+
+/* ── Public export — wraps inner component with ThemeProvider ─── */
+export default function Dashboard() {
+  return (
+    <ThemeProvider>
+      <DashboardInner />
+    </ThemeProvider>
   );
 }
 

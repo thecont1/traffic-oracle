@@ -129,11 +129,12 @@ function Sparkles() {
 
 /* ── Napkin chart — baseline (blue) / gap / recent (pink) ─────── */
 function NapkinChart({
-  baselineWeeks, recentWeeks, dark,
+  baselineWeeks, recentWeeks, dark, height = 120,
 }: {
   baselineWeeks: WeeklyAggregate[];
   recentWeeks:   WeeklyAggregate[];
   dark: boolean;
+  height?: number;
 }) {
   const bLen = baselineWeeks.length;
   const rLen = recentWeeks.length;
@@ -149,13 +150,12 @@ function NapkinChart({
   const maxS = Math.max(...allSpeeds);
   const range = maxS - minS || 1;
 
-  const W = 500, H = 76;
-  const PX = 14, PY = 10;
+  const W = 500, H = height;
+  const PX = 14, PY = 8;
   const chartW = W - PX * 2;
-  const chartH = H - PY * 2 - 14; /* leave 14px for date labels */
+  const chartH = H - PY * 2;
 
   const hasGap = bLen > 0 && rLen > 0;
-  /* allocate x-space: 43% baseline / 14% gap / 43% recent (or 100% if only one) */
   const bFrac = bLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
   const rFrac = rLen > 0 ? (hasGap ? 0.43 : 1.0) : 0;
   const bXS = PX;
@@ -174,66 +174,92 @@ function NapkinChart({
         }).join(" ");
 
   const muted = dark ? "#475569" : "#cbd5e1";
-  const labelColor = dark ? "#64748b" : "#94a3b8";
-  const fmtLabel = (s: string) => fmtDate(s);
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      style={{ width:"100%", height:76, display:"block" }}
-      preserveAspectRatio="xMidYMid meet"
-    >
-      {/* Gap connector — dashed */}
+    <svg viewBox={`0 0 ${W} ${H}`}
+      style={{ width:"100%", height:H, display:"block" }}
+      preserveAspectRatio="xMidYMid meet">
       {hasGap && (
-        <line
-          x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
+        <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
           x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}
-          stroke={muted} strokeWidth={1.5} strokeDasharray="4 3"
-        />
+          stroke={muted} strokeWidth={1.5} strokeDasharray="4 3" />
       )}
-      {/* Baseline polyline — blue */}
       {bLen > 0 && (
         <polyline points={pts(baselineWeeks, bXS, bXE)}
           fill="none" stroke="#60a5fa" strokeWidth={3.5}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
-      {/* Recent polyline — pink */}
       {rLen > 0 && (
         <polyline points={pts(recentWeeks, rXS, rXE)}
           fill="none" stroke="#f472b6" strokeWidth={3.5}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
-      {/* Junction dots */}
       {hasGap && bLen > 0 && (
         <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill="#60a5fa" />
       )}
       {hasGap && rLen > 0 && (
         <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill="#f472b6" />
       )}
-      {/* Date labels — start / end */}
-      {bLen > 0 && (
-        <text x={bXS} y={H - 1} fontSize={10} fill={labelColor} textAnchor="start">
-          {fmtLabel(baselineWeeks[0].weekKey)}
-        </text>
-      )}
-      {rLen > 0 && (
-        <text x={rXE} y={H - 1} fontSize={10} fill={labelColor} textAnchor="end">
-          {fmtLabel(recentWeeks[rLen - 1].weekKey)}
-        </text>
-      )}
     </svg>
   );
 }
 
-/* ── Speed → colour helper (15 km/h=red … 50 km/h=green) ─────── */
-function speedColor(kmh: number): string {
-  const t = Math.max(0, Math.min(1, (kmh - 15) / 35));
-  if (t < 0.5) {
-    const s = t * 2;
-    return `rgba(${Math.round(239+(234-239)*s)},${Math.round(68+(179-68)*s)},${Math.round(68+(8-68)*s)},0.88)`;
+/* ── Speed → colour helper — route-relative normalisation ─────── */
+function speedColorNorm(kmh: number, minSpd: number, maxSpd: number): string {
+  const t  = maxSpd > minSpd ? (kmh - minSpd) / (maxSpd - minSpd) : 0.5;
+  const tc = Math.max(0, Math.min(1, t));
+  if (tc < 0.5) {
+    const s = tc * 2;
+    return `rgba(${Math.round(239+(234-239)*s)},${Math.round(68+(179-68)*s)},${Math.round(68+(8-68)*s)},0.92)`;
   }
-  const s = (t - 0.5) * 2;
-  return `rgba(${Math.round(234+(52-234)*s)},${Math.round(179+(211-179)*s)},${Math.round(8+(153-8)*s)},0.88)`;
+  const s = (tc - 0.5) * 2;
+  return `rgba(${Math.round(234+(52-234)*s)},${Math.round(179+(211-179)*s)},${Math.round(8+(153-8)*s)},0.92)`;
+}
+
+/* ── KPI info icon + tooltip ──────────────────────────────────── */
+function KpiInfo({ text }: { text: string }) {
+  const tipRef = useRef<HTMLDivElement>(null);
+  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
+    const el = tipRef.current;
+    if (!el) return;
+    const r  = e.currentTarget.getBoundingClientRect();
+    const TW = el.offsetWidth  || 240;
+    const TH = el.offsetHeight || 64;
+    const vw = window.innerWidth;
+    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
+    el.style.left = left + "px";
+    el.style.top  = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
+    el.style.opacity = "1";
+  };
+  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
+  return (
+    <>
+      <span onMouseEnter={show} onMouseLeave={hide}
+        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
+          width:14, height:14, borderRadius:"50%",
+          border:"1.5px solid hsl(var(--muted-foreground))",
+          fontSize:8, fontWeight:900, cursor:"help",
+          color:"hsl(var(--muted-foreground))",
+          marginLeft:5, userSelect:"none",
+          textTransform:"none", letterSpacing:"normal",
+          lineHeight:1, flexShrink:0 }}>
+        i
+      </span>
+      <div ref={tipRef} style={{
+        position:"fixed", pointerEvents:"none",
+        opacity:0, transition:"opacity 0.15s ease",
+        background:"#1e1e2e",
+        borderRadius:10, padding:"9px 12px",
+        boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
+        zIndex:2000, maxWidth:240,
+        fontSize:12, lineHeight:1.5, color:"#e2e8f0",
+        fontFamily:"var(--app-font)",
+        top:0, left:0,
+      }}>
+        {text}
+      </div>
+    </>
+  );
 }
 
 /* ── Calendar widget ──────────────────────────────────────────── */
@@ -266,6 +292,15 @@ function CalendarWidget({
     if (lastStr) { const { y, m } = parseYM(lastStr); setCalYear(y); setCalMonth(m); }
   }, [lastStr]);
 
+  /* Route-relative speed range — recomputed whenever route data changes */
+  const { minSpd, maxSpd } = useMemo(() => {
+    const speeds = Array.from(dailyStats.values()).map(d => d.avgSpeed).filter(s => s > 0);
+    if (!speeds.length) return { minSpd: 15, maxSpd: 50 };
+    const mn = Math.min(...speeds);
+    const mx = Math.max(...speeds);
+    return { minSpd: mn, maxSpd: mx > mn ? mx : mn + 1 };
+  }, [dailyStats]);
+
   /* ── Imperative tooltip — zero grid re-renders on hover ─────── */
   const tooltipRef    = useRef<HTMLDivElement>(null);
   const lastKeyRef    = useRef<string | null>(null);
@@ -281,40 +316,66 @@ function CalendarWidget({
     const s = dailyStats.get(dateKey);
     if (!s) { hideTip(); return; }
 
-    const date    = new Date(dateKey + "T12:00:00");
-    const dayStr  = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
-    const hdrClr  = dark ? "#f1f5f9" : "#1e293b";
-    const mutClr  = dark ? "#94a3b8" : "#64748b";
-    const rows = ([
+    const date   = new Date(dateKey + "T12:00:00");
+    const dayStr = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
+    const rows   = ([
       ["⚡ Avg Speed",    `${s.avgSpeed} km/h`],
       ["🕐 Median Trip",  fmtDur(s.medianDuration)],
       ["🔥 Bad Day Trip", fmtDur(s.p95Duration)],
       ["📊 Trips",        String(s.count)],
     ] as [string,string][]).map(([lbl, val]) =>
-      `<div style="display:flex;justify-content:space-between;gap:16px;font-size:12px;margin-bottom:3px">` +
-      `<span style="color:${mutClr}">${lbl}</span>` +
-      `<span style="font-weight:600;color:${hdrClr}">${val}</span></div>`
+      `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
+      `<span style="color:#94a3b8">${lbl}</span>` +
+      `<span style="font-weight:600;color:#f1f5f9">${val}</span></div>`
     ).join("");
 
+    /* Comic-book callout: dark bubble + triangular tail */
     el.innerHTML =
-      `<div style="font-weight:700;font-size:13px;margin-bottom:8px;color:${hdrClr}">${dayStr}</div>` + rows;
+      `<div style="background:#1e1e2e;border-radius:12px;padding:11px 14px;` +
+      `box-shadow:0 8px 32px rgba(0,0,0,0.55);">` +
+      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#f1f5f9">${dayStr}</div>` +
+      rows + `</div>` +
+      `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
 
-    /* Smart positioning: above by default, below if cell is in top third */
-    const rect = cellEl.getBoundingClientRect();
-    const TW   = el.offsetWidth  || 188;
-    const TH   = el.offsetHeight || 130;
-    const GAP  = 8;
-    const vw   = window.innerWidth;
+    const rect    = cellEl.getBoundingClientRect();
+    const TW      = el.offsetWidth  || 200;
+    const TH      = el.offsetHeight || 140;
+    const TAIL    = 9;
+    const GAP     = 6;
+    const vw      = window.innerWidth;
 
-    const top  = rect.top > TH + GAP + 50
-      ? rect.top - TH - GAP
-      : rect.bottom + GAP;
-    const left = Math.max(8, Math.min(vw - TW - 8, rect.left + rect.width / 2 - TW / 2));
+    const rawLeft = rect.left + rect.width / 2 - TW / 2;
+    const left    = Math.max(8, Math.min(vw - TW - 8, rawLeft));
+    const isAbove = rect.top > TH + TAIL + GAP + 40;
+    const top     = isAbove ? rect.top - TH - TAIL - GAP : rect.bottom + TAIL + GAP;
+
+    /* Tail — points toward the hovered cell */
+    const tailLeft = Math.max(14, Math.min(TW - 14, rect.left + rect.width / 2 - left));
+    const tail = el.querySelector("#cal-tip-tail") as HTMLElement | null;
+    if (tail) {
+      tail.style.left      = tailLeft + "px";
+      tail.style.transform = "translateX(-50%)";
+      if (isAbove) {
+        tail.style.bottom       = -TAIL + "px";
+        tail.style.top          = "";
+        tail.style.borderLeft   = "9px solid transparent";
+        tail.style.borderRight  = "9px solid transparent";
+        tail.style.borderTop    = `${TAIL}px solid #1e1e2e`;
+        tail.style.borderBottom = "";
+      } else {
+        tail.style.top          = -TAIL + "px";
+        tail.style.bottom       = "";
+        tail.style.borderLeft   = "9px solid transparent";
+        tail.style.borderRight  = "9px solid transparent";
+        tail.style.borderBottom = `${TAIL}px solid #1e1e2e`;
+        tail.style.borderTop    = "";
+      }
+    }
 
     el.style.left    = left + "px";
     el.style.top     = top  + "px";
     el.style.opacity = "1";
-  }, [dailyStats, dark, fmtDur, hideTip]);
+  }, [dailyStats, fmtDur, hideTip]);
 
   /* Event delegation — cells carry no React event handlers */
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -357,7 +418,7 @@ function CalendarWidget({
       const dateKey = `${prefixStr}-${String(day).padStart(2, "0")}`;
       const s       = dailyStats.get(dateKey);
       const bg      = s
-        ? speedColor(s.avgSpeed)
+        ? speedColorNorm(s.avgSpeed, minSpd, maxSpd)
         : dark ? "rgba(148,163,184,0.15)" : "rgba(100,116,139,0.15)";
       const txtClr  = s ? "#fff" : (dark ? "rgba(148,163,184,0.5)" : "rgba(100,116,139,0.45)");
       return (
@@ -380,7 +441,7 @@ function CalendarWidget({
     });
     return [...blanks, ...days];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, dark]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, dark, minSpd, maxSpd]);
 
   const navBtn = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} disabled={!active}
@@ -433,15 +494,11 @@ function CalendarWidget({
         <span>Fast (km/h)</span>
       </div>
 
-      {/* Tooltip — always mounted, positioned imperatively, fades via CSS */}
+      {/* Tooltip — always mounted; content + tail set imperatively via innerHTML */}
       <div ref={tooltipRef} style={{
         position:"fixed", pointerEvents:"none",
-        opacity:0, transition:"opacity 0.14s ease",
-        background: dark ? "#1e293b" : "white",
-        border:"1px solid hsl(var(--border))",
-        borderRadius:12, padding:"10px 14px",
-        boxShadow:"0 8px 28px rgba(0,0,0,0.22)",
-        zIndex:1000, minWidth:188,
+        opacity:0, transition:"opacity 0.15s ease",
+        zIndex:1000, overflow:"visible",
         fontFamily:"var(--app-font)", fontSize:12,
         top:0, left:0,
       }} />
@@ -771,6 +828,7 @@ export default function Dashboard() {
   const kpiLabel: React.CSSProperties = {
     fontSize: 11, fontWeight: 700, textTransform: "uppercase",
     letterSpacing: "0.08em", color: dark ? "#94a3b8" : "#64748b",
+    display: "flex", alignItems: "center",
   };
   const kpiValue: React.CSSProperties = {
     fontFamily: "var(--app-font-display)", fontWeight: 800,
@@ -1051,66 +1109,63 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {/* Speed numbers — baseline vs recent */}
-                {baselineSpeed > 0 && (
-                  <div style={{ display:"flex", justifyContent:"center", alignItems:"center",
-                    gap:16, marginTop:18, flexWrap:"wrap" }}>
-                    <div style={{ textAlign:"center" }}>
-                      <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                        letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>
-                        Baseline
-                      </p>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:30,
-                        color: dark?"#f1f5f9":v.tc, lineHeight:1 }}>
-                        {baselineSpeed}
-                        <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>
-                      </p>
-                      <p style={{ fontSize:10, color: dark?"#475569":"#94a3b8", marginTop:3 }}>
-                        {fmtShortDate(baselineStartDate)}–{fmtShortDate(baselineEndDate)}
-                      </p>
-                    </div>
+                {/* Speed chart — baseline | taller chart + delta overlay | recent */}
+                {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
+                  <div style={{ display:"flex", alignItems:"center", gap:0, marginTop:20, opacity:0.95 }}>
 
-                    {recentSpeed > 0 && (
-                      <>
-                        <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
+                    {/* Left: Baseline reading */}
+                    {baselineSpeed > 0 && (
+                      <div style={{ width:86, flexShrink:0, textAlign:"center", paddingRight:8 }}>
+                        <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                          letterSpacing:"0.08em", color:"#60a5fa", marginBottom:4 }}>Baseline</p>
+                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
+                          color: dark ? "#f1f5f9" : v.tc, lineHeight:1 }}>
+                          {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Centre: napkin chart with delta floating over the gap */}
+                    <div style={{ flex:1, position:"relative" }}>
+                      <NapkinChart
+                        baselineWeeks={baselineWeeks}
+                        recentWeeks={recentWeeks}
+                        dark={dark}
+                        height={120}
+                      />
+                      {recentSpeed > 0 && baselineSpeed > 0 && (
+                        <div style={{
+                          position:"absolute", top:"50%", left:"50%",
+                          transform:"translate(-50%,-50%)",
+                          display:"flex", flexDirection:"column", alignItems:"center",
                           color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171" : "#94a3b8",
-                          fontFamily:"var(--app-font-display)", fontWeight:800 }}>
-                          <span style={{ fontSize:22 }}>
+                          fontFamily:"var(--app-font-display)", fontWeight:800,
+                          background:"rgba(18,20,40,0.82)", backdropFilter:"blur(4px)",
+                          borderRadius:8, padding:"4px 9px", lineHeight:1.2,
+                          pointerEvents:"none",
+                        }}>
+                          <span style={{ fontSize:17 }}>
                             {speedDiff > 0 ? "▲" : speedDiff < 0 ? "▼" : "—"}
                           </span>
-                          <span style={{ fontSize:12, marginTop:2 }}>
+                          <span style={{ fontSize:10, marginTop:1 }}>
                             {Math.abs(Math.round(speedDiff * 10) / 10)} km/h
                           </span>
                         </div>
+                      )}
+                    </div>
 
-                        <div style={{ textAlign:"center" }}>
-                          <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                            letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>
-                            Recent
-                          </p>
-                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:30,
-                            color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171"
-                              : dark?"#f1f5f9":v.tc, lineHeight:1 }}>
-                            {recentSpeed}
-                            <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>
-                          </p>
-                          <p style={{ fontSize:10, color: dark?"#475569":"#94a3b8", marginTop:3 }}>
-                            {fmtShortDate(recentStartDate)}–{fmtShortDate(lastDate)}
-                          </p>
-                        </div>
-                      </>
+                    {/* Right: Recent reading */}
+                    {recentSpeed > 0 && (
+                      <div style={{ width:86, flexShrink:0, textAlign:"center", paddingLeft:8 }}>
+                        <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                          letterSpacing:"0.08em", color:"#f472b6", marginBottom:4 }}>Recent</p>
+                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
+                          color: speedDiff > 0 ? "#34d399" : speedDiff < 0 ? "#f87171"
+                            : dark ? "#f1f5f9" : v.tc, lineHeight:1 }}>
+                          {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
+                        </p>
+                      </div>
                     )}
-                  </div>
-                )}
-
-                {/* Napkin chart */}
-                {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
-                  <div style={{ marginTop:16, opacity:0.9 }}>
-                    <NapkinChart
-                      baselineWeeks={baselineWeeks}
-                      recentWeeks={recentWeeks}
-                      dark={dark}
-                    />
                   </div>
                 )}
               </div>
@@ -1123,7 +1178,7 @@ export default function Dashboard() {
                   {/* Avg Speed */}
                   <div style={kpiCard}>
                     <span style={{ fontSize:28 }}>⚡</span>
-                    <p style={kpiLabel}>Avg Speed ({periodLabel})</p>
+                    <div style={kpiLabel}>Avg Speed ({periodLabel}) <KpiInfo text="Average speed across all trips in the selected period and time slot, for this route." /></div>
                     <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
                       {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
                     </p>
@@ -1137,15 +1192,15 @@ export default function Dashboard() {
                   {/* Median trip */}
                   <div style={kpiCard}>
                     <span style={{ fontSize:28 }}>🕐</span>
-                    <p style={kpiLabel}>Median Trip</p>
+                    <div style={kpiLabel}>Median Trip <KpiInfo text="Half of all trips were faster than this, half were slower. A better everyday estimate than the average." /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
                     <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
                   {/* Bad day trip (p95) */}
-                  <div style={kpiCard} title="1-in-20 trips take this long">
+                  <div style={kpiCard}>
                     <span style={{ fontSize:28 }}>🔥</span>
-                    <p style={kpiLabel}>Bad day trip ⓘ</p>
+                    <div style={kpiLabel}>Bad day trip <KpiInfo text="On a bad day, your trip could take this long. Specifically, 1 in every 20 trips (the 95th percentile) is at least this slow." /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-20 trips take this long</p>
                   </div>
@@ -1153,7 +1208,7 @@ export default function Dashboard() {
                   {/* Sample count */}
                   <div style={kpiCard}>
                     <span style={{ fontSize:28 }}>📊</span>
-                    <p style={kpiLabel}>Data Points</p>
+                    <div style={kpiLabel}>Data Points <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{merged.length} weeks · {periodLabel} window</p>
                   </div>

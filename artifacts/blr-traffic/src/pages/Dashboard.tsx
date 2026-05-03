@@ -488,9 +488,14 @@ function CalendarWidget({
     return Array.from({ length: 42 }, (_, i) => {
       const dayNum = i - firstDay + 1;
 
-      /* outside the month — blank spacer cell */
+      /* outside the month — blank spacer cell, same height as a day cell */
       if (dayNum < 1 || dayNum > daysInMo) {
-        return <div key={`e${i}`} style={{ padding:"5px 0" }} />;
+        return (
+          <div key={`e${i}`} style={{ display:"flex", alignItems:"center",
+            justifyContent:"center", padding:"5px 0" }}>
+            <div style={{ width:CIRCLE_D, height:CIRCLE_D }} />
+          </div>
+        );
       }
 
       const dateKey  = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;

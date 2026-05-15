@@ -11,6 +11,11 @@ const ROUTES_URL =
 const TRAFFIC_URL =
   "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv";
 
+/** Append a cache-busting query param so browsers/CDNs always fetch fresh. */
+function bust(url: string): string {
+  return `${url}?t=${Date.now()}`;
+}
+
 export interface Route {
   route_code: string;
   label_full: string;
@@ -149,7 +154,7 @@ function fetchTrafficData(
 ): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
   const fetchCsv = (url: string): Promise<Record<string, string>[]> =>
     new Promise((resolve, reject) => {
-      Papa.parse(url, {
+      Papa.parse(bust(url), {
         download: true,
         header: true,
         skipEmptyLines: true,

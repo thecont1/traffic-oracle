@@ -1213,7 +1213,7 @@ function DashboardInner() {
               <img
                 src="/trafficoracle-light.png"
                 alt="TraffiCOracle"
-                style={{ height:32, width:"auto", flexShrink:0 }}
+                style={{ height:48, width:"auto", flexShrink:0 }}
               />
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>

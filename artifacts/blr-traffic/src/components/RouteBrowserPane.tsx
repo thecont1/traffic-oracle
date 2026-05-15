@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 
@@ -20,21 +20,39 @@ interface PaneProps {
   onToggle: () => void;
 }
 
-/* ── Sparkline — responsive width ─────────────────────────────── */
+/* ── Sparkline — fixed internal coords, responsive via container ── */
 function MiniSparkline({ points, color }: { points: number[]; color: string }) {
-  if (points.length < 2) return <div style={{ height: 28, flexShrink: 0 }} />;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(200);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      const bw = entries[0]?.contentRect.width;
+      if (bw && bw > 0) setW(Math.round(bw));
+    });
+    obs.observe(el);
+    setW(el.getBoundingClientRect().width || 200);
+    return () => obs.disconnect();
+  }, []);
+
+  if (points.length < 2) return <div ref={containerRef} style={{ height: 28, flex: 1 }} />;
+
   const H = 28, PY = 3;
-  const minV  = Math.min(...points), maxV = Math.max(...points);
+  const minV = Math.min(...points), maxV = Math.max(...points);
   const range = maxV - minV || 1;
+  const toX = (i: number) => (i / (points.length - 1)) * w;
   const toY = (v: number) => PY + (H - PY * 2) * (1 - (v - minV) / range);
-  const step = 100 / (points.length - 1);
-  const pts  = points.map((v, i) => `${(i * step).toFixed(1)}%,${toY(v).toFixed(1)}`).join(" ");
+  const pts = points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+
   return (
-    <svg width="100%" height={H} viewBox={`0 0 100 ${H}`} preserveAspectRatio="none"
-      style={{ display: "block", overflow: "visible", flex: 1 }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5}
-        strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
+    <div ref={containerRef} style={{ flex: 1, minWidth: 40, height: 28 }}>
+      <svg width={w} height={H} style={{ display: "block", overflow: "visible" }}>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5}
+          strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </div>
   );
 }
 
@@ -46,8 +64,7 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
       aria-hidden="true"
       style={{
         position: "absolute",
-        left: 0,
-        right: 0,
+        left: 0, right: 0,
         top: isTop ? 0 : undefined,
         bottom: isTop ? undefined : 0,
         height: 28,
@@ -73,7 +90,7 @@ function RouteCard({
 }) {
   const THRESHOLD = 0.5;
   const dir = card.delta !== null && !card.isBaseline
-    ? card.delta >  THRESHOLD ? "up"
+    ? card.delta > THRESHOLD ? "up"
     : card.delta < -THRESHOLD ? "down"
     : "flat"
     : "flat";
@@ -134,33 +151,25 @@ function RouteCard({
     >
       {isSelected && (
         <div style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          width: 7,
-          height: 7,
-          borderRadius: "50%",
+          position: "absolute", top: 10, right: 10,
+          width: 7, height: 7, borderRadius: "50%",
           background: thm.chart.line1,
           boxShadow: `0 0 6px ${thm.chart.line1}`,
         }} />
       )}
       <p style={{
-        fontSize: 13,
-        fontWeight: 700,
+        fontSize: 13, fontWeight: 700,
         color: isSelected ? thm.chart.line1 : thm.textPrimary,
-        lineHeight: 1.3,
-        margin: 0,
+        lineHeight: 1.3, margin: 0,
         paddingRight: isSelected ? 14 : 0,
         transition: "color 0.15s",
       }}>
         {card.label}
       </p>
-      <div style={{ display: "flex", alignItems: "center",
-        justifyContent: "space-between", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <MiniSparkline points={card.sparkPoints} color={sparkColor} />
         {card.isBaseline ? (
-          <span style={{ fontSize: 11, fontWeight: 700,
-            color: "#F59E0B", whiteSpace: "nowrap", flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", whiteSpace: "nowrap", flexShrink: 0 }}>
             ⚡ Speed benchmark
           </span>
         ) : card.delta === null ? (
@@ -193,8 +202,9 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       display: "flex",
       background: thm.sectionBg,
       borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+      position: "relative",
     }}>
-      {/* Scrollable pane content — on the left */}
+      {/* Scrollable pane content — left side */}
       <div style={{
         width: PANE_WIDTH,
         flexShrink: 0,
@@ -203,6 +213,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         overflow: "hidden",
         opacity: isOpen ? 1 : 0,
         transition: "opacity 0.2s ease",
+        pointerEvents: isOpen ? "auto" : "none",
       }}>
         {/* Header */}
         <div style={{
@@ -212,51 +223,29 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{
-              fontFamily: "var(--app-font-display)",
-              fontWeight: 700,
-              fontSize: 15,
+              fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 15,
               color: thm.textPrimary,
             }}>
               🗺️ Speed Snapshot
             </span>
-            <button
-              onClick={onToggle}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 16,
-                color: thm.textMuted,
-                padding: 4,
-                borderRadius: 6,
-                lineHeight: 1,
-              }}
-              title="Close"
-            >
+            <button onClick={onToggle} title="Close"
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16,
+                color: thm.textMuted, padding: 4, borderRadius: 6, lineHeight: 1 }}>
               ✕
             </button>
           </div>
-          <p style={{
-            fontSize: 11,
-            color: thm.textMuted,
-            margin: "4px 0 0",
-          }}>
+          <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0" }}>
             Tap a route to explore it
           </p>
         </div>
 
-        {/* Scrollable list with blur edges */}
+        {/* Scrollable list */}
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%",
-            overflowY: "auto",
-            padding: "14px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            scrollbarWidth: "thin",
+            height: "100%", overflowY: "auto", padding: "14px 12px",
+            display: "flex", flexDirection: "column", gap: 10, scrollbarWidth: "thin",
           }}>
             {!cards ? (
               <p style={{ color: thm.textMuted, fontSize: 13, padding: "1rem 0", textAlign: "center" }}>
@@ -268,34 +257,27 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               </p>
             ) : (
               cards.map(card => (
-                <RouteCard
-                  key={card.label}
-                  card={card}
-                  thm={thm}
-                  isSelected={card.label === selectedRoute}
-                  onSelect={onRouteSelect}
-                />
+                <RouteCard key={card.label} card={card} thm={thm}
+                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect} />
               ))
             )}
           </div>
         </div>
       </div>
 
-      {/* Slim rail / handle — on the right edge */}
+      {/* Rail / handle — right edge of browser */}
       <div
         onClick={onToggle}
         title={isOpen ? "Close route browser" : "Browse all routes"}
         style={{
+          position: "absolute", right: 0, top: 0, bottom: 0,
           width: RAIL_WIDTH,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          paddingTop: 18,
-          cursor: "pointer",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          paddingTop: 18, cursor: "pointer",
           background: thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
           borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
           transition: "background 0.2s",
+          zIndex: 2,
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLElement).style.background =
@@ -306,31 +288,15 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
         }}
       >
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 6,
-          writingMode: "vertical-rl",
-          textOrientation: "mixed",
-          transform: "rotate(180deg)",
+        <span style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+          textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",
+          writingMode: "vertical-rl", textOrientation: "mixed", transform: "rotate(180deg)",
         }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>🗺️</span>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: thm.textMuted,
-            whiteSpace: "nowrap",
-          }}>
-            Routes
-          </span>
-        </div>
+          ROUTES
+        </span>
         <div style={{
-          marginTop: 12,
-          fontSize: 12,
-          color: thm.textMuted,
+          marginTop: 10, fontSize: 12, color: thm.textMuted,
           transform: isOpen ? "rotate(90deg)" : "rotate(-90deg)",
           transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
         }}>▸</div>
@@ -343,88 +309,42 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle }: PaneProps) {
   return (
     <>
-      {/* Backdrop */}
       {isOpen && (
-        <div
-          onClick={onToggle}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            zIndex: 998,
-            backdropFilter: "blur(2px)",
-            WebkitBackdropFilter: "blur(2px)",
-            animation: "fade-in 0.2s ease",
-          }}
-        />
+        <div onClick={onToggle} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 998,
+          backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
+          animation: "fade-in 0.2s ease",
+        }} />
       )}
-
-      {/* Sheet */}
       <div style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: isOpen ? 320 : 0,
-        zIndex: 999,
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        height: isOpen ? 320 : 0, zIndex: 999,
         background: thm.sectionBg,
         borderTop: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20,
         boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
+        display: "flex", flexDirection: "column", overflow: "hidden",
         transition: "height 0.3s cubic-bezier(0.4,0,0.2,1)",
       }}>
-        {/* Drag handle */}
-        <div
-          onClick={onToggle}
-          style={{
-            flexShrink: 0,
-            padding: "10px 0 6px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 4,
-            cursor: "pointer",
-          }}
-        >
-          <div style={{
-            width: 36,
-            height: 4,
-            borderRadius: 2,
-            background: thm.textMuted,
-            opacity: 0.3,
-          }} />
+        <div onClick={onToggle} style={{
+          flexShrink: 0, padding: "10px 0 6px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer",
+        }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: thm.textMuted, opacity: 0.3 }} />
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 14 }}>🗺️</span>
             <span style={{
-              fontFamily: "var(--app-font-display)",
-              fontWeight: 700,
-              fontSize: 14,
-              color: thm.textPrimary,
-            }}>
-              Speed Snapshot by Route
-            </span>
+              fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 14, color: thm.textPrimary,
+            }}>Speed Snapshot by Route</span>
           </div>
-          <p style={{ fontSize: 11, color: thm.textMuted, margin: 0 }}>
-            Tap a route to explore it
-          </p>
+          <p style={{ fontSize: 11, color: thm.textMuted, margin: 0 }}>Tap a route to explore it</p>
         </div>
-
-        {/* Scrollable list */}
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%",
-            overflowY: "auto",
-            padding: "8px 12px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            scrollbarWidth: "thin",
+            height: "100%", overflowY: "auto", padding: "8px 12px 16px",
+            display: "flex", flexDirection: "column", gap: 8, scrollbarWidth: "thin",
           }}>
             {!cards ? (
               <p style={{ color: thm.textMuted, fontSize: 13, padding: "1rem 0", textAlign: "center" }}>
@@ -432,45 +352,25 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               </p>
             ) : (
               cards.map(card => (
-                <RouteCard
-                  key={card.label}
-                  card={card}
-                  thm={thm}
-                  isSelected={card.label === selectedRoute}
-                  onSelect={(label) => {
-                    onRouteSelect(label);
-                  }}
-                />
+                <RouteCard key={card.label} card={card} thm={thm}
+                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect} />
               ))
             )}
           </div>
         </div>
       </div>
-
-      {/* Floating trigger button (when closed) */}
       {!isOpen && (
-        <button
-          onClick={onToggle}
-          style={{
-            position: "fixed",
-            bottom: 20,
-            right: 20,
-            zIndex: 997,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 16px",
-            borderRadius: 9999,
-            border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-            background: thm.key === "colour" ? "#262321" : "#FFF9F0",
-            color: thm.textPrimary,
-            fontFamily: "var(--app-font-display)",
-            fontWeight: 700,
-            fontSize: 13,
-            cursor: "pointer",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-          }}
+        <button onClick={onToggle} style={{
+          position: "fixed", bottom: 20, right: 20, zIndex: 997,
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 16px", borderRadius: 9999,
+          border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+          background: thm.key === "colour" ? "#262321" : "#FFF9F0",
+          color: thm.textPrimary, fontFamily: "var(--app-font-display)",
+          fontWeight: 700, fontSize: 13, cursor: "pointer",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
+          transition: "transform 0.15s, box-shadow 0.15s",
+        }}
           onMouseEnter={e => {
             (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
             (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 24px rgba(0,0,0,0.2)";
@@ -499,25 +399,15 @@ interface Props {
 export default function RouteBrowserPane(props: Props) {
   const { theme: thm } = useTheme();
   const [isOpen, setIsOpen] = useState(true);
-
   const handleToggle = useCallback(() => setIsOpen(v => !v), []);
-
   const handleRouteSelect = useCallback((label: string) => {
     props.onRouteSelect(label);
   }, [props.onRouteSelect]);
 
   const paneProps: PaneProps = {
-    cards: props.cards,
-    selectedRoute: props.selectedRoute,
-    onRouteSelect: handleRouteSelect,
-    thm,
-    isOpen,
-    onToggle: handleToggle,
+    cards: props.cards, selectedRoute: props.selectedRoute,
+    onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle,
   };
 
-  if (props.mobile) {
-    return <MobileSheet {...paneProps} />;
-  }
-
-  return <DesktopPane {...paneProps} />;
+  return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;
 }

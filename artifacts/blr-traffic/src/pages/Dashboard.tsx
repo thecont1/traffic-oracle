@@ -1194,6 +1194,7 @@ function DashboardInner() {
             display: "flex",
             flexDirection: "column",
             gap: "1.5rem",
+            overflowY: "auto",
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}

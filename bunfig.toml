@@ -1,0 +1,14 @@
+# Bun configuration
+
+# Install lockfile and minimum release age for supply-chain safety
+install.lockfile = true
+install.minimumReleaseAge = "1 day"
+
+# Trusted internal packages (no minimum release age check needed)
+install.minimumReleaseAgeExceptions = ["@replit/*", "stripe-replit-sync"]
+
+# Platform restrictions (Replit runs linux-x64 only — skip other platforms for faster installs)
+install.platforms = ["linux", "linux-x64"]
+
+# No auto-install of peer dependencies — handled explicitly in each package
+install.autoInstallPeers = false

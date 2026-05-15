@@ -2,26 +2,24 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+Bun workspace monorepo using TypeScript. Each package manages its own dependencies.
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
+- **Monorepo tool**: Bun workspaces
 - **Node.js version**: 24
-- **Package manager**: pnpm
+- **Package manager**: Bun
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
+- **Validation**: Zod (`zod/v3`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Build**: esbuild (ESM bundle)
 
 ## Key Commands
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+- `bun run typecheck` — full typecheck across all packages
+- `bun run build` — typecheck + build all packages
+- `bun run --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
+- `bun run --filter @workspace/db run push` — push DB schema changes (dev only)
+- `bun run --filter @workspace/api-server run dev` — run API server locally

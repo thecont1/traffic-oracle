@@ -1,6 +1,6 @@
 # TraffiCOracle
 
-A monorepo for Bangalore (Bengaluru) traffic monitoring, analysis, and visualisation. Built as a pnpm workspace with TypeScript, featuring a REST API server, a React dashboard with interactive maps and charts, and a component preview sandbox.
+A monorepo for Bangalore (Bengaluru) traffic monitoring, analysis, and visualisation. Built as a Bun workspace with TypeScript, featuring a REST API server, a React dashboard with interactive maps and charts, and a component preview sandbox.
 
 ---
 
@@ -22,6 +22,7 @@ A monorepo for Bangalore (Bengaluru) traffic monitoring, analysis, and visualisa
 
 ```
 TraffiCOracle/
+├── bunfig.toml                  # Bun workspace + supply-chain config
 ├── lib/                          # Shared libraries
 │   ├── db/                       # Database layer (Drizzle ORM + PostgreSQL)
 │   ├── api-spec/                 # OpenAPI 3.1 spec → codegen source of truth
@@ -61,7 +62,7 @@ Data flow:
   - React Query hooks → `lib/api-client-react/src/generated/`
   - Zod schemas → `lib/api-zod/src/generated/`
 - **Current endpoints**: `GET /healthz` (health check returning `{ status: string }`)
-- **Regenerate**: `pnpm --filter @workspace/api-spec run codegen`
+- **Regenerate**: `bun run --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` — Generated Zod Types
 - Re-exports from `./generated/api` (API module) and `./generated/types` (type schemas)
@@ -115,7 +116,7 @@ A React + Vite single-page application for visualising Bangalore traffic data.
 A development server that renders individual React components from `src/components/mockups/` for the Replit workspace canvas. Routes to `/preview/<ComponentName>`.
 
 ### `scripts` — Build Helpers
-- `post-merge.sh`: Runs `pnpm install --frozen-lockfile` then `pnpm --filter db push` (schema migrations)
+- `post-merge.sh`: Runs `bun install --frozen-lockfile` then `bun --filter @workspace/db run push` (schema migrations)
 - `src/hello.ts`: Placeholder script
 
 ---
@@ -124,9 +125,9 @@ A development server that renders individual React components from `src/componen
 
 | Layer | Technology |
 |---|---|
-| **Runtime** | Node.js 24 |
+| **Runtime** | Bun (Node.js 24-compatible) |
 | **Language** | TypeScript 5.9 |
-| **Monorepo** | pnpm workspaces |
+| **Monorepo** | Bun workspaces |
 | **Build** | esbuild (API), Vite 7 + SWC (frontend) |
 | **API Server** | Express 5, Pino logging |
 | **Database** | PostgreSQL + Drizzle ORM v0.45 + drizzle-zod v0.8 |
@@ -144,40 +145,54 @@ A development server that renders individual React components from `src/componen
 
 ## Prerequisites
 
-- **Node.js** 24
-- **pnpm** 9+
+- **Bun** 1.x (latest stable)
 - **PostgreSQL** (for API server)
 - **Env vars** (see [Configuration](#configuration))
 
 ## Getting Started
 
 ```bash
-# Install dependencies
-pnpm install
+# Install dependencies (uses Bun lockfile)
+bun install
 
 # Typecheck all packages
-pnpm run typecheck
+bun run typecheck
 
 # Build all packages
-pnpm run build
+bun run build
 
 # Run API server
-pnpm --filter @workspace/api-server run dev
+bun run --filter @workspace/api-server run dev
 
-# Run traffic dashboard
+# Run traffic dashboard (from a separate terminal)
 cd artifacts/blr-traffic
-PORT=3000 pnpm dev
+PORT=3000 bun run dev
 
 # Push DB schema (dev only, destructive)
-pnpm --filter @workspace/db push
+bun --filter @workspace/db run push
 
 # Regenerate API client code from OpenAPI spec
-pnpm --filter @workspace/api-spec run codegen
+bun run --filter @workspace/api-spec run codegen
 ```
 
 ---
 
 ## Configuration
+
+### Bun Workspace Config (`bunfig.toml`)
+
+```toml
+# Supply-chain safety: require 1-day minimum publish age for npm packages
+install.lockfile = true
+install.minimumReleaseAge = "1 day"
+install.minimumReleaseAgeExceptions = ["@replit/*", "stripe-replit-sync"]
+
+# Platform restrictions (Replit runs linux-x64 only)
+install.platforms = ["linux", "linux-x64"]
+
+# No auto-install of peer dependencies — handled explicitly per package
+install.autoInstallPeers = false
+```
 
 ### Environment Variables
 
@@ -214,27 +229,27 @@ pnpm --filter @workspace/api-spec run codegen
 
 | Command | Description |
 |---|---|
-| `pnpm run build` | Typecheck + build all workspace packages |
-| `pnpm run typecheck` | Full TypeScript typecheck across all packages |
-| `pnpm run typecheck:libs` | Typecheck shared libs only (`lib/*`) |
-| `pnpm --filter @workspace/api-server run dev` | Start API in dev mode (build + start) |
-| `pnpm --filter @workspace/api-server run start` | Start API from pre-built dist |
-| `pnpm --filter @workspace/api-server run typecheck` | Typecheck API server |
-| `pnpm --filter @workspace/blr-traffic dev` | Start dashboard dev server |
-| `pnpm --filter @workspace/blr-traffic build` | Build dashboard for production |
-| `pnpm --filter @workspace/db push` | Push DB schema to PostgreSQL (dev only) |
-| `pnpm --filter @workspace/db push-force` | Force-push DB schema (drops existing) |
-| `pnpm --filter @workspace/api-spec run codegen` | Regenerate client code from OpenAPI spec |
-| `pnpm --filter @workspace/api-zod run typecheck` | Typecheck Zod types package |
+| `bun run build` | Typecheck + build all workspace packages |
+| `bun run typecheck` | Full TypeScript typecheck across all packages |
+| `bun run typecheck:libs` | Typecheck shared libs only (`lib/*`) |
+| `bun run --filter @workspace/api-server run dev` | Start API in dev mode (build + start) |
+| `bun run --filter @workspace/api-server run start` | Start API from pre-built dist |
+| `bun run --filter @workspace/api-server run typecheck` | Typecheck API server |
+| `bun run --filter @workspace/blr-traffic dev` | Start dashboard dev server |
+| `bun run --filter @workspace/blr-traffic build` | Build dashboard for production |
+| `bun run --filter @workspace/db run push` | Push DB schema to PostgreSQL (dev only) |
+| `bun run --filter @workspace/db run push-force` | Force-push DB schema (drops existing) |
+| `bun run --filter @workspace/api-spec run codegen` | Regenerate client code from OpenAPI spec |
+| `bun run --filter @workspace/api-zod run typecheck` | Typecheck Zod types package |
 
 ---
 
 ## Project Conventions
 
 - **Monorepo packages** use `workspace:*` protocol for inter-package dependencies
-- **npm lock-only policy**: `pnpm-lock.yaml` is committed; `package-lock.json` and `yarn.lock` are removed in `preinstall`
-- **Security**: `minimumReleaseAge: 1440` (1-day minimum publish age for npm packages, excluding `@replit/*` and `stripe-replit-sync`)
-- **Supply chain overrides**: Platform-specific esbuild and rollup packages are excluded (see `pnpm-workspace.yaml` `overrides` section)
+- **Bun lockfile**: `bun.lockb` is committed; `package-lock.json`, `pnpm-lock.yaml`, and `yarn.lock` are gitignored
+- **Supply-chain safety**: 1-day minimum package publish age enforced via `bunfig.toml` (excluding `@replit/*` and `stripe-replit-sync`)
+- **Platform overrides**: Non-linux packages are excluded in `bunfig.toml` platform restrictions
 - **No `dist/` in git**: Compiled output is gitignored
 - **`.local/` is gitignored**: Local runtime state (Replit skills, secondary skills, workflow logs, scribble DB) excluded from version control
 - **`/connect.lock`**, **`/coverage`**, **`/typings`** are all gitignored

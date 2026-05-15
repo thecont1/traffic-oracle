@@ -1,16 +1,17 @@
 {
   "extends": "./tsconfig.base.json",
-  "compileOnSave": false,
-  "files": [],
-  "references": [
-    {
-      "path": "./lib/db"
-    },
-    {
-      "path": "./lib/api-client-react"
-    },
-    {
-      "path": "./lib/api-zod"
-    }
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "strict": true
+  },
+  "include": [
+    "lib/db",
+    "lib/api-client-react",
+    "lib/api-zod",
+    "artifacts/api-server",
+    "artifacts/blr-traffic",
+    "artifacts/mockup-sandbox",
+    "scripts"
   ]
 }

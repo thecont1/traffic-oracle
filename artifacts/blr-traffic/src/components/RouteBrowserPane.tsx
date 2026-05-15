@@ -5,6 +5,8 @@ import type { AppTheme } from "@/lib/theme";
 /* ── Types ─────────────────────────────────────────────────────── */
 interface RouteCardData {
   label: string;
+  origin: string;
+  destination: string;
   sparkPoints: number[];
   delta: number | null;
   isBaseline: boolean;
@@ -40,17 +42,21 @@ function MiniSparkline({ points, color, isSelected, thm }: {
     return () => obs.disconnect();
   }, []);
 
-  if (points.length < 2) return <div ref={containerRef} style={{ height: 24, flex: 1 }} />;
+  if (points.length < 2) return <div ref={containerRef} style={{ height: 22, flex: 1 }} />;
 
-  const H = 24, PY = 2;
+  const H = 22, PY = 2;
   const minV = Math.min(...points), maxV = Math.max(...points);
   const range = maxV - minV || 1;
   const toX = (i: number) => (i / (points.length - 1)) * w;
   const toY = (v: number) => PY + (H - PY * 2) * (1 - (v - minV) / range);
   const pts = points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
 
-  const strokeWidth = isSelected ? 3 : 1.5;
-  const strokeColor = isSelected ? color : (thm.key === "colour" ? "rgba(140,126,107,0.5)" : "rgba(0,0,0,0.25)");
+  // WCAG contrast: selected gets full color + thicker stroke,
+  // non-selected gets a muted but still visible color
+  const strokeWidth = isSelected ? 2.5 : 1.5;
+  const strokeColor = isSelected
+    ? color
+    : thm.key === "colour" ? "rgba(140,126,107,0.45)" : "rgba(0,0,0,0.2)";
 
   return (
     <div ref={containerRef} style={{ flex: 1, minWidth: 30, height: H }}>
@@ -69,7 +75,7 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
     <div aria-hidden="true" style={{
       position: "absolute", left: 0, right: 0,
       top: isTop ? 0 : undefined, bottom: isTop ? undefined : 0,
-      height: 24, pointerEvents: "none", zIndex: 5,
+      height: 20, pointerEvents: "none", zIndex: 5,
       backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)",
       maskImage: `linear-gradient(to ${isTop ? "bottom" : "top"}, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)`,
       WebkitMaskImage: `linear-gradient(to ${isTop ? "bottom" : "top"}, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)`,
@@ -84,6 +90,7 @@ function RouteCard({
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
 }) {
+  const [hovered, setHovered] = useState(false);
   const THRESHOLD = 0.5;
   const dir = card.delta !== null && !card.isBaseline
     ? card.delta > THRESHOLD ? "up" : card.delta < -THRESHOLD ? "down" : "flat"
@@ -92,55 +99,52 @@ function RouteCard({
     ? (thm.key === "colour" ? "#7DB7E8" : "#8A8176")
     : dir === "up" ? thm.speedGood : dir === "down" ? thm.speedBad : thm.textMuted;
 
+  // Full-width background: selected gets strong tint, hover gets subtle tint
   let cardBg = "transparent";
   if (isSelected) {
-    cardBg = thm.key === "colour" ? "rgba(125,183,232,0.14)"
-             : thm.key === "pastel" ? "rgba(58,134,200,0.12)"
-             : "rgba(0,0,0,0.06)";
+    cardBg = thm.key === "colour" ? "rgba(125,183,232,0.18)"
+             : thm.key === "pastel" ? "rgba(58,134,200,0.15)"
+             : "rgba(0,0,0,0.08)";
+  } else if (hovered) {
+    cardBg = thm.key === "colour" ? "rgba(125,183,232,0.08)"
+             : thm.key === "pastel" ? "rgba(58,134,200,0.07)"
+             : "rgba(0,0,0,0.04)";
   } else if (card.isTop3Worst) {
     cardBg = thm.key === "colour" ? "rgba(240,138,93,0.06)"
-           : thm.key === "pastel" ? "rgba(224,106,62,0.06)"
-           : "rgba(0,0,0,0.03)";
+             : thm.key === "pastel" ? "rgba(224,106,62,0.05)"
+             : "rgba(0,0,0,0.03)";
   }
+
+  const endpoints = card.destination
+    ? `${card.origin} → ${card.destination}`
+    : card.origin;
 
   return (
     <div
       onClick={() => onSelect(card.label)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       title={card.isBaseline
         ? "The fastest road in Bangalore — sets the upper bound for what's achievable without breaking traffic laws."
         : undefined}
       style={{
         background: cardBg,
         borderRadius: 6,
-        padding: "5px 8px",
+        padding: "7px 8px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 2,
-        transition: "background 0.15s",
-        position: "relative",
+        gap: 3,
+        transition: "background 0.12s",
       }}
     >
-      {/* Accent bar — juts out left for selected */}
-      {isSelected && (
-        <div style={{
-          position: "absolute",
-          left: -6,
-          top: 4,
-          bottom: 4,
-          width: 4,
-          borderRadius: 2,
-          background: thm.chart.line1,
-          zIndex: 2,
-        }} />
-      )}
-      {/* Row 1: title + delta */}
+      {/* Row 1: short name + delta */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
         <p style={{
           fontSize: 12, fontWeight: 700,
           color: isSelected ? thm.chart.line1 : thm.textPrimary,
           lineHeight: 1.3, margin: 0,
-          transition: "color 0.15s",
+          transition: "color 0.12s",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           flex: 1, minWidth: 0,
         }}>
@@ -162,13 +166,21 @@ function RouteCard({
           </span>
         )}
       </div>
-      {/* Row 2: sparkline */}
+      {/* Row 2: origin → destination */}
+      <p style={{
+        fontSize: 10, color: thm.textMuted,
+        lineHeight: 1.3, margin: 0,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {endpoints}
+      </p>
+      {/* Row 3: sparkline */}
       <MiniSparkline points={card.sparkPoints} color={sparkColor} isSelected={isSelected} thm={thm} />
       {/* Separator */}
       {!isLast && (
         <div style={{
-          height: 1, width: "80%", margin: "3px auto 0",
-          background: thm.key === "colour" ? "rgba(71,65,60,0.10)" : "rgba(0,0,0,0.07)",
+          height: 1, width: "80%", margin: "2px auto 0",
+          background: thm.key === "colour" ? "rgba(71,65,60,0.08)" : "rgba(0,0,0,0.06)",
         }} />
       )}
     </div>
@@ -186,6 +198,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragging(true);
     startXRef.current = e.clientX;
     startWidthRef.current = paneWidth;
@@ -196,14 +209,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
     const onMove = (e: MouseEvent) => {
       const dx = startXRef.current - e.clientX;
       const newW = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidthRef.current + dx));
-      // We can't call a prop setter here since paneWidth is controlled by parent
-      // Instead we dispatch a custom event that the parent listens for
-      window.dispatchEvent(new CustomEvent('route-pane-resize', { detail: newW }));
+      window.dispatchEvent(new CustomEvent("route-pane-resize", { detail: newW }));
     };
     const onUp = () => setDragging(false);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dragging]);
 
   return (
@@ -223,11 +234,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           onMouseDown={onDragStart}
           style={{
             position: "absolute", left: 0, top: 0, bottom: 0,
-            width: 6, cursor: "col-resize", zIndex: 3,
+            width: 8, cursor: "col-resize", zIndex: 3,
             background: dragging
-              ? (thm.key === "colour" ? "rgba(125,183,232,0.3)" : "rgba(58,134,200,0.2)")
+              ? (thm.key === "colour" ? "rgba(125,183,232,0.25)" : "rgba(58,134,200,0.18)")
               : "transparent",
             transition: "background 0.15s",
+            borderRadius: "0 2px 2px 0",
           }}
           title="Drag to resize"
         />
@@ -240,27 +252,27 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         opacity: isOpen ? 1 : 0,
         transition: "opacity 0.2s ease",
         pointerEvents: isOpen ? "auto" : "none",
-        marginLeft: isOpen ? 6 : 0,
+        marginLeft: isOpen ? 8 : 0,
       }}>
         {/* Header */}
         <div style={{
-          padding: "12px 14px 8px",
+          padding: "10px 12px 7px",
           borderBottom: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{
-              fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 14, color: thm.textPrimary,
+              fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
             }}>
               🗺️ Speed Snapshot
             </span>
             <button onClick={onToggle} title="Close"
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15,
-                color: thm.textMuted, padding: 3, borderRadius: 4, lineHeight: 1 }}>
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,
+                color: thm.textMuted, padding: 2, borderRadius: 4, lineHeight: 1 }}>
               ✕
             </button>
           </div>
-          <p style={{ fontSize: 10, color: thm.textMuted, margin: "3px 0 0" }}>
+          <p style={{ fontSize: 10, color: thm.textMuted, margin: "2px 0 0" }}>
             Tap a route to explore it
           </p>
         </div>
@@ -270,15 +282,15 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "10px 8px",
-            display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "thin",
+            height: "100%", overflowY: "auto", padding: "8px 6px",
+            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (
-              <p style={{ color: thm.textMuted, fontSize: 12, padding: "1rem 0", textAlign: "center" }}>
+              <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>
                 Computing route summaries…
               </p>
             ) : cards.length === 0 ? (
-              <p style={{ color: thm.textMuted, fontSize: 12, padding: "1rem 0", textAlign: "center" }}>
+              <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>
                 No routes found
               </p>
             ) : (
@@ -300,7 +312,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           position: "absolute", right: 0, top: 0, bottom: 0,
           width: RAIL_WIDTH,
           display: "flex", flexDirection: "column", alignItems: "center",
-          paddingTop: 16, cursor: "pointer",
+          paddingTop: 14, cursor: "pointer",
           background: thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
           borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
           transition: "background 0.2s", zIndex: 2,
@@ -372,7 +384,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (
-              <p style={{ color: thm.textMuted, fontSize: 12, padding: "1rem 0", textAlign: "center" }}>
+              <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>
                 Computing route summaries…
               </p>
             ) : (

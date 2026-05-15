@@ -662,6 +662,8 @@ function CalendarWidget({
 /* ── All-roads overview panel ──────────────────────────────────── */
 interface RouteCardData {
   label: string;
+  origin: string;
+  destination: string;
   sparkPoints: number[];
   delta: number | null;
   isBaseline: boolean;
@@ -673,6 +675,7 @@ function computeAllRouteCards(
   routeOptions: string[],
   baselineStartDate: string | undefined,
   baselineEndDate: string | undefined,
+  routes: { label_short: string; label_full: string }[],
 ): RouteCardData[] {
   const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
   const lastDataDate = lastTs ? new Date(lastTs) : new Date();
@@ -682,6 +685,12 @@ function computeAllRouteCards(
 
   const cards = routeOptions.map((label): RouteCardData => {
     const routeRows = allRows.filter(r => r.label_short === label);
+
+    /* extract origin/destination from routes lookup */
+    const labelFull = routes.find(r => r.label_short === label)?.label_full ?? label;
+    const arrowIdx = labelFull.indexOf("→");
+    const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
+    const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
 
     /* sparkline: weekly avg speeds over last 6 months */
     const byWeek = new Map<string, number[]>();
@@ -716,7 +725,7 @@ function computeAllRouteCards(
       : null;
 
     const isBaseline = label.toLowerCase().includes("airport expy");
-    return { label, sparkPoints, delta, isBaseline, isTop3Worst: false };
+    return { label, origin, destination, sparkPoints, delta, isBaseline, isTop3Worst: false };
   });
 
   /* sort: worst delta first; null after; baseline always last */
@@ -954,7 +963,7 @@ function DashboardInner() {
     if (allRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
+    const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate, routes);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;

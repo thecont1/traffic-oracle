@@ -11,7 +11,7 @@ const ROUTES_URL =
 const TRAFFIC_URL =
   "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv";
 
-/** Append a cache-busting query param so browsers/CDNs always fetch fresh. */
+/** Append a cache-busting query param so CDNs never serve a stale copy. */
 function bust(url: string): string {
   return `${url}?t=${Date.now()}`;
 }
@@ -148,23 +148,34 @@ function computeStats(rows: TrafficRow[]): StatsResult {
   };
 }
 
-/* ── Core fetch — can be called on mount or on manual refresh ─────── */
+/* ── Core fetch — uses fetch() with cache:'no-store' so browsers,
+ * CDNs and proxies can never serve a stale CSV response. ──────────── */
 function fetchTrafficData(
   signal: AbortSignal | undefined,
 ): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
-  const fetchCsv = (url: string): Promise<Record<string, string>[]> =>
-    new Promise((resolve, reject) => {
-      Papa.parse(bust(url), {
-        download: true,
+  const fetchCsv = async (url: string): Promise<Record<string, string>[]> => {
+    const resp = await fetch(bust(url), {
+      cache: "no-store",
+      signal,
+      headers: { Accept: "text/plain,*/*" },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${url}`);
+    const text = await resp.text();
+    return new Promise<Record<string, string>[]>((resolve, reject) => {
+      Papa.parse(text, {
         header: true,
         skipEmptyLines: true,
         complete: (r) => resolve(r.data as Record<string, string>[]),
-        error: (e) => reject(e),
+        error: (e: Error) => reject(e),
       });
     });
+  };
 
+  let cancelled = false;
   return Promise.all([fetchCsv(ROUTES_URL), fetchCsv(TRAFFIC_URL)]).then(
     ([routesRaw, trafficRaw]) => {
+      if (cancelled) throw new Error("cancelled");
+
       const routeList: Route[] = routesRaw.map((r) => ({
         route_code: getCol(r, "route_code").trim(),
         label_full: getCol(r, "label_full").trim(),
@@ -228,27 +239,25 @@ export function useTrafficData() {
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
-      let cancelled = false;
       setLoading(true);
       setError(null);
 
       fetchTrafficData(signal)
         .then(({ routes: rl, allRows: ar, rowCount: rc }) => {
-          if (cancelled) return;
           setRoutes(rl);
           setAllRows(ar);
           setRowCount(rc);
           setLoading(false);
         })
         .catch((e) => {
-          if (!cancelled) {
+          if (e?.message !== "cancelled") {
             setError(String(e?.message ?? e));
             setLoading(false);
           }
         });
 
       return () => {
-        cancelled = true;
+        /* cancellation is handled via AbortSignal */
       };
     },
     [],
@@ -256,16 +265,19 @@ export function useTrafficData() {
 
   /* Initial load on mount */
   useEffect(() => {
-    return fetchData();
+    const ctrl = new AbortController();
+    fetchData(ctrl.signal);
+    return () => {
+      ctrl.abort();
+    };
   }, [fetchData]);
 
   /* Manual refresh — exposed to the caller */
   const refresh = useCallback(() => {
     const ctrl = new AbortController();
-    const cleanup = fetchData(ctrl.signal);
+    fetchData(ctrl.signal);
     return () => {
       ctrl.abort();
-      cleanup?.();
     };
   }, [fetchData]);
 
@@ -300,13 +312,13 @@ export function useDailyStats(
     }
     const result = new Map<string, DayStats>();
     for (const [dateKey, dayRows] of byDay.entries()) {
-      const speeds    = dayRows.map((r) => r.speed_kmh);
+      const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
       result.set(dateKey, {
         dateKey,
-        avgSpeed:        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
-        medianDuration:  Math.round(percentile(durations, 50) * 10) / 10,
-        p95Duration:     Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+        avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
+        p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
         count: dayRows.length,
       });
     }
@@ -333,13 +345,13 @@ export function useDailyStatsAllDay(
     }
     const result = new Map<string, DayStats>();
     for (const [dateKey, dayRows] of byDay.entries()) {
-      const speeds    = dayRows.map((r) => r.speed_kmh);
+      const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
       result.set(dateKey, {
         dateKey,
-        avgSpeed:        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
-        medianDuration:  Math.round(percentile(durations, 50) * 10) / 10,
-        p95Duration:     Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+        avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
+        p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
         count: dayRows.length,
       });
     }
@@ -396,22 +408,25 @@ export function useFilteredData(
 
     const selectedWeekly = aggregateRows(filtered);
     const baselineWeekly = aggregateRows(baseline);
-    const selectedStats  = computeStats(filtered);
-    const baselineStats  = computeStats(baseline);
+    const selectedStats = computeStats(filtered);
+    const baselineStats = computeStats(baseline);
 
     const merged: WeeklyAggregate[] = selectedWeekly.map((sw) => {
       const bw = baselineWeekly.find((b) => b.weekKey === sw.weekKey);
       return {
         ...sw,
-        baselineSpeed:    bw?.avgSpeed    ?? null,
+        baselineSpeed: bw?.avgSpeed ?? null,
         baselineDuration: bw?.avgDuration ?? null,
       };
     });
 
     return {
-      filtered, baseline,
-      selectedWeekly, baselineWeekly,
-      selectedStats, baselineStats,
+      filtered,
+      baseline,
+      selectedWeekly,
+      baselineWeekly,
+      selectedStats,
+      baselineStats,
       merged,
     };
   }, [allRows, selectedRoute, period, tod, baselineRoute]);

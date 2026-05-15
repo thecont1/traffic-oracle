@@ -5,7 +5,7 @@ import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Share2 } from "lucide-react";
+import { Share2, RefreshCw } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
 } from "@/lib/useTrafficData";
@@ -952,7 +952,7 @@ function DashboardInner() {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   /* data */
-  const { routes, allRows, loading, error, rowCount } = useTrafficData();
+  const { routes, allRows, loading, error, rowCount, refresh } = useTrafficData();
 
   const routeOptions = useMemo(() => {
     const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
@@ -1211,29 +1211,12 @@ function DashboardInner() {
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <img
-                src={thm.isDark
-                  ? "/trafficoracle-light.png"
-                  : "/trafficoracle-dark.png"}
+                src="/trafficoracle-light.png"
                 alt="TraffiCOracle"
                 style={{ height:32, width:"auto", flexShrink:0 }}
               />
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>
-                  <span style={{
-                    fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:16,
-                    display:"inline-block",
-                    ...(thm.key === "gray" ? { color:"#111111" } : {
-                      backgroundImage: thm.key === "pastel"
-                        ? "linear-gradient(90deg,#ec4899,#8b5cf6)"
-                        : "linear-gradient(90deg,#2563eb,#7c3aed)",
-                      WebkitBackgroundClip:"text",
-                      backgroundClip:"text" as React.CSSProperties["backgroundClip"],
-                      WebkitTextFillColor:"transparent",
-                      color:"transparent",
-                    }),
-                  }}>
-                    TraffiCoracle
-                  </span>
                   <Chip icon="📍" variant="city" onClick={() => {}} inert>Bangalore</Chip>
                 </div>
               </div>
@@ -1254,6 +1237,19 @@ function DashboardInner() {
                 </button>
               )}
               {/* Three-way theme toggle */}
+              <button onClick={refresh} disabled={loading} style={{
+                display:"flex", alignItems:"center", gap:5, fontSize:12,
+                border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                borderRadius:9999, padding:"5px 12px",
+                color: thm.textMuted,
+                background: "transparent",
+                cursor: loading ? "default" : "pointer",
+                transition:"color 0.2s, background 0.2s",
+                opacity: loading ? 0.4 : 1,
+              }} title="Refresh data from GitHub">
+                <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+                <span style={{ fontSize:12, fontWeight:600 }}>{loading ? "Fetching…" : "Refresh"}</span>
+              </button>
               <button
                 onClick={cycleTheme}
                 title={`Switch to ${nextMeta.label}`}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import * as Papa from "papaparse";
 import appConfig from "../config.json";
 import type { AppConfig } from "./config";
@@ -130,108 +130,141 @@ export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
 }
 
 function computeStats(rows: TrafficRow[]): StatsResult {
-  if (rows.length === 0) return { mean: 0, median: 0, p95: 0, avgSpeed: 0, count: 0 };
+  if (rows.length === 0)
+    return { mean: 0, median: 0, p95: 0, avgSpeed: 0, count: 0 };
   const durations = rows.map((r) => r.duration_min).sort((a, b) => a - b);
   const speeds = rows.map((r) => r.speed_kmh);
   return {
-    mean:    Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
-    median:  Math.round(percentile(durations, 50) * 10) / 10,
-    p95:     Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
-    avgSpeed:Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+    mean: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+    median: Math.round(percentile(durations, 50) * 10) / 10,
+    p95: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+    avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
     count: rows.length,
   };
 }
 
+/* ── Core fetch — can be called on mount or on manual refresh ─────── */
+function fetchTrafficData(
+  signal: AbortSignal | undefined,
+): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
+  const fetchCsv = (url: string): Promise<Record<string, string>[]> =>
+    new Promise((resolve, reject) => {
+      Papa.parse(url, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: (r) => resolve(r.data as Record<string, string>[]),
+        error: (e) => reject(e),
+      });
+    });
+
+  return Promise.all([fetchCsv(ROUTES_URL), fetchCsv(TRAFFIC_URL)]).then(
+    ([routesRaw, trafficRaw]) => {
+      const routeList: Route[] = routesRaw.map((r) => ({
+        route_code: getCol(r, "route_code").trim(),
+        label_full: getCol(r, "label_full").trim(),
+        label_short: getCol(r, "label_short").trim(),
+      }));
+
+      const routeByCode = new Map<string, Route>();
+      for (const rt of routeList) {
+        if (rt.route_code) routeByCode.set(rt.route_code, rt);
+      }
+
+      const rows: TrafficRow[] = [];
+      for (const r of trafficRaw) {
+        const dateRaw = getCol(r, "date").trim();
+        const timeRaw = getCol(r, "time").trim();
+        if (!dateRaw) continue;
+
+        const tsString = timeRaw
+          ? `${dateRaw}T${timeRaw}:00`
+          : `${dateRaw}T12:00:00`;
+        const ts = new Date(tsString);
+        if (isNaN(ts.getTime())) continue;
+
+        const rcRaw = getCol(r, "route_code").trim();
+        const route = routeByCode.get(rcRaw);
+        if (!route) continue;
+
+        const duration_min = parseNum(getCol(r, "duration"));
+        const distance_km = parseNum(getCol(r, "distance")) || 10;
+
+        if (duration_min <= 0 || duration_min > 300) continue;
+
+        const speed_kmh =
+          Math.round((distance_km / (duration_min / 60)) * 10) / 10;
+        if (speed_kmh <= 0 || speed_kmh > 150) continue;
+
+        rows.push({
+          timestamp: ts,
+          route_code: route.route_code,
+          label_short: route.label_short,
+          duration_min: Math.round(duration_min * 10) / 10,
+          distance_km,
+          speed_kmh,
+          hour: ts.getHours(),
+          dayOfWeek: ts.getDay(),
+          weekKey: toWeekKey(ts),
+        });
+      }
+
+      return { routes: routeList, allRows: rows, rowCount: rows.length };
+    },
+  );
+}
+
 export function useTrafficData() {
-  const [routes,   setRoutes]   = useState<Route[]>([]);
-  const [allRows,  setAllRows]  = useState<TrafficRow[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [allRows, setAllRows] = useState<TrafficRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [rowCount, setRowCount] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(
+    (signal?: AbortSignal) => {
+      let cancelled = false;
+      setLoading(true);
+      setError(null);
 
-    const fetchCsv = (url: string): Promise<Record<string, string>[]> =>
-      new Promise((resolve, reject) => {
-        Papa.parse(url, {
-          download: true, header: true, skipEmptyLines: true,
-          complete: (r) => resolve(r.data as Record<string, string>[]),
-          error: (e) => reject(e),
-        });
-      });
-
-    Promise.all([fetchCsv(ROUTES_URL), fetchCsv(TRAFFIC_URL)])
-      .then(([routesRaw, trafficRaw]) => {
-        if (cancelled) return;
-
-        const routeList: Route[] = routesRaw.map((r) => ({
-          route_code:  getCol(r, "route_code").trim(),
-          label_full:  getCol(r, "label_full").trim(),
-          label_short: getCol(r, "label_short").trim(),
-        }));
-
-        const routeByCode = new Map<string, Route>();
-        for (const rt of routeList) {
-          if (rt.route_code) routeByCode.set(rt.route_code, rt);
-        }
-
-        const rows: TrafficRow[] = [];
-        for (const r of trafficRaw) {
-          const dateRaw = getCol(r, "date").trim();
-          const timeRaw = getCol(r, "time").trim();
-          if (!dateRaw) continue;
-
-          const tsString = timeRaw
-            ? `${dateRaw}T${timeRaw}:00`
-            : `${dateRaw}T12:00:00`;
-          const ts = new Date(tsString);
-          if (isNaN(ts.getTime())) continue;
-
-          const rcRaw = getCol(r, "route_code").trim();
-          const route = routeByCode.get(rcRaw);
-          if (!route) continue;
-
-          const duration_min = parseNum(getCol(r, "duration"));
-          const distance_km  = parseNum(getCol(r, "distance")) || 10;
-
-          if (duration_min <= 0 || duration_min > 300) continue;
-
-          const speed_kmh =
-            Math.round((distance_km / (duration_min / 60)) * 10) / 10;
-          if (speed_kmh <= 0 || speed_kmh > 150) continue;
-
-          rows.push({
-            timestamp: ts,
-            route_code: route.route_code,
-            label_short: route.label_short,
-            duration_min: Math.round(duration_min * 10) / 10,
-            distance_km,
-            speed_kmh,
-            hour: ts.getHours(),
-            dayOfWeek: ts.getDay(),
-            weekKey: toWeekKey(ts),
-          });
-        }
-
-        setRoutes(routeList);
-        setAllRows(rows);
-        setRowCount(rows.length);
-        setLoading(false);
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(String(e?.message ?? e));
+      fetchTrafficData(signal)
+        .then(({ routes: rl, allRows: ar, rowCount: rc }) => {
+          if (cancelled) return;
+          setRoutes(rl);
+          setAllRows(ar);
+          setRowCount(rc);
           setLoading(false);
-        }
-      });
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setError(String(e?.message ?? e));
+            setLoading(false);
+          }
+        });
 
-    return () => { cancelled = true; };
-  }, []);
+      return () => {
+        cancelled = true;
+      };
+    },
+    [],
+  );
 
-  return { routes, allRows, loading, error, rowCount };
+  /* Initial load on mount */
+  useEffect(() => {
+    return fetchData();
+  }, [fetchData]);
+
+  /* Manual refresh — exposed to the caller */
+  const refresh = useCallback(() => {
+    const ctrl = new AbortController();
+    const cleanup = fetchData(ctrl.signal);
+    return () => {
+      ctrl.abort();
+      cleanup?.();
+    };
+  }, [fetchData]);
+
+  return { routes, allRows, loading, error, rowCount, refresh };
 }
 
 export interface DayStats {

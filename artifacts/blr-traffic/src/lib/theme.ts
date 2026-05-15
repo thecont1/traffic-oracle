@@ -71,17 +71,22 @@ export interface AppTheme {
 }
 
 /* ── Calendar colour helpers ────────────────────────────────────── */
+
+/** Colour theme: orange → green gradient, warm & cozy */
 function calColour(kmh: number, p10: number, p90: number): string {
   const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
   const tc = Math.max(0, Math.min(1, t));
   if (tc < 0.5) {
     const s = tc * 2;
-    return `rgba(${Math.round(239+(245-239)*s)},${Math.round(68+(158-68)*s)},${Math.round(68+(11-68)*s)},0.92)`;
+    // From #F08A5D (orange/worse) → warm midpoint
+    return `rgba(${Math.round(240+(220-240)*s)},${Math.round(138+(170-138)*s)},${Math.round(93+(120-93)*s)},0.92)`;
   }
   const s = (tc - 0.5) * 2;
-  return `rgba(${Math.round(245+(34-245)*s)},${Math.round(158+(197-158)*s)},${Math.round(11+(94-11)*s)},0.92)`;
+  // Warm midpoint → #8BCB7E (green/better)
+  return `rgba(${Math.round(220+(139-220)*s)},${Math.round(170+(203-170)*s)},${Math.round(120+(126-120)*s)},0.92)`;
 }
 
+/** Gray theme: dark → light grayscale */
 function calGray(kmh: number, p10: number, p90: number): string {
   const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
   const tc = Math.max(0, Math.min(1, t));
@@ -89,91 +94,101 @@ function calGray(kmh: number, p10: number, p90: number): string {
   return `rgb(${v},${v},${v})`;
 }
 
+/** Pastel theme: orange → green gradient, warm & sunny */
 function calPastel(kmh: number, p10: number, p90: number): string {
   const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
   const tc = Math.max(0, Math.min(1, t));
   if (tc < 0.5) {
     const s = tc * 2;
-    return `rgba(${Math.round(248+(254-248)*s)},${Math.round(187+(215-187)*s)},${Math.round(208+(170-208)*s)},0.92)`;
+    // From #E06A3E (orange) → warm midpoint (#F6E7C8 area)
+    return `rgba(${Math.round(224+(246-224)*s)},${Math.round(106+(215-106)*s)},${Math.round(62+(170-62)*s)},0.92)`;
   }
   const s = (tc - 0.5) * 2;
-  return `rgba(${Math.round(254+(187-254)*s)},${Math.round(215+(247-215)*s)},${Math.round(170+(208-170)*s)},0.92)`;
+  // Warm midpoint → #6FAE63 (green)
+  return `rgba(${Math.round(246+(111-246)*s)},${Math.round(215+(174-215)*s)},${Math.round(170+(99-170)*s)},0.92)`;
 }
 
 /* ── Chip tokens per theme ──────────────────────────────────────── */
+
+/** Colour (dark) chips — warm, cozy, muted on dark backgrounds */
 const COLOUR_CHIPS: Record<ChipVariant, ChipToken> = {
-  route:    { bg:"linear-gradient(135deg,#10b981,#06b6d4)", color:"white", border:"transparent", shadow:"0 4px 14px rgba(16,185,129,0.35)" },
-  period:   { bg:"linear-gradient(135deg,#8b5cf6,#3b82f6)", color:"white", border:"transparent", shadow:"0 4px 14px rgba(139,92,246,0.35)" },
-  tod:      { bg:"linear-gradient(135deg,#f59e0b,#ef4444)", color:"white", border:"transparent", shadow:"0 4px 14px rgba(245,158,11,0.35)" },
-  worsened: { bg:"linear-gradient(135deg,#ef4444,#f97316)", color:"white", border:"transparent", shadow:"0 4px 14px rgba(239,68,68,0.35)" },
-  improved: { bg:"linear-gradient(135deg,#10b981,#22c55e)", color:"white", border:"transparent", shadow:"0 4px 14px rgba(16,185,129,0.4)" },
-  city:     { bg:"linear-gradient(135deg,#334155,#475569)", color:"white", border:"transparent", shadow:"0 2px 8px rgba(71,85,105,0.3)" },
+  route:    { bg:"linear-gradient(135deg,#1E3A5F,#2A5A8F)", color:"#93C5FD", border:"transparent", shadow:"0 4px 14px rgba(30,58,95,0.4)" },
+  period:   { bg:"linear-gradient(135deg,#2A2523,#3D3633)", color:"#C1B7A7", border:"transparent", shadow:"0 4px 14px rgba(42,37,35,0.4)" },
+  tod:      { bg:"linear-gradient(135deg,#78350F,#92400E)", color:"#FCD34D", border:"transparent", shadow:"0 4px 14px rgba(120,53,15,0.4)" },
+  worsened: { bg:"linear-gradient(135deg,#7F1D1D,#991B1B)", color:"#FCA5A5", border:"transparent", shadow:"0 4px 14px rgba(127,29,29,0.4)" },
+  improved: { bg:"linear-gradient(135deg,#052E16,#064E3B)", color:"#86EFAC", border:"transparent", shadow:"0 4px 14px rgba(5,46,22,0.4)" },
+  city:     { bg:"linear-gradient(135deg,#1E293B,#334155)", color:"#94A3B8", border:"transparent", shadow:"0 2px 8px rgba(30,41,59,0.4)" },
 };
 
+/** Gray chips — white bg, dark text, differentiated by weight/border */
 const GRAY_CHIPS: Record<ChipVariant, ChipToken> = {
   route:    { bg:"#ffffff", color:"#111111", border:"#111111", shadow:"none" },
-  period:   { bg:"#ffffff", color:"#111111", border:"#111111", shadow:"none" },
-  tod:      { bg:"#ffffff", color:"#111111", border:"#111111", shadow:"none" },
-  worsened: { bg:"#ffffff", color:"#111111", border:"#111111", shadow:"none" },
-  improved: { bg:"#ffffff", color:"#111111", border:"#111111", shadow:"none" },
-  city:     { bg:"#ffffff", color:"#111111", border:"#111111", shadow:"none" },
+  period:   { bg:"#ffffff", color:"#111111", border:"#999999", shadow:"none" },
+  tod:      { bg:"#ffffff", color:"#111111", border:"#999999", shadow:"none" },
+  worsened: { bg:"#ffffff", color:"#111111", border:"#999999", shadow:"none" },
+  improved: { bg:"#ffffff", color:"#111111", border:"#999999", shadow:"none" },
+  city:     { bg:"#ffffff", color:"#111111", border:"#cccccc", shadow:"none" },
 };
 
+/** Pastel chips — warm, sunny, paper-like tints */
 const PASTEL_CHIPS: Record<ChipVariant, ChipToken> = {
-  route:    { bg:"#fce7f3", color:"#be185d", border:"#fbb6d0", shadow:"none" },
-  period:   { bg:"#ede9fe", color:"#6d28d9", border:"#c4b5fd", shadow:"none" },
-  tod:      { bg:"#fef9c3", color:"#92400e", border:"#fde68a", shadow:"none" },
-  worsened: { bg:"#fee2e2", color:"#991b1b", border:"#fca5a5", shadow:"none" },
-  improved: { bg:"#dcfce7", color:"#166534", border:"#86efac", shadow:"none" },
-  city:     { bg:"#f3f4f6", color:"#374151", border:"#d1d5db", shadow:"none" },
+  route:    { bg:"#DBEAFE", color:"#1E40AF", border:"#93C5FD", shadow:"none" },
+  period:   { bg:"#F3F0EB", color:"#6E675B", border:"#DCCFB8", shadow:"none" },
+  tod:      { bg:"#FEF3C7", color:"#92400E", border:"#FDE68A", shadow:"none" },
+  worsened: { bg:"#FFEDD5", color:"#9A3412", border:"#FED7AA", shadow:"none" },
+  improved: { bg:"#DCFCE7", color:"#166534", border:"#86EFAC", shadow:"none" },
+  city:     { bg:"#F3F4F6", color:"#4B5563", border:"#D1D5DB", shadow:"none" },
 };
 
 /* ── Theme definitions ──────────────────────────────────────────── */
 export const THEMES: Record<ThemeKey, AppTheme> = {
+
+  /* ── Colour (dark) — "Colour me surprised!" ─────────────────── */
   colour: {
     key: "colour",
     isDark: true,
-    bodyBg: "linear-gradient(135deg,#0f1728 0%,#0d1a1f 40%,#130f28 100%)",
-    textPrimary:   "#f1f5f9",
-    textSecondary: "#94a3b8",
-    textMuted:     "#64748b",
-    headerBg: "rgba(15,18,40,0.88)",
-    sectionBg: "rgba(20,28,50,0.85)",
-    cardBg:    "rgba(20,30,55,0.92)",
-    cardBorder: "1px solid hsl(var(--border))",
+    bodyBg: "linear-gradient(135deg,#1D1B1A 0%,#262321 40%,#1F1C19 100%)",
+    textPrimary:   "#F3EBDD",
+    textSecondary: "#C1B7A7",
+    textMuted:     "#8C7E6B",
+    headerBg: "rgba(29,27,26,0.92)",
+    sectionBg: "#262321",
+    cardBg:    "#2A2725",
+    cardBorder: "1px solid #47413C",
     cardShadow: "none",
-    titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#2563eb,#7c3aed)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
+    titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#7DB7E8,#9AA3AD)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
     chips: COLOUR_CHIPS,
-    napkin: { baseline:"#60a5fa", recent:"#f472b6", gap:"#475569" },
+    napkin: { baseline:"#9AA3AD", recent:"#7DB7E8", gap:"#47413C" },
     slider: {
-      track:            "linear-gradient(90deg,#34d399,#60a5fa,#a78bfa,#f472b6)",
+      track:            "linear-gradient(90deg,#7DB7E8,#9AA3AD)",
       stripe:           "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.55) 4px,rgba(255,255,255,0.55) 8px)",
       dim:              "rgba(0,0,0,0.45)",
-      thumbLeftBorder:  "#34d399",
-      thumbRightBorder: "#a78bfa",
-      thumbLeftShadow:  "0 2px 8px rgba(52,211,153,0.5),0 1px 3px rgba(0,0,0,0.2)",
-      thumbRightShadow: "0 2px 8px rgba(167,139,250,0.5),0 1px 3px rgba(0,0,0,0.2)",
-      thumbFg: "#e2e8f0",
+      thumbLeftBorder:  "#7DB7E8",
+      thumbRightBorder: "#9AA3AD",
+      thumbLeftShadow:  "0 2px 8px rgba(125,183,232,0.5),0 1px 3px rgba(0,0,0,0.2)",
+      thumbRightShadow: "0 2px 8px rgba(154,163,173,0.5),0 1px 3px rgba(0,0,0,0.2)",
+      thumbFg: "#F3EBDD",
     },
     kpiCardBgs: [
-      "linear-gradient(135deg,#052e16 60%,#064e3b)",
-      "linear-gradient(135deg,#1e3a5f 60%,#1e40af)",
-      "linear-gradient(135deg,#451a03 60%,#713f12)",
-      "linear-gradient(135deg,#2e1065 60%,#4c1d95)",
+      "linear-gradient(135deg,#1A2744 60%,#1E40AF)",
+      "linear-gradient(135deg,#2A2523 60%,#3D3633)",
+      "linear-gradient(135deg,#3D1A08 60%,#78350F)",
+      "linear-gradient(135deg,#262321 60%,#334155)",
     ],
-    chart: { line1:"#2dd4bf", line2:"#f472b6", line3:"#a78bfa", line4:"#60a5fa" },
+    chart: { line1:"#7DB7E8", line2:"#9AA3AD", line3:"#9AA3AD", line4:"#F08A5D" },
     calColor: calColour,
-    calTextColor: () => "#fff",
-    verdictBg:     ()  => "rgba(30,40,60,0.8)",
+    calTextColor: () => "#F3EBDD",
+    verdictBg:     ()  => "rgba(38,35,33,0.92)",
     verdictBorder: (b) => b,
-    verdictText:   ()  => "#f1f5f9",
-    speedGood: "#34d399",
-    speedBad:  "#f87171",
-    baselineLabel: "#60a5fa",
-    recentLabel:   "#f472b6",
-    emptyCalCircle: "rgba(148,163,184,0.15)",
+    verdictText:   ()  => "#F3EBDD",
+    speedGood: "#8BCB7E",
+    speedBad:  "#F08A5D",
+    baselineLabel: "#9AA3AD",
+    recentLabel:   "#7DB7E8",
+    emptyCalCircle: "rgba(125,183,232,0.12)",
   },
 
+  /* ── Gray — "Scale me gray!" ──────────────────────────────── */
   gray: {
     key: "gray",
     isDark: false,
@@ -200,55 +215,61 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
       thumbFg: "#ffffff",
     },
     kpiCardBgs: ["#ffffff", "#ffffff", "#ffffff", "#ffffff"],
-    chart: { line1:"#555555", line2:"#999999", line3:"#555555", line4:"#333333" },
+    chart: { line1:"#111111", line2:"#888888", line3:"#111111", line4:"#888888" },
     calColor: calGray,
     calTextColor: (t) => t > 0.5 ? "#111111" : "#ffffff",
     verdictBg:     ()  => "#ffffff",
     verdictBorder: ()  => "#111111",
     verdictText:   ()  => "#111111",
-    speedGood: "#333333",
+    speedGood: "#111111",
     speedBad:  "#555555",
     baselineLabel: "#555555",
-    recentLabel:   "#333333",
+    recentLabel:   "#111111",
     emptyCalCircle: "rgba(0,0,0,0.06)",
   },
 
+  /* ── Pastel — "Clear as day!" ──────────────────────────────── */
   pastel: {
     key: "pastel",
     isDark: false,
-    bodyBg: "#fdf0f5",
-    textPrimary:   "#1e1e2e",
-    textSecondary: "#555577",
-    textMuted:     "#8888aa",
-    headerBg: "rgba(253,240,245,0.88)",
-    sectionBg: "#ffffff",
-    cardBg:    "#ffffff",
-    cardBorder: "1px solid rgba(236,72,153,0.18)",
-    cardShadow: "0 2px 8px rgba(236,72,153,0.08)",
-    titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#ec4899,#8b5cf6)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
+    bodyBg: "#F9F4E8",
+    textPrimary:   "#2B2924",
+    textSecondary: "#6E675B",
+    textMuted:     "#8A8176",
+    headerBg: "rgba(249,244,232,0.92)",
+    sectionBg: "#FFF9F0",
+    cardBg:    "#FFFFFF",
+    cardBorder: "1px solid #DCCFB8",
+    cardShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#3A86C8,#8F98A3)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
     chips: PASTEL_CHIPS,
-    napkin: { baseline:"#93c5fd", recent:"#f9a8d4", gap:"#e9d5ff" },
+    napkin: { baseline:"#8F98A3", recent:"#3A86C8", gap:"#DCCFB8" },
     slider: {
-      track:            "linear-gradient(90deg,#fbb6d0,#c4b5fd)",
+      track:            "linear-gradient(90deg,#3A86C8,#8F98A3)",
       stripe:           "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.6) 4px,rgba(255,255,255,0.6) 8px)",
       dim:              "rgba(0,0,0,0.22)",
-      thumbLeftBorder:  "#f9a8d4",
-      thumbRightBorder: "#c4b5fd",
-      thumbLeftShadow:  "0 2px 8px rgba(249,168,212,0.5)",
-      thumbRightShadow: "0 2px 8px rgba(196,181,253,0.5)",
-      thumbFg: "#ffffff",
+      thumbLeftBorder:  "#3A86C8",
+      thumbRightBorder: "#8F98A3",
+      thumbLeftShadow:  "0 2px 8px rgba(58,134,200,0.5)",
+      thumbRightShadow: "0 2px 8px rgba(143,152,163,0.5)",
+      thumbFg: "#FFFFFF",
     },
-    kpiCardBgs: ["#fce7f3", "#ede9fe", "#dcfce7", "#fef9c3"],
-    chart: { line1:"#93c5fd", line2:"#f9a8d4", line3:"#c4b5fd", line4:"#86efac" },
+    kpiCardBgs: [
+      "linear-gradient(135deg,#EFF6FF,#BFDBFE)",
+      "linear-gradient(135deg,#F9F6F0,#E8E0D0)",
+      "linear-gradient(135deg,#FFF5ED,#FED7AA)",
+      "linear-gradient(135deg,#F3F4F6,#D1D5DB)",
+    ],
+    chart: { line1:"#3A86C8", line2:"#8F98A3", line3:"#8F98A3", line4:"#E06A3E" },
     calColor: calPastel,
-    calTextColor: () => "#1e1e2e",
+    calTextColor: () => "#2B2924",
     verdictBg:     (vBg)     => vBg,
     verdictBorder: (vBorder) => vBorder,
     verdictText:   (vTc)     => vTc,
-    speedGood: "#10b981",
-    speedBad:  "#ef4444",
-    baselineLabel: "#93c5fd",
-    recentLabel:   "#f9a8d4",
-    emptyCalCircle: "rgba(236,72,153,0.08)",
+    speedGood: "#6FAE63",
+    speedBad:  "#E06A3E",
+    baselineLabel: "#8F98A3",
+    recentLabel:   "#3A86C8",
+    emptyCalCircle: "rgba(58,134,200,0.08)",
   },
 };

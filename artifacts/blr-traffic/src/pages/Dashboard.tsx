@@ -72,25 +72,28 @@ function weeklyAvg(weeks: Record<string,number>[], key: string): number {
 }
 
 /* ── Recharts tooltip ─────────────────────────────────────────── */
-function ChartTooltip({ active, payload, label }: {
-  active?:boolean; payload?:Array<{name:string;value:number;color:string}>; label?:string;
-}) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background:"rgba(255,255,255,0.97)", border:"1px solid #e2e8f0",
-      borderRadius:12, padding:"10px 14px", fontSize:13, boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
-      <p style={{ fontWeight:700, marginBottom:6, color:"#1e293b" }}>{label}</p>
-      {payload.map(p => (
-        <div key={p.name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
-          <span style={{ width:8, height:8, borderRadius:"50%", background:p.color, flexShrink:0 }} />
-          <span style={{ color:"#64748b" }}>{p.name}:</span>
-          <span style={{ fontWeight:600, color:"#1e293b" }}>
-            {p.name.toLowerCase().includes("speed") ? `${p.value} km/h` : fmtDuration(p.value)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMuted:string; cardBg:string; cardBorder:string }) {
+  return (props: any) => {
+    const { active, payload, label } = props ?? {};
+    if (!active || !payload?.length) return null;
+    const tp = thm?.textPrimary  ?? "#2B2924";
+    const ts = thm?.textSecondary ?? "#6E675B";
+    return (
+      <div style={{ background:"rgba(255,255,255,0.97)", border:`1px solid ${thm?.cardBorder ?? "hsl(var(--border))"}`,
+        borderRadius:12, padding:"10px 14px", fontSize:13, boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
+        <p style={{ fontWeight:700, marginBottom:6, color:tp }}>{label}</p>
+        {payload.map((p: any) => (
+          <div key={p.name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+            <span style={{ width:8, height:8, borderRadius:"50%", background:p.color, flexShrink:0 }} />
+            <span style={{ color:ts }}>{p.name}:</span>
+            <span style={{ fontWeight:600, color:tp }}>
+              {p.name.toLowerCase().includes("speed") ? `${p.value} km/h` : fmtDuration(p.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 }
 
 /* ── Chips ─────────────────────────────────────────────────────── */
@@ -292,11 +295,11 @@ function KpiInfo({ text }: { text: string }) {
       <div ref={tipRef} style={{
         position:"fixed", pointerEvents:"none",
         opacity:0, transition:"opacity 0.15s ease",
-        background:"#1e1e2e",
+        background:"#262321",
         borderRadius:10, padding:"9px 12px",
         boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
         zIndex:2000, maxWidth:240,
-        fontSize:12, lineHeight:1.5, color:"#e2e8f0",
+        fontSize:12, lineHeight:1.5, color:"#C1B7A7",
         fontFamily:"var(--app-font)",
         top:0, left:0,
       }}>
@@ -389,14 +392,14 @@ function CalendarWidget({
       ["📊 Trips",        String(s.count)],
     ] as [string,string][]).map(([lbl, val]) =>
       `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
-      `<span style="color:#94a3b8">${lbl}</span>` +
-      `<span style="font-weight:600;color:#f1f5f9">${val}</span></div>`
+      `<span style="color:#8A8176">${lbl}</span>` +
+      `<span style="font-weight:600;color:#F3EBDD">${val}</span></div>`
     ).join("");
 
     el.innerHTML =
-      `<div style="background:#1e1e2e;border-radius:12px;padding:11px 14px;` +
+      `<div style="background:#262321;border-radius:12px;padding:11px 14px;` +
       `box-shadow:0 8px 32px rgba(0,0,0,0.55);">` +
-      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#f1f5f9">${dayStr}</div>` +
+      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#F3EBDD">${dayStr}</div>` +
       rows + `</div>` +
       `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
 
@@ -423,14 +426,14 @@ function CalendarWidget({
         tail.style.top          = "";
         tail.style.borderLeft   = "9px solid transparent";
         tail.style.borderRight  = "9px solid transparent";
-        tail.style.borderTop    = `${TAIL}px solid #1e1e2e`;
+        tail.style.borderTop    = `${TAIL}px solid #262321`;
         tail.style.borderBottom = "";
       } else {
         tail.style.top          = -TAIL + "px";
         tail.style.bottom       = "";
         tail.style.borderLeft   = "9px solid transparent";
         tail.style.borderRight  = "9px solid transparent";
-        tail.style.borderBottom = `${TAIL}px solid #1e1e2e`;
+        tail.style.borderBottom = `${TAIL}px solid #262321`;
         tail.style.borderTop    = "";
       }
     }
@@ -559,7 +562,7 @@ function CalendarWidget({
 
   const navBtn = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} disabled={!active}
-      style={{ background:"none", border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+      style={{ background:"none", border:`1px solid ${thm.cardBorder}`,
         borderRadius:8, padding:"3px 11px", fontSize:18, lineHeight:1,
         cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
         color: thm.textPrimary }}>
@@ -620,8 +623,8 @@ function CalendarWidget({
                 background: thm.key === "gray"
                   ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
                   : thm.key === "pastel"
-                  ? "linear-gradient(90deg,rgba(248,187,208,0.9),rgba(254,215,170,0.9),rgba(187,247,208,0.9))"
-                  : "linear-gradient(90deg,rgba(239,68,68,0.88),rgba(245,158,11,0.88),rgba(34,197,94,0.88))"
+                  ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
+                  : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
               }} />
               <span>Fast (km/h)</span>
             </div>
@@ -816,19 +819,19 @@ function AllRoadsPanel({
                   : "flat"
                   : "flat";
                 const sparkColor = card.isBaseline
-                  ? (thm.key === "colour" ? "#60a5fa" : "#888888")
-                  : dir === "up"   ? "#34d399"
-                  : dir === "down" ? "#f87171"
-                  : "#94a3b8";
+                  ? (thm.key === "colour" ? "#7DB7E8" : "#8A8176")
+                  : dir === "up"   ? thm.speedGood
+                  : dir === "down" ? thm.speedBad
+                  : thm.textMuted;
 
-                let cardBg: string = thm.key === "colour" ? "rgba(20,30,55,0.92)" : (thm.cardBg as string);
+                let cardBg: string = thm.cardBg;
                 if (card.isTop3Worst) {
-                  cardBg = thm.key === "colour" ? "rgba(239,68,68,0.09)"
+                  cardBg = thm.key === "colour" ? "rgba(240,138,93,0.08)"
                          : thm.key === "gray"   ? "rgba(0,0,0,0.04)"
-                         : "rgba(239,100,68,0.07)";
+                         : "rgba(224,106,62,0.07)";
                 }
                 const cardBorder = card.isBaseline
-                  ? "1.5px solid #f59e0b"
+                  ? "1.5px solid #F59E0B"
                   : card.label === selectedRoute
                   ? `1px solid ${thm.chart.line4}`
                   : thm.cardBorder as string;
@@ -866,7 +869,7 @@ function AllRoadsPanel({
                       <MiniSparkline points={card.sparkPoints} color={sparkColor} />
                       {card.isBaseline ? (
                         <span style={{ fontSize: 11, fontWeight: 700,
-                          color: "#f59e0b", whiteSpace: "nowrap" }}>
+                          color: "#F59E0B", whiteSpace: "nowrap" }}>
                           ⚡ Speed benchmark
                         </span>
                       ) : card.delta === null ? (
@@ -875,7 +878,7 @@ function AllRoadsPanel({
                         <span style={{ fontSize: 11, color: thm.textMuted }}>— steady</span>
                       ) : (
                         <span style={{ fontSize: 12, fontWeight: 700,
-                          color: card.delta > 0 ? "#34d399" : "#f87171",
+                          color: card.delta > 0 ? thm.speedGood : thm.speedBad,
                           whiteSpace: "nowrap" }}>
                           {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)} km/h
                         </span>
@@ -1157,12 +1160,12 @@ function DashboardInner() {
       : dataTrend === "worsened" ? "confirmed_bad"       : "contradicted_better";
 
   const VERDICT: Record<VerdictKey, {face:string; msg:string; border:string; bg:string; tc:string}> = {
-    confirmed_good:      { face:"🤩", msg:"Yes! It's gotten better — speed is up. 🎉",          border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46" },
-    confirmed_bad:       { face:"🥵", msg:"Yep, it's gotten worse — traffic is heavier.",         border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b" },
-    contradicted_better: { face:"🤩", msg:"Actually, things have improved! Roads are faster.",    border:"#6ee7b7", bg:"#f0fdf4", tc:"#065f46" },
-    contradicted_worse:  { face:"🥵", msg:"Actually, things have gotten worse — traffic is heavier.", border:"#fca5a5", bg:"#fff1f2", tc:"#991b1b" },
-    no_change:           { face:"😐", msg:"Not really — no meaningful change either way.",         border:"#fcd34d", bg:"#fffbeb", tc:"#92400e" },
-    insufficient:        { face:"🔍", msg:"Need more data — widen the baseline window.",           border:"#c4b5fd", bg:"#f5f3ff", tc:"#5b21b6" },
+    confirmed_good:      { face:"🤩", msg:"Yes! It's gotten better — speed is up. 🎉",          border:"#86EFAC", bg:"#F0FDF4", tc:"#166534" },
+    confirmed_bad:       { face:"🥵", msg:"Yep, it's gotten worse — traffic is heavier.",         border:"#FCA5A5", bg:"#FFF1F2", tc:"#991B1B" },
+    contradicted_better: { face:"🤩", msg:"Actually, things have improved! Roads are faster.",    border:"#86EFAC", bg:"#F0FDF4", tc:"#166534" },
+    contradicted_worse:  { face:"🥵", msg:"Actually, things have gotten worse — traffic is heavier.", border:"#FCA5A5", bg:"#FFF1F2", tc:"#991B1B" },
+    no_change:           { face:"😐", msg:"Not really — no meaningful change either way.",         border:"#FDE68A", bg:"#FFFBEB", tc:"#92400E" },
+    insufficient:        { face:"🔍", msg:"Need more data — widen the baseline window.",           border:"#C4B5FD", bg:"#F5F3FF", tc:"#5B21B6" },
   };
   const v      = VERDICT[verdictKey];
   const colors = thm.chart;
@@ -1253,8 +1256,8 @@ function DashboardInner() {
                   display:"flex", alignItems:"center", gap:5, fontSize:12,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, padding:"5px 12px",
-                  color: copied ? "#34d399" : thm.textMuted,
-                  background: copied ? "rgba(52,211,153,0.1)" : "transparent",
+                  color: copied ? thm.speedGood : thm.textMuted,
+                  background: copied ? "rgba(111,174,99,0.1)" : "transparent",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
                   <Share2 size={13} />
@@ -1282,7 +1285,7 @@ function DashboardInner() {
                   display:"flex", alignItems:"center", gap:6,
                   height:34, borderRadius:9999, padding:"0 12px",
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  background: thm.key==="colour" ? "#1e293b" : thm.key==="gray" ? "#f5f5f5" : "#fce7f3",
+                  background: thm.key==="colour" ? "#262321" : thm.key==="gray" ? "#f5f5f5" : "#DBEAFE",
                   cursor:"pointer",
                   transition:"background 0.2s",
                 }}
@@ -1341,8 +1344,8 @@ function DashboardInner() {
 
           {/* Error */}
           {!loading && error && (
-            <div style={{ background:"#fff1f2", border:"1px solid #fca5a5",
-              borderRadius:16, padding:"1.5rem", color:"#991b1b" }}>
+            <div style={{ background:"#FFF1F2", border:"1px solid #FCA5A5",
+              borderRadius:16, padding:"1.5rem", color:"#991B1B" }}>
               <p style={{ fontWeight:700, marginBottom:4 }}>😬 Couldn't load data</p>
               <p style={{ fontSize:13 }}>{error}</p>
             </div>
@@ -1472,7 +1475,7 @@ function DashboardInner() {
                   {/* Overlap warning */}
                   {overlapWarning && (
                     <p key={String(overlapWarning)} style={{
-                      fontSize:11, color:"#f87171", textAlign:"center",
+                      fontSize:11, color: thm.speedBad, textAlign:"center",
                       marginTop:8, animation:"overlap-warning 3s ease forwards",
                       pointerEvents:"none",
                     }}>
@@ -1625,7 +1628,7 @@ function DashboardInner() {
                             tickLine={false} axisLine={false}/>
                           <YAxis tick={{fontSize:11,fill:thm.textMuted}}
                             tickLine={false} axisLine={false} unit=" km/h"/>
-                          <RCTooltip content={<ChartTooltip/>}/>
+                          <RCTooltip content={useChartTooltip(thm)}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
                             stroke={colors.line1}
@@ -1660,7 +1663,7 @@ function DashboardInner() {
                             tickLine={false} axisLine={false}/>
                           <YAxis tick={{fontSize:11,fill:thm.textMuted}}
                             tickLine={false} axisLine={false} unit=" min"/>
-                          <RCTooltip content={<ChartTooltip/>}/>
+                          <RCTooltip content={useChartTooltip(thm)}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Line type="monotone" dataKey="avgDuration" name="Avg Duration"
                             stroke={colors.line3}

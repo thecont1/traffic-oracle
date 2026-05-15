@@ -89,13 +89,13 @@ function arcApex(
 /* ──────────────────────────────────────────────────────────────── */
 function makeLabelIcon(label: string, selected: boolean, dark: boolean): L.DivIcon {
   const bg = selected
-    ? "rgba(220,38,38,0.95)"
-    : dark ? "rgba(15,23,42,0.86)" : "rgba(30,41,59,0.82)";
+    ? (dark ? "rgba(125,183,232,0.92)" : "rgba(58,134,200,0.92)")
+    : dark ? "rgba(38,35,33,0.86)" : "rgba(255,255,255,0.82)";
   const shadow = selected
-    ? "0 2px 14px rgba(239,68,68,0.55), 0 1px 4px rgba(0,0,0,0.4)"
-    : "0 1px 4px rgba(0,0,0,0.35)";
+    ? "0 2px 14px rgba(58,134,200,0.5), 0 1px 4px rgba(0,0,0,0.35)"
+    : "0 1px 4px rgba(0,0,0,0.25)";
   const scale = selected ? "scale(1.13)" : "scale(1)";
-  const border = selected ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.2)";
+  const border = selected ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.15)";
   return L.divIcon({
     className: "",
     html: `<div style="
@@ -188,7 +188,7 @@ export function TrafficMap({ routes, selectedRoute, onRouteSelect, dark }: Props
               <Polyline
                 positions={arc}
                 pathOptions={{
-                  color: isAirport ? "#22c55e" : dark ? "#64748b" : "#475569",
+                  color: isAirport ? "#6FAE63" : dark ? "#64748b" : "#8A8176",
                   weight:     isAirport ? 12 : 10,
                   opacity:    0.40,
                   dashArray:  isAirport ? "10 6" : undefined,
@@ -243,26 +243,26 @@ export function TrafficMap({ routes, selectedRoute, onRouteSelect, dark }: Props
             <Fragment key={`sel-${selectedRoute}`}>
               {/* Outer ambient glow */}
               <Polyline positions={arc} pathOptions={{
-                ...sharedOpts, color: "#ef4444",
+                ...sharedOpts, color: dark ? "#7DB7E8" : "#3A86C8",
                 weight: 36, opacity: 0.10, className: "route-glow-outer",
               }} />
               {/* Mid diffuse glow */}
               <Polyline positions={arc} pathOptions={{
-                ...sharedOpts, color: "#f97316",
+                ...sharedOpts, color: dark ? "#9CC9EE" : "#6DB0D9",
                 weight: 22, opacity: 0.20, className: "route-glow-mid",
               }} />
               {/* Core — pulsing red */}
               <Polyline
                 positions={arc}
                 pathOptions={{
-                  ...sharedOpts, color: "#ef4444",
+                  ...sharedOpts, color: dark ? "#7DB7E8" : "#3A86C8",
                   weight: 16, opacity: 1,
                   className: "route-selected",
                 }}
                 eventHandlers={{ click: () => onRouteSelect(selectedRoute) }}
               >
                 <Tooltip sticky>
-                  <strong style={{ color: "#dc2626" }}>📍 {selectedRoute}</strong>
+                  <strong style={{ color: dark ? "#7DB7E8" : "#3A86C8" }}>📍 {selectedRoute}</strong>
                   {speedTxt && <span>&nbsp; {speedTxt}</span>}
                   <span style={{ display: "block", fontSize: 11, opacity: 0.65 }}>Currently selected</span>
                 </Tooltip>
@@ -275,7 +275,7 @@ export function TrafficMap({ routes, selectedRoute, onRouteSelect, dark }: Props
                 eventHandlers={{ click: () => onRouteSelect(selectedRoute) }}
               >
                 <Tooltip direction="top" offset={[0, -8]}>
-                  <strong style={{ color: "#dc2626" }}>📍 {selectedRoute}</strong>
+                  <strong style={{ color: dark ? "#7DB7E8" : "#3A86C8" }}>📍 {selectedRoute}</strong>
                   {speedTxt && <span>&nbsp; {speedTxt}</span>}
                 </Tooltip>
               </Marker>
@@ -287,11 +287,11 @@ export function TrafficMap({ routes, selectedRoute, onRouteSelect, dark }: Props
       {/* ── Legend ─────────────────────────────────────────── */}
       <div style={{
         position: "absolute", bottom: 14, left: 14, zIndex: 1000,
-        background: dark ? "rgba(10,15,36,0.92)" : "rgba(255,255,255,0.93)",
+        background: dark ? "rgba(38,35,33,0.92)" : "rgba(255,255,255,0.93)",
         backdropFilter: "blur(10px)",
         border: "1px solid hsl(var(--border))",
         borderRadius: 12, padding: "8px 12px",
-        fontSize: 11.5, color: dark ? "#f1f5f9" : "#1e293b",
+        fontSize: 11.5, color: dark ? "#F3EBDD" : "#2B2924",
         pointerEvents: "none",
         boxShadow: dark
           ? "0 4px 20px rgba(0,0,0,0.5)"
@@ -302,19 +302,19 @@ export function TrafficMap({ routes, selectedRoute, onRouteSelect, dark }: Props
           Legend
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <LegendRow color="#ef4444" weight={5} label="Selected route" />
+          <LegendRow color={dark ? "#7DB7E8" : "#3A86C8"} weight={5} label="Selected route" />
           <LegendRow
             color={dark ? "#64748b" : "#475569"}
             weight={3.5} label="Other routes" opacity={0.7}
           />
-          <LegendRow color="#22c55e" weight={3} dashed label="🟢 Airport Expy" />
+          <LegendRow color="#6FAE63" weight={3} dashed label="🟢 Airport Expy" />
         </div>
       </div>
 
       {/* ── Hint ───────────────────────────────────────────── */}
       <div style={{
         position: "absolute", top: 14, right: 14, zIndex: 1000,
-        background: dark ? "rgba(10,15,36,0.82)" : "rgba(255,255,255,0.88)",
+        background: dark ? "rgba(38,35,33,0.82)" : "rgba(255,255,255,0.88)",
         backdropFilter: "blur(8px)",
         border: "1px solid hsl(var(--border))",
         borderRadius: 9, padding: "4px 10px",

@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useState, useEffect, useMemo, useCallback } from "react";
 import * as Papa from "papaparse";
 import appConfig from "../config.json";
@@ -7,9 +8,13 @@ const WORST_CASE_PCT: number =
   (appConfig as AppConfig).worst_case_percentile ?? 95;
 
 const ROUTES_URL =
-  "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv";
+  import.meta.env.DEV
+    ? "/api/traffic-csv/csv-routes.csv"
+    : "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv";
 const TRAFFIC_URL =
-  "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv";
+  import.meta.env.DEV
+    ? "/api/traffic-csv/csv-bangalore_traffic.csv"
+    : "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv";
 
 /** Append a cache-busting query param so CDNs never serve a stale copy. */
 function bust(url: string): string {

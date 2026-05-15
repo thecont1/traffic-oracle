@@ -66,6 +66,16 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    proxy: {
+      "/api/traffic-csv": {
+        target: "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/traffic-csv/, ""),
+        configure: (_proxy, _options) => {
+          /* no additional config needed — Vite handles the proxy */
+        },
+      },
+    },
   },
   preview: {
     port,

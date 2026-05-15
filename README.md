@@ -2,15 +2,11 @@
 
 [![Typecheck](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml/badge.svg)](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml)
 
-**TraffiCOracle** is a web platform that collects, processes, and visualises road traffic data for **Bengaluru (Bangalore)**. It helps you understand how traffic moves across the city — which routes are fast, which are slow, and how conditions change over time.
+**TraffiCOracle** is a web platform that visualises road traffic data for **Bengaluru (Bangalore)**. It helps you understand how traffic moves across the city — which routes are fast, which are slow, and how conditions change over time.
 
-The system consists of three parts working together:
+**How it works:** The dashboard fetches live traffic data directly from a public GitHub repository that is updated every hour. No local database is needed to use the dashboard — just open it and go.
 
-| Part | What it does |
-|------|-------------|
-| **Data Collector** | Downloads and processes traffic speed/duration data from public CSV sources |
-| **API Server** | Stores data in a PostgreSQL database and serves it through a REST API |
-| **Dashboard** | An interactive web map that shows traffic patterns, route comparisons, and daily trends |
+The PostgreSQL database and API server are infrastructure that's ready for when you want to store historical data locally, run custom queries, or build additional services on top.
 
 ---
 
@@ -86,26 +82,17 @@ bun run typecheck
 
 This verifies the entire project compiles correctly. Should exit with `0` (success).
 
-### 4. Set Up the Database
+### 4. Set Up the Database *(optional)*
 
-Create a `.env` file from the example:
+The dashboard works without a local database — it fetches live data from GitHub. If you want to store data locally or run the API server, set up PostgreSQL:
 
 ```bash
 cp .env.example .env
 # Edit .env — set DATABASE_URL to your PostgreSQL connection string
-# Example: DATABASE_URL="postgresql://user:password@localhost:5432/traffic"
-```
-
-Push the schema to your database:
-
-```bash
 cd lib/db && bun run push
 ```
 
-> **Note:** This drops and recreates tables. For production, use migrations instead:
-> `cd lib/db && bun run migrate`
-
-### 5. Start the API Server
+### 5. Start the API Server *(optional)*
 
 ```bash
 cd artifacts/api-server && bun run dev
@@ -149,13 +136,30 @@ The dashboard is a single-page application with these main areas:
 
 ### Data Sources
 
-Traffic data comes from external CSV files hosted on GitHub. The system downloads, parses (using PapaParse), and processes this data client-side in the dashboard.
+The dashboard fetches live data directly from the **[blr-traffic-monitor](https://github.com/thecont1/blr-traffic-monitor)** repository on GitHub, which is updated every hour:
+
+| File | Purpose |
+|------|---------|
+| `csv-bangalore_traffic.csv` | Speed/duration readings per route and timestamp |
+| `csv-routes.csv` | Route metadata (names, codes, coordinates) |
+
+These files are downloaded and parsed client-side using PapaParse — no local database is required to use the dashboard.
+
+The PostgreSQL database and API server (steps 4–5 below) are optional infrastructure for storing historical data locally or building custom services.
 
 ---
 
 ## Running the System
 
 ### All-in-One (Development)
+
+**Just the dashboard** (works without a database — fetches live data from GitHub):
+
+```bash
+cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run dev
+```
+
+**Full stack** (dashboard + API server + database):
 
 ```bash
 # Terminal 1: Start the API server
@@ -214,7 +218,7 @@ TraffiCOracle/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string (e.g., `postgresql://user:pass@localhost:5432/dbname`) |
+|| `DATABASE_URL` | Only if using DB/API | PostgreSQL connection string (e.g., `postgresql://user:***@localhost:5432/dbname`) |
 | `PORT` | Yes (dev) | Port for the dev server (dashboard uses `5173`, API uses `9000`) |
 | `BASE_PATH` | Yes (dev) | URL path prefix (use `/` for local development) |
 | `NODE_ENV` | No | `production` or `development` |

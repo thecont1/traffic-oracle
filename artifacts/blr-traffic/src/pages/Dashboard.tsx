@@ -952,7 +952,8 @@ function DashboardInner() {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   /* data */
-  const { routes, allRows, loading, error, rowCount, refresh } = useTrafficData();
+  const { routes, allRows, loading, error, rowCount, lastUpdated, refresh } =
+    useTrafficData();
 
   const routeOptions = useMemo(() => {
     const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
@@ -1221,6 +1222,19 @@ function DashboardInner() {
                 </div>
               </div>
             </div>
+
+            {lastUpdated && (
+              <div style={{
+                fontSize:11, color: thm.textMuted,
+                display:"flex", alignItems:"center", gap:4,
+              }}>
+                <span style={{ fontSize:12 }}>🕐</span>
+                {lastUpdated.toLocaleTimeString("en-IN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </div>
+            )}
 
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               {!loading && rowCount > 0 && (

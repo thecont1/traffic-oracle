@@ -71,8 +71,13 @@ export default defineConfig({
         target: "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/traffic-csv/, ""),
-        configure: (_proxy, _options) => {
-          /* no additional config needed — Vite handles the proxy */
+        configure: (proxy) => {
+          proxy.on("proxyRes", (proxyRes) => {
+            proxyRes.headers["cache-control"] =
+              "no-cache, no-store, must-revalidate, max-age=0";
+            proxyRes.headers["pragma"] = "no-cache";
+            proxyRes.headers["expires"] = "0";
+          });
         },
       },
     },

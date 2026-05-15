@@ -162,7 +162,10 @@ function fetchTrafficData(
     const resp = await fetch(bust(url), {
       cache: "no-store",
       signal,
-      headers: { Accept: "text/plain,*/*" },
+      headers: {
+        Accept: "text/plain,*/*",
+        Pragma: "no-cache",
+      },
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${url}`);
     const text = await resp.text();
@@ -241,6 +244,7 @@ export function useTrafficData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rowCount, setRowCount] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
@@ -252,6 +256,7 @@ export function useTrafficData() {
           setRoutes(rl);
           setAllRows(ar);
           setRowCount(rc);
+          setLastUpdated(new Date());
           setLoading(false);
         })
         .catch((e) => {
@@ -286,7 +291,7 @@ export function useTrafficData() {
     };
   }, [fetchData]);
 
-  return { routes, allRows, loading, error, rowCount, refresh };
+  return { routes, allRows, loading, error, rowCount, lastUpdated, refresh };
 }
 
 export interface DayStats {

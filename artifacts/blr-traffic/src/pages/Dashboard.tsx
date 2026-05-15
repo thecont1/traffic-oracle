@@ -1174,16 +1174,6 @@ function DashboardInner() {
         {/* ── Below-header area: main content + route pane ─────────── */}
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
-          {/* ── Route browser pane (desktop) ──────────────────────── */}
-          {!isMobile && (
-            <RouteBrowserPane
-              cards={allRouteCards}
-              selectedRoute={selectedRoute}
-              onRouteSelect={handleRouteSelectFromPane}
-              mobile={false}
-            />
-          )}
-
           {/* ── Main content ──────────────────────────────────────── */}
           <main style={{
             flex: 1,
@@ -1590,6 +1580,16 @@ function DashboardInner() {
           )}
 
         </main>
+
+          {/* ── Route browser pane (desktop) ──────────────────────── */}
+          {!isMobile && (
+            <RouteBrowserPane
+              cards={allRouteCards}
+              selectedRoute={selectedRoute}
+              onRouteSelect={handleRouteSelectFromPane}
+              mobile={false}
+            />
+          )}
 
         </div>
 

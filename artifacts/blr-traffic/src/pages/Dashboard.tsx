@@ -871,7 +871,7 @@ function DashboardInner() {
       if (idx >= 0) rightIdx = idx;
     }
     setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
-  }, [selectedRoute, tod, allRouteWeeks.length]);
+  }, [tod, allRouteWeeks.length]);
 
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
@@ -1197,7 +1197,7 @@ function DashboardInner() {
               justifyContent:"center", gap:"0.3em",
             }}>
               <span>Has traffic</span>
-              <Chip icon={questionMode==="worsened"?"🚦":"✅"} variant={questionMode}
+              <Chip icon={questionMode==="worsened"?"":"✅"} variant={questionMode}
                 onClick={toggleMode} animate={!!chipAnim.mode}>{questionMode}</Chip>
               <span>on</span>
               <Chip icon="🛣️" variant="route"

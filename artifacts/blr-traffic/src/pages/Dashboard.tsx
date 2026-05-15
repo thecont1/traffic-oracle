@@ -13,6 +13,7 @@ import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow } fro
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant } from "@/lib/theme";
+import RouteBrowserPane from "@/components/RouteBrowserPane";
 
 /* ── Filter options ───────────────────────────────────────────── */
 const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
@@ -28,6 +29,19 @@ const TOD_LIST: { value: TimeOfDay; label: string }[] = [
   { value:"weekends",          label:"weekends (all day)" },
   { value:"all",               label:"any time of day" },
 ];
+
+/* ── Mobile detection ─────────────────────────────────────────── */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const handler = (e: MediaQueryListEvent | MediaQueryList) => setIsMobile(e.matches);
+    handler(mq);
+    mq.addEventListener("change", handler as any);
+    return () => mq.removeEventListener("change", handler as any);
+  }, []);
+  return isMobile;
+}
 
 /* ── URL param helpers ────────────────────────────────────────── */
 function readUrlParams() {
@@ -724,180 +738,10 @@ function computeAllRouteCards(
   return cards;
 }
 
-function MiniSparkline({ points, color }: { points: number[]; color: string }) {
-  if (points.length < 2) return <div style={{ width: 60, height: 28, flexShrink: 0 }} />;
-  const W = 60, H = 28, PY = 3;
-  const minV  = Math.min(...points), maxV = Math.max(...points);
-  const range = maxV - minV || 1;
-  const toX = (i: number) => (i / (points.length - 1)) * W;
-  const toY = (v: number) => PY + (H - PY * 2) * (1 - (v - minV) / range);
-  const pts  = points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-  return (
-    <svg width={W} height={H} style={{ display: "block", overflow: "visible", flexShrink: 0 }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5}
-        strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function AllRoadsPanel({
-  allRows, routeOptions, baselineStartDate, baselineEndDate, selectedRoute, setRouteIdx,
-}: {
-  allRows: TrafficRow[];
-  routeOptions: string[];
-  baselineStartDate: string | undefined;
-  baselineEndDate: string | undefined;
-  selectedRoute: string;
-  setRouteIdx: (i: number) => void;
-}) {
-  const { theme: thm } = useTheme();
-  const [expanded, setExpanded]   = useState(true);
-  const cardsRef                  = useRef<RouteCardData[] | null>(null);
-  const [cards, setCards]         = useState<RouteCardData[] | null>(null);
-  const prevBaselineKey           = useRef("");
-
-  const toggle = useCallback(() => setExpanded(e => !e), []);
-
-  /* compute on mount (expanded by default) + recompute when baseline changes */
-  useEffect(() => {
-    if (!expanded || allRows.length === 0) return;
-    const key = `${baselineStartDate}|${baselineEndDate}`;
-    if (cardsRef.current && key === prevBaselineKey.current) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
-    cardsRef.current = computed;
-    setCards(computed);
-    prevBaselineKey.current = key;
-  }, [expanded, allRows, routeOptions, baselineStartDate, baselineEndDate]);
-
-  const handleCardClick = useCallback((label: string) => {
-    const idx = routeOptions.indexOf(label);
-    if (idx >= 0) setRouteIdx(idx);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [routeOptions, setRouteIdx]);
-
-  const THRESHOLD = 0.5;
-
-  return (
-    <div style={{
-      background: thm.sectionBg,
-      border: thm.cardBorder,
-      boxShadow: thm.cardShadow,
-      borderRadius: "1.5rem",
-      overflow: "hidden",
-    }}>
-      {/* ── Collapse/expand header ── */}
-      <button onClick={toggle} style={{
-        width: "100%", display: "flex", alignItems: "center",
-        justifyContent: "space-between", padding: "1.25rem 1.5rem",
-        background: "none", border: "none", cursor: "pointer", textAlign: "left",
-      }}>
-        <span style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
-          color: thm.textPrimary }}>
-          🗺️ Speed Snapshot by Route
-        </span>
-        <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
-          transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-          transition: "transform 0.2s ease" }}>▾</span>
-      </button>
-
-      {expanded && (
-        <div style={{ padding: "0 1.5rem 1.5rem" }}>
-          {!cards ? (
-            <p style={{ color: thm.textMuted, fontSize: 13, padding: "0.5rem 0" }}>
-              Computing route summaries…
-            </p>
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(195px, 1fr))",
-              gap: 12,
-            }}>
-              {cards.map(card => {
-                const dir = card.delta !== null && !card.isBaseline
-                  ? card.delta >  THRESHOLD ? "up"
-                  : card.delta < -THRESHOLD ? "down"
-                  : "flat"
-                  : "flat";
-                const sparkColor = card.isBaseline
-                  ? (thm.key === "colour" ? "#7DB7E8" : "#8A8176")
-                  : dir === "up"   ? thm.speedGood
-                  : dir === "down" ? thm.speedBad
-                  : thm.textMuted;
-
-                let cardBg: string = thm.cardBg;
-                if (card.isTop3Worst) {
-                  cardBg = thm.key === "colour" ? "rgba(240,138,93,0.08)"
-                         : thm.key === "gray"   ? "rgba(0,0,0,0.04)"
-                         : "rgba(224,106,62,0.07)";
-                }
-                const cardBorder = card.isBaseline
-                  ? "1.5px solid #F59E0B"
-                  : card.label === selectedRoute
-                  ? `1px solid ${thm.chart.line4}`
-                  : thm.cardBorder as string;
-
-                return (
-                  <div key={card.label}
-                    onClick={() => handleCardClick(card.label)}
-                    title={card.isBaseline
-                      ? "The fastest road in Bangalore — sets the upper bound for what's achievable without breaking traffic laws."
-                      : undefined}
-                    style={{
-                      background: cardBg, border: cardBorder,
-                      boxShadow: thm.cardShadow as string,
-                      borderRadius: 14, padding: "12px 14px",
-                      cursor: "pointer", display: "flex", flexDirection: "column", gap: 8,
-                      transition: "transform 0.12s, box-shadow 0.12s",
-                    }}
-                    onMouseEnter={e => {
-                      const el = e.currentTarget as HTMLDivElement;
-                      el.style.transform = "translateY(-2px)";
-                      el.style.boxShadow = "0 6px 20px rgba(0,0,0,0.22)";
-                    }}
-                    onMouseLeave={e => {
-                      const el = e.currentTarget as HTMLDivElement;
-                      el.style.transform = "";
-                      el.style.boxShadow = thm.cardShadow as string;
-                    }}
-                  >
-                    <p style={{ fontSize: 13, fontWeight: 700, color: thm.textPrimary,
-                      lineHeight: 1.3, margin: 0 }}>
-                      {card.label}
-                    </p>
-                    <div style={{ display: "flex", alignItems: "center",
-                      justifyContent: "space-between", gap: 8 }}>
-                      <MiniSparkline points={card.sparkPoints} color={sparkColor} />
-                      {card.isBaseline ? (
-                        <span style={{ fontSize: 11, fontWeight: 700,
-                          color: "#F59E0B", whiteSpace: "nowrap" }}>
-                          ⚡ Speed benchmark
-                        </span>
-                      ) : card.delta === null ? (
-                        <span style={{ fontSize: 11, color: thm.textMuted }}>— no data</span>
-                      ) : Math.abs(card.delta) < THRESHOLD ? (
-                        <span style={{ fontSize: 11, color: thm.textMuted }}>— steady</span>
-                      ) : (
-                        <span style={{ fontSize: 12, fontWeight: 700,
-                          color: card.delta > 0 ? thm.speedGood : thm.speedBad,
-                          whiteSpace: "nowrap" }}>
-                          {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)} km/h
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
 function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
+  const isMobile = useIsMobile();
 
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {
@@ -1102,6 +946,27 @@ function DashboardInner() {
   const recentStartDate   = recentWeeks[0]?.weekKey;
   const lastDate          = allRouteWeeks[allRouteWeeks.length - 1]?.weekKey;
 
+  /* ── Route browser pane state ─────────────────────────────────── */
+  const allRouteCardsRef = useRef<RouteCardData[] | null>(null);
+  const [allRouteCards, setAllRouteCards] = useState<RouteCardData[] | null>(null);
+  const prevBaselineKeyForPane = useRef("");
+
+  useEffect(() => {
+    if (allRows.length === 0) return;
+    const key = `${baselineStartDate}|${baselineEndDate}`;
+    if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current) return;
+    const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate);
+    allRouteCardsRef.current = computed;
+    setAllRouteCards(computed);
+    prevBaselineKeyForPane.current = key;
+  }, [allRows, routeOptions, baselineStartDate, baselineEndDate]);
+
+  const handleRouteSelectFromPane = useCallback((label: string) => {
+    const idx = routeOptions.indexOf(label);
+    if (idx >= 0) setRouteIdx(idx);
+    // No scrollTo — preserve scroll position and slider state
+  }, [routeOptions]);
+
   const gapCenterPct = (() => {
     if (!baselineStartDate || !baselineEndDate || !recentStartDate || !lastDate) return 50;
     const t0   = new Date(baselineStartDate).getTime();
@@ -1301,8 +1166,25 @@ function DashboardInner() {
           </div>
         </header>
 
-        <main style={{ maxWidth:1320, margin:"0 auto", padding:"1.5rem 1.5rem 2rem",
-          display:"flex", flexDirection:"column", gap:"1.5rem" }}>
+        {/* ── Main content + route browser pane ─────────────────── */}
+        <div style={{
+          display: "flex",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}>
+          {/* ── Main content column ──────────────────────────────── */}
+          <main style={{
+            flex: 1,
+            minWidth: 0,
+            maxWidth: isMobile ? "100%" : 1320,
+            margin: "0 auto",
+            padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.5rem",
+            overflowY: isMobile ? "auto" : "visible",
+          }}>
 
           {/* ── Hero question ────────────────────────────────── */}
           <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem" }}>
@@ -1693,18 +1575,30 @@ function DashboardInner() {
                 </>
               )}
 
-              {/* ── All-roads overview panel ───────────────── */}
-              <AllRoadsPanel
-                allRows={allRows}
-                routeOptions={routeOptions}
-                baselineStartDate={baselineStartDate}
-                baselineEndDate={baselineEndDate}
-                selectedRoute={selectedRoute}
-                setRouteIdx={setRouteIdx}
-              />
             </>
           )}
+
+          {/* ── Route browser pane (desktop: right slide-over, mobile: bottom sheet) ── */}
+          {!isMobile && (
+            <RouteBrowserPane
+              cards={allRouteCards}
+              selectedRoute={selectedRoute}
+              onRouteSelect={handleRouteSelectFromPane}
+              mobile={false}
+            />
+          )}
         </main>
+      </div>
+
+      {/* ── Mobile route browser (bottom sheet) ──────────────────── */}
+      {isMobile && (
+        <RouteBrowserPane
+          cards={allRouteCards}
+          selectedRoute={selectedRoute}
+          onRouteSelect={handleRouteSelectFromPane}
+          mobile={true}
+        />
+      )}
 
         <footer style={{
           borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,

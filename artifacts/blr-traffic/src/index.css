@@ -414,6 +414,58 @@
   100% { opacity: 0; }
 }
 
+/* ── Route browser pane ───────────────────────────────────────── */
+.route-browser-pane {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.route-browser-pane__rail {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.route-browser-pane__rail:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.dark .route-browser-pane__rail:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Progressive blur edges for scroll lists */
+.route-blur-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 28px;
+  pointer-events: none;
+  z-index: 5;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.route-blur-edge--top {
+  top: 0;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+.route-blur-edge--bottom {
+  bottom: 0;
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
 @media print {
   @page { margin: 0; }
   body { margin: 0.5in; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

@@ -99,16 +99,16 @@ cp .env.example .env
 Push the schema to your database:
 
 ```bash
-bun --filter @workspace/db run push
+cd lib/db && bun run push
 ```
 
 > **Note:** This drops and recreates tables. For production, use migrations instead:
-> `bun --filter @workspace/db run migrate`
+> `cd lib/db && bun run migrate`
 
 ### 5. Start the API Server
 
 ```bash
-bun --filter @workspace/api-server run dev
+cd artifacts/api-server && bun run dev
 ```
 
 This builds and starts the Express API server with source maps. Default port: `9000`.
@@ -159,7 +159,7 @@ Traffic data comes from external CSV files hosted on GitHub. The system download
 
 ```bash
 # Terminal 1: Start the API server
-bun --filter @workspace/api-server run dev
+cd artifacts/api-server && bun run dev
 
 # Terminal 2: Start the dashboard
 cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run dev
@@ -235,8 +235,8 @@ bun run typecheck:libs         # Check shared libraries only
 ### Development
 ```bash
 bun install                         # Install dependencies
-bun --filter @workspace/db run push # Push database schema
-bun --filter @workspace/api-server run dev  # Start API
+cd lib/db && bun run push # Push database schema
+cd artifacts/api-server && bun run dev  # Start API
 cd artifacts/blr-traffic && bun run dev      # Start dashboard
 ```
 
@@ -249,14 +249,14 @@ cd artifacts/blr-traffic && bun run build   # Build dashboard
 
 ### Database
 ```bash
-bun --filter @workspace/db run push      # Dev push (drops + recreates tables)
-bun --filter @workspace/db run migrate   # Generate SQL migration files
-bun --filter @workspace/db run generate  # Generate Drizzle snapshots
+cd lib/db && bun run push      # Dev push (drops + recreates tables)
+cd lib/db && bun run migrate   # Generate SQL migration files
+cd lib/db && bun run generate  # Generate Drizzle snapshots
 ```
 
 ### Regenerating API Client
 ```bash
-bun --filter @workspace/api-spec run codegen
+cd lib/api-spec && bun run codegen
 ```
 
 ---

@@ -103,8 +103,6 @@ function RouteCard({
            : "rgba(0,0,0,0.03)";
   }
 
-  const selectedBar = isSelected ? thm.chart.line1 : "transparent";
-
   return (
     <div
       onClick={() => onSelect(card.label)}
@@ -114,16 +112,28 @@ function RouteCard({
       style={{
         background: cardBg,
         borderRadius: 6,
-        padding: "7px 8px",
+        padding: "5px 8px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 2,
         transition: "background 0.15s",
         position: "relative",
-        borderLeft: `3px solid ${selectedBar}`,
       }}
     >
+      {/* Accent bar — juts out left for selected */}
+      {isSelected && (
+        <div style={{
+          position: "absolute",
+          left: -6,
+          top: 4,
+          bottom: 4,
+          width: 4,
+          borderRadius: 2,
+          background: thm.chart.line1,
+          zIndex: 2,
+        }} />
+      )}
       {/* Row 1: title + delta */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
         <p style={{
@@ -201,7 +211,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       flexShrink: 0,
       width: isOpen ? paneWidth + RAIL_WIDTH : RAIL_WIDTH,
       transition: dragging ? "none" : "width 0.3s cubic-bezier(0.4,0,0.2,1)",
-      overflow: "hidden",
+      overflow: "visible",
       display: "flex",
       background: thm.sectionBg,
       borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
@@ -261,7 +271,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="bottom" />
           <div style={{
             height: "100%", overflowY: "auto", padding: "10px 8px",
-            display: "flex", flexDirection: "column", gap: 8, scrollbarWidth: "thin",
+            display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "thin",
           }}>
             {!cards ? (
               <p style={{ color: thm.textMuted, fontSize: 12, padding: "1rem 0", textAlign: "center" }}>

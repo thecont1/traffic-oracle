@@ -41,7 +41,7 @@ testem.log
 .DS_Store
 Thumbs.db
 
-# Lock files (Bun: bun.lockb is committed; ignore everything else)
+# Lock files (Bun: bun.lock is committed; ignore everything else)
 pnpm-lock.yaml
 package-lock.json
 yarn.lock

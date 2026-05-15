@@ -2,7 +2,7 @@
 
 # Install lockfile and minimum release age for supply-chain safety
 install.lockfile = true
-install.minimumReleaseAge = "1 day"
+install.minimumReleaseAge = 86400
 
 # Trusted internal packages (no minimum release age check needed)
 install.minimumReleaseAgeExceptions = ["@replit/*", "stripe-replit-sync"]

@@ -912,7 +912,7 @@ function DashboardInner() {
 
   /* chip animation */
   const [chipAnim, setChipAnim] = useState<Record<string,boolean>>({});
-  const chipTimer = useRef<ReturnType<typeof setTimeout>>();
+  const chipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const popChip = useCallback((key:string) => {
     clearTimeout(chipTimer.current);
     setChipAnim(a => ({...a,[key]:true}));
@@ -922,9 +922,9 @@ function DashboardInner() {
   /* slider */
   const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
   const [showSparkle, setShowSparkle] = useState(false);
-  const sparkleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [overlapWarning, setOverlapWarning] = useState(false);
-  const overlapTimer = useRef<ReturnType<typeof setTimeout>>();
+  const overlapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
   sliderValsRef.current = sliderVals;
@@ -949,7 +949,7 @@ function DashboardInner() {
 
   /* Share */
   const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   /* data */
   const { routes, allRows, loading, error, rowCount } = useTrafficData();
@@ -1007,8 +1007,8 @@ function DashboardInner() {
       urlParamsRef.current = { ...p, bl: undefined, br: undefined };
       return;
     }
-    const cfgStart = (appConfig as Record<string,string>).baseline_default_start;
-    const cfgEnd   = (appConfig as Record<string,string>).baseline_default_end;
+    const cfgStart = appConfig.baseline_default_start;
+    const cfgEnd   = appConfig.baseline_default_end;
     let leftIdx  = 0;
     let rightIdx = Math.max(0, Math.floor(maxI * 0.5));
     if (cfgStart) {
@@ -1133,7 +1133,7 @@ function DashboardInner() {
 
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
-    (appConfig as Record<string, number>).verdict_threshold_kmh ?? 0.5;
+    (appConfig as AppConfig).verdict_threshold_kmh ?? 0.5;
 
   type DataTrend = "improved" | "worsened" | "stable" | "insufficient";
   const dataTrend: DataTrend =
@@ -1622,7 +1622,7 @@ function DashboardInner() {
                         color: thm.textPrimary }}>🐌 Trip Duration Over Time</p>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
                         Weekly median + bad-day (p{
-                          (appConfig as Record<string,number>).worst_case_percentile
+                          (appConfig as AppConfig).worst_case_percentile
                         }) — lower is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
@@ -1709,3 +1709,4 @@ export default function Dashboard() {
 
 /* need this import for the config reference in JSX */
 import appConfig from "../config.json";
+import type { AppConfig } from "../lib/config";

@@ -13,9 +13,9 @@
     "scripts"
   ],
   "scripts": {
-    "dev": "echo 'Run specific package dev scripts (e.g. bun --filter @workspace/api-server run dev)'",
-    "build": "bun run typecheck && bun exec --filter ./artifacts/** --filter ./scripts --if-present run build",
-    "typecheck": "bun run typecheck:libs && bun exec --filter ./artifacts/** --filter ./scripts --if-present run typecheck",
+    "dev": "echo 'Run specific package dev scripts (e.g. bun --filter @workspace/api-server run dev)'\n",
+    "build": "bun run typecheck && bun exec --if-present run build",
+    "typecheck": "bun run typecheck:libs && tsc -p artifacts/api-server/tsconfig.json --noEmit && tsc -p artifacts/blr-traffic/tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit",
     "typecheck:libs": "tsc --build"
   },
   "overrides": {
@@ -27,7 +27,7 @@
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-react": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",

@@ -5,13 +5,11 @@
     "noEmit": true,
     "strict": true
   },
-  "include": [
-    "lib/db",
-    "lib/api-client-react",
-    "lib/api-zod",
-    "artifacts/api-server",
-    "artifacts/blr-traffic",
-    "artifacts/mockup-sandbox",
-    "scripts"
+  "files": [],
+  "references": [
+    { "path": "./lib/db" },
+    { "path": "./lib/api-zod" },
+    { "path": "./lib/api-client-react" },
+    { "path": "./artifacts/api-server" }
   ]
 }

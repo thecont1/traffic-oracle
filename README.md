@@ -1,211 +1,268 @@
 # TraffiCOracle
 
-A monorepo for Bangalore (Bengaluru) traffic monitoring, analysis, and visualisation. Built as a Bun workspace with TypeScript, featuring a REST API server, a React dashboard with interactive maps and charts, and a component preview sandbox.
+[![Typecheck](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml/badge.svg)](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml)
+
+Bangalore traffic data analysis platform — a TypeScript monorepo for collecting, processing, and visualising road traffic patterns in Bengaluru. Built with Bun workspaces, React 19, Drizzle ORM, and Postgres.
 
 ---
 
 ## Table of Contents
 
 - [Architecture](#architecture)
-- [Monorepo Structure](#monorepo-structure)
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-- [Key Packages](#key-packages)
-- [Configuration](#configuration)
-- [Available Scripts](#available-scripts)
-- [Project Conventions](#project-conventions)
+- [Quick Start](#quick-start)
+- [Workspace Packages](#workspace-packages)
+- [TypeScript Configuration](#typescript-configuration)
+- [Key Commands](#key-commands)
+- [Development Workflows](#development-workflows)
+- [Supply Chain Security](#supply-chain-security)
+- [Infrastructure](#infrastructure)
+- [Known Issues](#known-issues)
+- [Project History](#project-history)
 
 ---
 
 ## Architecture
 
+TraffiCOracle is a **Bun workspace monorepo** containing 7 packages organized into three layers:
+
 ```
 TraffiCOracle/
-├── bunfig.toml                  # Bun workspace + supply-chain config
-├── lib/                          # Shared libraries
-│   ├── db/                       # Database layer (Drizzle ORM + PostgreSQL)
-│   ├── api-spec/                 # OpenAPI 3.1 spec → codegen source of truth
-│   ├── api-zod/                  # Auto-generated Zod schemas from OpenAPI
-│   └── api-client-react/         # Auto-generated React Query hooks
-├── artifacts/                    # Deployable applications
-│   ├── api-server/               # Express 5 REST API
-│   ├── blr-traffic/              # React traffic dashboard (Vite)
-│   └── mockup-sandbox/           # Component preview server
-├── scripts/                      # Build & CI helpers
-├── attached_assets/              # Design/PM reference notes
-└── package.json                  # Workspace root
+├── lib/                        # Shared libraries
+│   ├── db/                     #   Database layer (Drizzle ORM + PostgreSQL)
+│   ├── api-zod/                #   Zod validation schemas for API responses
+│   ├── api-client-react/       #   React hooks + typed fetch client (Orval-generated)
+│   └── api-spec/               #   OpenAPI 3.x spec + Orval codegen config
+├── artifacts/                  # Applications & artifacts
+│   ├── api-server/             #   Express 5 API server
+│   ├── blr-traffic/            #   React/Vite traffic dashboard (main UI)
+│   └── mockup-sandbox/         #   UI component sandbox (Replit-skinned)
+├── scripts/                    # Build/utility scripts
+├── bunfig.toml                 # Bun workspace configuration
+├── tsconfig.json               # Root composite TypeScript config
+├── tsconfig.base.json          # Shared TypeScript compiler options
+└── package.json                # Workspace root
 ```
 
-Data flow:
+**Data flow:**
 
-1. **CSV data sources** hosted on `thecont1/blr-traffic-monitor` (routes + traffic logs) are fetched client-side by the dashboard.
-2. The **API server** (`artifacts/api-server`) provides REST endpoints backed by PostgreSQL via Drizzle ORM, with Zod-based request/response validation.
-3. The **React dashboard** (`artifacts/blr-traffic`) consumes traffic CSVs directly, renders an interactive Leaflet map, calendar heatmap, KPI cards, and baseline-vs-recent comparison charts.
-4. **Orval** codegens API client hooks + Zod types from the single `lib/api-spec/openapi.yaml` spec — the spec is the contract between frontend and backend.
-
----
-
-## Monorepo Structure
-
-### `lib/db` — Database Layer
-- **ORM**: Drizzle ORM v0.45 (`drizzle-orm/node-postgres`)
-- **Driver**: `pg` (PostgreSQL client)
-- **Validation**: `drizzle-zod` for insert schemas
-- **Migration**: `drizzle-kit push` (dev only)
-- **Schema**: `lib/db/src/schema/index.ts` — currently a starter template with commented examples
-- **Connection**: Requires `DATABASE_URL` env var
-
-### `lib/api-spec` — API Contract
-- **Format**: OpenAPI 3.1 (`openapi.yaml`)
-- **Codegen**: Orval v8 generates:
-  - React Query hooks → `lib/api-client-react/src/generated/`
-  - Zod schemas → `lib/api-zod/src/generated/`
-- **Current endpoints**: `GET /healthz` (health check returning `{ status: string }`)
-- **Regenerate**: `bun run --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` — Generated Zod Types
-- Re-exports from `./generated/api` (API module) and `./generated/types` (type schemas)
-- Used by both the API server and client for runtime validation
-
-### `lib/api-client-react` — Generated React Client
-- Re-exports from `./generated/api` (React Query hooks) and `./generated/api.schemas`
-- Provides `setBaseUrl()` and `setAuthTokenGetter()` for native/Expo app usage
-- Custom fetch wrapper (`custom-fetch.ts`) handles base URL prepending, auth tokens, error parsing, and response type resolution
-
-### `artifacts/api-server` — Express API Server
-- **Framework**: Express 5
-- **Logging**: Pino with `pino-http` (pretty-printed in dev, JSON in prod)
-- **Middleware**: CORS, JSON/URL-encoded body parsing
-- **Routing**: `src/routes/` — currently only `/api/healthz`
-- **Build**: esbuild → CJS bundle (`dist/index.mjs`)
-- **Env**: `PORT` (required), `NODE_ENV`, `LOG_LEVEL`, `DATABASE_URL`
-
-### `artifacts/blr-traffic` — Traffic Dashboard (Main UI)
-A React + Vite single-page application for visualising Bangalore traffic data.
-
-**Features:**
-- **Interactive Map**: Leaflet/React-Leaflet with 16 hardcoded Bangalore routes rendered as quadratic Bézier curves; click to select, hover for speed tooltips
-- **KPI Dashboard**: Speed, median trip duration, p95 (worst-case) duration, trip count — with baseline comparison
-- **Napkin Chart**: SVG sparkline comparing baseline vs recent weekly average speeds
-- **Calendar Heatmap**: Day-by-day speed colour-coding using p10/p90 percentile spread
-- **Time-of-Day Filters**: Weekday morning (8–12), afternoon (12–18), evening (18–22), weekends, or all day
-- **Period Filters**: 1 month, 3 months, 6 months, 1 year lookback
-- **Baseline Window Slider**: Adjustable date range for baseline comparison
-- **3 Themes**: Colour (dark), Gray (light), Pastel (light) — cycled via button, persisted in localStorage
-- **Responsive**: Mobile-detecting layout with Radix UI components
-- **Toast Notifications**: Custom React toast system
-
-**Data Sources** (fetched as CSV from GitHub):
-- Routes: `https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv`
-- Traffic: `https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv`
-
-**Key files:**
-| File | Purpose |
-|---|---|
-| `src/App.tsx` | Root component with router + providers |
-| `src/pages/Dashboard.tsx` | Main dashboard (~1700 lines, all visualisations) |
-| `src/components/TrafficMap.tsx` | Leaflet map with Bézier route rendering |
-| `src/lib/useTrafficData.ts` | Data fetching, parsing, aggregation hooks |
-| `src/lib/routeCoords.ts` | Hardcoded lat/lng pairs for 16 routes |
-| `src/lib/theme.ts` | Theme definitions (colour/gray/pastel) |
-| `src/lib/ThemeContext.tsx` | Theme provider + localStorage persistence |
-| `src/config.json` | App-level config (percentiles, baseline defaults) |
-
-### `artifacts/mockup-sandbox` — Component Preview
-A development server that renders individual React components from `src/components/mockups/` for the Replit workspace canvas. Routes to `/preview/<ComponentName>`.
-
-### `scripts` — Build Helpers
-- `post-merge.sh`: Runs `bun install --frozen-lockfile` then `bun --filter @workspace/db run push` (schema migrations)
-- `src/hello.ts`: Placeholder script
+```
+[OpenAPI Spec] ──orval──► [lib/api-spec]
+                              │
+                              ├──► [lib/api-zod]     (Zod schemas)
+                              └──► [lib/api-client-react]  (React Query hooks)
+                                        │
+[PostgreSQL] ◄─── [lib/db] ◄───────────┘
+        │
+        ▼
+  [artifacts/api-server]  (Express 5 REST API)
+        │
+        ▼
+  [artifacts/blr-traffic]  (React 19 Dashboard)
+```
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Runtime** | Bun (Node.js 24-compatible) |
-| **Language** | TypeScript 5.9 |
-| **Monorepo** | Bun workspaces |
-| **Build** | esbuild (API), Vite 7 + SWC (frontend) |
-| **API Server** | Express 5, Pino logging |
-| **Database** | PostgreSQL + Drizzle ORM v0.45 + drizzle-zod v0.8 |
-| **API Spec** | OpenAPI 3.1 → Orval v8 for codegen |
-| **Validation** | Zod v3 |
-| **Frontend** | React 19, TypeScript, Tailwind CSS 4 + `tw-animate-css` |
-| **UI Components** | Radix UI, shadcn/ui patterns (`@/components/ui/*`) |
-| **Charts** | Recharts |
-| **Maps** | Leaflet 1.9 + React-Leaflet 5 |
-| **Routing** | Wouter v3 |
-| **State** | TanStack React Query v5, React Context |
-| **CSS** | Tailwind CSS 4 with `@theme inline`, custom keyframe animations |
+| Category       | Technology                          | Version       |
+|----------------|-------------------------------------|---------------|
+| Runtime        | Bun                                 | 1.x           |
+| Language       | TypeScript                          | 5.9.0-dev     |
+| Node           | Node.js                             | 24            |
+| Frontend       | React                               | 19.0.0        |
+| Build          | Vite                                | 7.3.x         |
+| CSS Framework  | TailwindCSS                         | 4.1.x         |
+| UI Components  | Radix UI + shadcn/ui                | latest        |
+| Router         | Wouter                             | 3.3.x         |
+| State          | TanStack Query                      | 5.90.x        |
+| Database       | PostgreSQL 16+                      | —             |
+| ORM            | Drizzle ORM                         | 0.45.x        |
+| Validation     | Zod                                 | 3.25.x        |
+| API Codegen    | Orval                               | —             |
+| Maps           | Leaflet + react-leaflet             | latest        |
+| Charts         | Victory / Recharts (via napkin)     | —             |
+| Testing        | (TBD)                               | —             |
+| Package Mgmt   | Bun workspaces                      | —             |
+| Linting        | TypeScript strict mode              | —             |
 
 ---
 
 ## Prerequisites
 
-- **Bun** 1.x (latest stable)
-- **PostgreSQL** (for API server)
-- **Env vars** (see [Configuration](#configuration))
+- **Bun** >= 1.0 (`curl -fsSL https://bun.sh/install | bash`)
+- **Node.js** >= 24 (Bun ships its own; used for production deployment)
+- **PostgreSQL** >= 16 (for `db` workspace and `api-server`)
+- **Git** (for cloning and submodule initialization)
 
-## Getting Started
+Verify your environment:
 
 ```bash
-# Install dependencies (uses Bun lockfile)
-bun install
-
-# Typecheck all packages
-bun run typecheck
-
-# Build all packages
-bun run build
-
-# Run API server
-bun run --filter @workspace/api-server run dev
-
-# Run traffic dashboard (from a separate terminal)
-cd artifacts/blr-traffic
-PORT=3000 bun run dev
-
-# Push DB schema (dev only, destructive)
-bun --filter @workspace/db run push
-
-# Regenerate API client code from OpenAPI spec
-bun run --filter @workspace/api-spec run codegen
+bun --version   # >= 1.x
+node --version  # >= v24.0.0
+psql --version  # >= 16.0
 ```
 
 ---
 
-## Configuration
+## Quick Start
 
-### Bun Workspace Config (`bunfig.toml`)
+```bash
+# 1. Clone the repository
+git clone <repo-url> && cd TraffiCOracle
 
-```toml
-# Supply-chain safety: require 1-day minimum publish age for npm packages
-install.lockfile = true
-install.minimumReleaseAge = "1 day"
-install.minimumReleaseAgeExceptions = ["@replit/*", "stripe-replit-sync"]
+# 2. Install all dependencies (supply-chain safe, 24h lock)
+bun install
 
-# Platform restrictions (Replit runs linux-x64 only)
-install.platforms = ["linux", "linux-x64"]
+# 3. Typecheck the entire project
+bun run typecheck
 
-# No auto-install of peer dependencies — handled explicitly per package
-install.autoInstallPeers = false
+# 4. Set up the database
+cp .env.example .env          # Edit DATABASE_URL
+bun --filter @workspace/db run push   # Dev: push schema to Postgres
+
+# 5. Run the API server
+bun --filter @workspace/api-server run dev
+
+# 6. Run the dashboard (separate terminal)
+cd artifacts/blr-traffic && bun run dev
 ```
 
-### Environment Variables
+Open `http://localhost:5173` (Vite dev server) for the dashboard.
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes (api-server) | PostgreSQL connection string |
-| `PORT` | Yes (api-server, blr-traffic) | Server listen port |
-| `NODE_ENV` | No | `production` or `development` (defaults to dev behaviour) |
-| `LOG_LEVEL` | No | Pino log level (default: `info`) |
-| `BASE_PATH` | Yes (blr-traffic) | Vite base URL path |
-| `REPL_ID` | No | Replit environment ID (enables dev-only plugins) |
+---
 
-### `artifacts/blr-traffic/src/config.json`
+## Workspace Packages
+
+### `lib/db` — Database Layer
+
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/db`                |
+| Entry          | `src/index.ts`                 |
+| Type           | `emitDeclarationOnly: true`    |
+| Dependencies   | `drizzle-orm`, `pg`, `drizzle-zod`, `zod` |
+| Dev deps       | `esbuild`, `pino-pretty`       |
+
+Drizzle ORM setup for PostgreSQL. Provides typed database access, schema definition, and migration tooling. The schema is intentionally minimal (stub) — extend it with tables for traffic data, routes, and historical records.
+
+**Key files:**
+- `src/index.ts` — Exports `db` (Drizzle instance) and `pool` (Postgres connection pool)
+- `src/schema/index.ts` — Table definitions (add your tables here)
+- `drizzle.config.ts` — Drizzle CLI config for migrations
+
+**Usage:**
+
+```typescript
+import { db, users } from "@workspace/db";
+
+const allUsers = await db.select().from(users);
+```
+
+**Run migrations:**
+
+```bash
+bun --filter @workspace/db run push      # Dev push (no migrations table)
+bun --filter @workspace/db run migrate   # SQL migration generation
+```
+
+---
+
+### `lib/api-zod` — Zod Validation Schemas
+
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/api-zod`           |
+| Entry          | `src/index.ts`                 |
+| Type           | `emitDeclarationOnly: true`    |
+| Dependencies   | `zod`                          |
+
+Shared Zod schemas used by the API server for request/response validation. Schemas are auto-generated from the OpenAPI spec via Orval and can be extended manually.
+
+---
+
+### `lib/api-client-react` — React API Client
+
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/api-client-react`  |
+| Entry          | `src/index.ts`                 |
+| Type           | `emitDeclarationOnly: true`    |
+| Dependencies   | `@tanstack/react-query`, custom fetch |
+
+Auto-generated React Query hooks and typed fetch utilities. The custom fetch layer (`src/custom-fetch.ts`) extends Orval's generated client with interceptors and error handling.
+
+**Generated from:** `lib/api-spec/openapi.yaml` via Orval codegen.
+
+**Regenerate after spec changes:**
+
+```bash
+bun --filter @workspace/api-spec run codegen
+```
+
+---
+
+### `lib/api-spec` — OpenAPI Specification
+
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/api-spec`          |
+| Source         | `openapi.yaml`                 |
+| Codegen        | Orval (`orval.config.ts`)      |
+
+The single source of truth for API contracts. Edit `openapi.yaml`, then run codegen to propagate types to `api-client-react` and `api-zod`.
+
+```bash
+bun --filter @workspace/api-spec run codegen
+```
+
+---
+
+### `artifacts/api-server` — Express API Server
+
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/api-server`        |
+| Entry          | `src/app.ts` (Express app)     |
+| Build          | `build.mjs` (esbuild → ESM)    |
+| Start          | `node --enable-source-maps ./dist/index.mjs` |
+| Dependencies   | `express`, `cors`, `cookie-parser`, `pino`, `drizzle-orm` |
+
+Production-ready Express 5 server with structured logging (Pino), CORS, and JSON parsing. Serves REST endpoints consumed by the Blr-Traffic dashboard.
+
+**Run in dev:**
+
+```bash
+bun run dev     # Builds + starts with source maps
+```
+
+**Routes:** Defined in `src/routes/` (health, traffic data, etc.)
+
+---
+
+### `artifacts/blr-traffic` — Bangalore Traffic Dashboard
+
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/blr-traffic`       |
+| Build          | Vite 7 + React 19              |
+| Entry          | `index.html` → `src/main.tsx`  |
+| CSS            | TailwindCSS 4 + `src/index.css`|
+| Data           | CSV from external GitHub repos  |
+| Config         | `src/config.json` (build-time)  |
+| Dependencies   | `leaflet`, `react-leaflet`, `papaparse`, `react-csv`, `lucide-react`, `framer-motion`, `wouter` |
+
+The main user-facing application. Displays traffic speed/duration data on a Leaflet map with:
+
+- **Traffic Map** — Leaflet-based map with route polylines, color-coded by traffic speed
+- **Dashboard** — Configurable baseline windows, verdict thresholds, and percentile analysis
+- **Data Calendar** — Collapsible daily speed heatmap
+- **Verdict Panel** — Route comparison with good/bad day analysis
+- **CSV Export** — Download filtered data via PapaParse + react-csv
+- **Share** — URL-encoded state sharing with debounced copy-to-clipboard
+
+**Configuration** (`src/config.json`):
 
 ```json
 {
@@ -216,44 +273,335 @@ install.autoInstallPeers = false
 }
 ```
 
-| Field | Description |
-|---|---|
-| `worst_case_percentile` | Percentile used for "bad day" duration (p95 by default) |
-| `verdict_threshold_kmh` | Speed difference threshold (km/h) for worsened/improved verdict |
-| `baseline_default_start` | Default start date for baseline comparison window |
-| `baseline_default_end` | Default end date for baseline comparison window |
+**Run in dev:**
+
+```bash
+cd artifacts/blr-traffic
+bun run dev     # Vite dev server on :5173
+```
 
 ---
 
-## Available Scripts
+### `artifacts/mockup-sandbox` — UI Component Sandbox
 
-| Command | Description |
-|---|---|
-| `bun run build` | Typecheck + build all workspace packages |
-| `bun run typecheck` | Full TypeScript typecheck across all packages |
-| `bun run typecheck:libs` | Typecheck shared libs only (`lib/*`) |
-| `bun run --filter @workspace/api-server run dev` | Start API in dev mode (build + start) |
-| `bun run --filter @workspace/api-server run start` | Start API from pre-built dist |
-| `bun run --filter @workspace/api-server run typecheck` | Typecheck API server |
-| `bun run --filter @workspace/blr-traffic dev` | Start dashboard dev server |
-| `bun run --filter @workspace/blr-traffic build` | Build dashboard for production |
-| `bun run --filter @workspace/db run push` | Push DB schema to PostgreSQL (dev only) |
-| `bun run --filter @workspace/db run push-force` | Force-push DB schema (drops existing) |
-| `bun run --filter @workspace/api-spec run codegen` | Regenerate client code from OpenAPI spec |
-| `bun run --filter @workspace/api-zod run typecheck` | Typecheck Zod types package |
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/mockup-sandbox`    |
+| Build          | Vite 7 + React 19              |
+| Purpose        | Experimental UI playground      |
+| Dependencies   | Replit-themed shadcn/ui components |
+
+A sandboxed environment for developing and testing UI components with a Replit-inspired design system. Includes a preview plugin (`mockupPreviewPlugin.ts`) that generates mockup frames from component screenshots.
+
+> **Note:** This package has known dependency deduplication issues with Vite types (see [Known Issues](#known-issues)). It is excluded from the composite typecheck but can be typechecked independently.
 
 ---
 
-## Project Conventions
+### `scripts` — Build & Utility Scripts
 
-- **Monorepo packages** use `workspace:*` protocol for inter-package dependencies
-- **Bun lockfile**: `bun.lockb` is committed; `package-lock.json`, `pnpm-lock.yaml`, and `yarn.lock` are gitignored
-- **Supply-chain safety**: 1-day minimum package publish age enforced via `bunfig.toml` (excluding `@replit/*` and `stripe-replit-sync`)
-- **Platform overrides**: Non-linux packages are excluded in `bunfig.toml` platform restrictions
-- **No `dist/` in git**: Compiled output is gitignored
-- **`.local/` is gitignored**: Local runtime state (Replit skills, secondary skills, workflow logs, scribble DB) excluded from version control
-- **`/connect.lock`**, **`/coverage`**, **`/typings`** are all gitignored
-- **IDE**: VSCode settings are committed (`.vscode/settings.json`, `tasks.json`, `launch.json`, `extensions.json`); other IDE configs are ignored
-- **esbuild overrides**: `@esbuild-kit/esm-loader` is aliased to `tsx` to work around drizzle-kit's internal esbuild dependency; esbuild is pinned to `0.27.3`
-- **React**: Pinned to exact `19.1.0` (required by Expo compatibility)
-- **CSS**: Uses Tailwind CSS 4 with `@theme inline` for CSS custom properties, `tw-animate-css` for keyframe animations, and `@tailwindcss/typography` plugin
+| Field          | Value                          |
+|----------------|--------------------------------|
+| Package name   | `@workspace/scripts`           |
+| Entry          | `src/hello.ts`                 |
+| Scripts        | `post-merge.sh`                |
+
+Utility scripts for CI/CD and developer workflows.
+
+---
+
+## TypeScript Configuration
+
+### Strategy: Composite Project References
+
+This monorepo uses TypeScript's [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) for fast, incremental builds and strict type checking across packages.
+
+### File Structure
+
+```
+tsconfig.json           # Root orchestrator (no source files, only references)
+tsconfig.base.json      # Shared compiler options (inherited by all packages)
+lib/db/tsconfig.json        # Composite: emits declarations to dist/
+lib/api-zod/tsconfig.json   # Composite: emits declarations to dist/
+lib/api-client-react/tsconfig.json  # Composite: emits declarations to dist/
+artifacts/api-server/tsconfig.json  # Composite: emits declarations to dist/
+artifacts/blr-traffic/tsconfig.json # App: noEmit, JSX preserve
+artifacts/mockup-sandbox/tsconfig.json  # App: standalone config
+scripts/tsconfig.json              # App: noEmit
+```
+
+### Base Compiler Options (`tsconfig.base.json`)
+
+```json
+{
+  "target": "es2022",
+  "module": "esnext",
+  "moduleResolution": "bundler",
+  "lib": ["dom", "es2022"],
+  "jsx": "preserve",
+  "strict": true,
+  "esModuleInterop": true,
+  "skipLibCheck": true,
+  "isolatedModules": true,
+  "allowImportingTsExtensions": true,
+  "noFallthroughCasesInSwitch": true,
+  "noImplicitOverride": true
+}
+```
+
+### Path Aliases
+
+All packages use `@/*` mapped to their `src/` directory:
+
+```json
+// In each package's tsconfig.json
+"paths": {
+  "@/*": ["./src/*"]
+}
+```
+
+Example usage:
+
+```typescript
+import Dashboard from "@/pages/Dashboard";
+import { db } from "@workspace/db";
+```
+
+### Build Order (Dependency Graph)
+
+```
+lib/db ──────► lib/api-zod ──► lib/api-client-react
+    │                               │
+    └─────► artifacts/api-server ◄──┘
+                         │
+                         ▼
+                  artifacts/blr-traffic
+```
+
+---
+
+## Key Commands
+
+### Typechecking
+
+```bash
+# Full typecheck (composite build + per-package checks)
+bun run typecheck
+
+# Composite library build only (fast incremental)
+bun run typecheck:libs
+
+# Individual package typecheck
+bun --filter @workspace/api-server run typecheck
+cd artifacts/blr-traffic && tsc -p tsconfig.json --noEmit
+```
+
+### Development
+
+```bash
+# Install dependencies (supply-chain safe)
+bun install
+
+# Dev server for dashboard
+cd artifacts/blr-traffic && bun run dev
+
+# Dev server for API
+bun --filter @workspace/api-server run dev
+
+# Database schema push (dev only — no migration files)
+bun --filter @workspace/db run push
+
+# Regenerate API client from OpenAPI spec
+bun --filter @workspace/api-spec run codegen
+```
+
+### Build
+
+```bash
+# Full build: typecheck + build all packages
+bun run build
+
+# Build API server (esbuild → ESM)
+cd artifacts/api-server && bun run build
+```
+
+### Database
+
+```bash
+# Push schema to Postgres (dev, drops + recreates tables)
+bun --filter @workspace/db run push
+
+# Generate SQL migration (production)
+bun --filter @workspace/db run migrate
+
+# Generate Drizzle snapshots after schema changes
+bun --filter @workspace/db run generate
+```
+
+---
+
+## Development Workflows
+
+### Adding a New API Endpoint
+
+1. Update `lib/api-spec/openapi.yaml` with the new endpoint definition
+2. Run `bun --filter @workspace/api-spec run codegen` to regenerate types
+3. Implement the route handler in `artifacts/api-server/src/routes/`
+4. Run `bun run typecheck` to verify everything compiles
+
+### Adding a Database Table
+
+1. Define the table in `lib/db/src/schema/` (follow the Drizzle pattern in the comment block)
+2. Export it from `lib/db/src/schema/index.ts`
+3. Run `bun --filter @workspace/db run push` to apply locally
+4. Generate a migration for production: `bun --filter @workspace/db run migrate`
+
+### Adding a Dashboard Component
+
+1. Create the component in `artifacts/blr-traffic/src/components/`
+2. Use `@/*` path aliases for imports
+3. Add TailwindCSS classes for styling (no CSS files — all inline via classes)
+4. Run `tsc -p tsconfig.json --noEmit` from `artifacts/blr-traffic/` to verify
+
+### Updating Dependencies
+
+```bash
+# Add a dependency to a specific workspace
+bun add <package> --filter @workspace/blr-traffic
+
+# Add a workspace-internal dependency
+bun add @workspace/db --filter @workspace/api-server
+
+# After any dependency change, re-lock and typecheck
+bun install
+bun run typecheck
+```
+
+---
+
+## Supply Chain Security
+
+The project enforces supply-chain integrity via `bunfig.toml`:
+
+```toml
+# Minimum package age: 24 hours (86400 seconds)
+# Blocks newly-published packages from being installed
+install.minimumReleaseAge = 86400
+
+# Lockfile must be present and up to date
+install.lockfile = true
+
+# Platform restriction: linux-x64 only (production target)
+install.platforms = ["linux", "linux-x64"]
+
+# No automatic peer dependency installation
+install.autoInstallPeers = false
+```
+
+**Exceptions** (internal/test packages exempted from age check):
+
+```toml
+install.minimumReleaseAgeExceptions = ["@replit/*", "stripe-replit-sync"]
+```
+
+This means:
+- Any dependency published less than 24 hours ago is rejected
+- The `bun.lock` file is the source of truth for resolved versions
+- Peer dependencies must be explicitly declared
+- Only Linux x86_64 packages are installed (faster installs, smaller attack surface)
+
+---
+
+## Infrastructure
+
+### Environment Variables
+
+| Variable              | Required | Description                              |
+|-----------------------|----------|------------------------------------------|
+| `DATABASE_URL`        | Yes      | PostgreSQL connection string             |
+| `PORT`                | Yes      | Port for the dev server                  |
+| `BASE_PATH`           | Yes      | Base URL path for the Vite app           |
+| `NODE_ENV`            |          | `production` or `development`            |
+| `REPL_ID`             | No       | Replit environment ID (for cartographer) |
+
+### Build Pipeline
+
+1. **Typecheck** — `tsc --build` (composite) + per-package `--noEmit`
+2. **API Server** — esbuild bundles `src/app.ts` → `dist/index.mjs`
+3. **Dashboard** — Vite builds SPA to `dist/` with Tailwind + JSX transform
+
+### Post-Merge Hook (`scripts/post-merge.sh`)
+
+Automatically runs after `git pull` to re-install dependencies and push database schema:
+
+```bash
+bun install --frozen-lockfile
+bun --filter @workspace/db run push
+```
+
+---
+
+## Known Issues
+
+### Mockup-Sandbox: Vite Dependency Dedup
+
+The `mockup-sandbox` package has its own `node_modules/.bun/` directory with a duplicate Vite installation (v7.3.2 vs workspace v7.3.3). This causes TypeScript type errors between the two Vite versions. The package is **excluded from the composite typecheck** and can be typechecked independently.
+
+**Workaround:** Run `bun install` at the root to ensure deduplication, then delete `artifacts/mockup-sandbox/node_modules/` if it persists.
+
+### Blr-Traffic: JSON Import Outside TS Include
+
+The `config.json` file at `artifacts/blr-traffic/config.json` lives outside the `src/` directory. TypeScript's `resolveJsonModule` requires the file to be in the program's `include` path. The `tsconfig.json` for blr-traffic explicitly includes `"config.json"` to resolve this.
+
+### Blr-Traffic: MapIterator Requires `downlevelIteration`
+
+`useTrafficData.ts` iterates over `Map.entries()` which returns `MapIterator`. TypeScript requires `--downlevelIteration` or `target >= "es2015"`. The blr-traffic tsconfig has `target: "es2022"` (inherited) and `downlevelIteration: true` to handle this.
+
+### Papaparse: Default Export
+
+The `@types/papaparse` package doesn't declare a default export compatible with `esModuleInterop`. The import uses `import * as Papa from "papaparse"` instead of `import Papa from "papaparse"`.
+
+### ~~Stale `pnpm-lock.yaml`~~
+
+~~The repository still contains a `pnpm-lock.yaml` file from the pre-migration era. This file is **not used** — `bun.lock` is the sole lockfile. Consider removing `pnpm-lock.yaml` in a cleanup pass.~~
+
+The `pnpm-lock.yaml` file has been removed. `bun.lock` is the sole lockfile in VCS.
+
+---
+
+## Migration Notes (pnpm → Bun)
+
+This project was migrated from pnpm workspaces to Bun workspaces. Key changes:
+
+| Before (pnpm)                        | After (Bun)                            |
+|--------------------------------------|----------------------------------------|
+| `pnpm-workspace.yaml`                | `workspaces` in `package.json`         |
+|| `pnpm-lock.yaml`                     | `bun.lock`                            |
+| `catalog:` in package.json           | Direct version ranges                  |
+| `.npmrc`                             | `bunfig.toml`                          |
+| `pnpm exec --filter`                 | `bun exec --if-present`                |
+| Flat `tsconfig.json` with `include`  | Composite `references`-based config    |
+| `pnpm install`                       | `bun install` (with `minimumReleaseAge`)|
+
+### Post-Merge Cleanup Checklist
+
+- [x] Remove `pnpm-lock.yaml`
+- [x] Remove `.npmrc`
+- [x] Remove `pnpm-workspace.yaml`
+- [x] Verify `bun install` succeeds with clean `bun.lock`
+- [x] Confirm `bun run typecheck` exits 0
+- [x] Test `bun run build` for all deployable packages (composite + api-server + blr-traffic + mockup-sandbox)
+- [x] Verify `bun.lock` is committed to VCS
+
+---
+
+## Contributing
+
+1. Run `bun install` after pulling changes
+2. Run `bun run typecheck` before committing
+3. Add new packages to both `workspaces` in `package.json` and `references` in `tsconfig.json`
+4. Use `@/*` path aliases (configured per-package)
+5. Keep `tsconfig.base.json` in sync across packages
+
+## License
+
+MIT

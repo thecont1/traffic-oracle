@@ -832,7 +832,6 @@ function DashboardInner() {
   const routeDestination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
   const routeEndpoints   = routeDestination ? `${routeOrigin} → ${routeDestination}` : routeOrigin;
 
-  const nextRoute  = () => { setRouteIdx(i => (i+1)%routeOptions.length); popChip("route"); };
   const nextPeriod = () => { setPeriodIdx(i => (i+1)%PERIOD_LIST.length);  popChip("period"); };
   const nextTod    = () => { setTodIdx(i => (i+1)%TOD_LIST.length);         popChip("tod"); };
   const toggleMode = () => {
@@ -960,6 +959,25 @@ function DashboardInner() {
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
   }, [allRows, routeOptions, baselineStartDate, baselineEndDate]);
+
+  /* ── Route cycling in pane order ───────────────────────────────── */
+  const routeOrder = useMemo(() => {
+    if (allRouteCards && allRouteCards.length > 0) return allRouteCards.map(c => c.label);
+    return routeOptions;
+  }, [allRouteCards, routeOptions]);
+
+  const routeOrderIdx = useMemo(() => {
+    const idx = routeOrder.indexOf(selectedRoute);
+    return idx >= 0 ? idx : 0;
+  }, [routeOrder, selectedRoute]);
+
+  const nextRoute = useCallback(() => {
+    const nextIdx = (routeOrderIdx + 1) % routeOrder.length;
+    const nextLabel = routeOrder[nextIdx];
+    const optIdx = routeOptions.indexOf(nextLabel);
+    if (optIdx >= 0) setRouteIdx(optIdx);
+    popChip("route");
+  }, [routeOrder, routeOrderIdx, routeOptions]);
 
   const handleRouteSelectFromPane = useCallback((label: string) => {
     const idx = routeOptions.indexOf(label);
@@ -1437,7 +1455,7 @@ function DashboardInner() {
                   gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
-                    <span style={{ fontSize:28 }}>⚡</span>
+                    {/*<span style={{ fontSize:28 }}>⚡</span>*/}
                     <div style={kpiLabel}>Avg Speed ({periodLabel}) <KpiInfo text="Average speed across all trips in the selected period and time slot, for this route." /></div>
                     <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
                       {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
@@ -1448,21 +1466,21 @@ function DashboardInner() {
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[1] }}>
-                    <span style={{ fontSize:28 }}>🕐</span>
+                    {/*<span style={{ fontSize:28 }}>🕐</span>*/}
                     <div style={kpiLabel}>Median Trip <KpiInfo text="Half of all trips were faster than this, half were slower. A better everyday estimate than the average." /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
                     <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
-                    <span style={{ fontSize:28 }}>🔥</span>
+                    {/*<span style={{ fontSize:28 }}>🔥</span>*/}
                     <div style={kpiLabel}>Bad day trip <KpiInfo text="On a bad day, your trip could take this long. Specifically, 1 in every 20 trips (the 95th percentile) is at least this slow." /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-20 trips take this long</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
-                    <span style={{ fontSize:28 }}>📊</span>
+                    {/*<span style={{ fontSize:28 }}>📊</span>*/}
                     <div style={kpiLabel}>Readings <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{merged.length} weeks · {periodLabel} window</p>

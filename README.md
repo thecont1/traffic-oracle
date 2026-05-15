@@ -2,54 +2,61 @@
 
 [![Typecheck](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml/badge.svg)](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml)
 
-**TraffiCOracle** is a web platform that visualises road traffic data for **Bengaluru (Bangalore)**. It helps you understand how traffic moves across the city — which routes are fast, which are slow, and how conditions change over time.
+<p align="center">
+  <img src="artifacts/blr-traffic/public/trafficoracle-dark.png" alt="TraffiCOracle" height="64">
+</p>
 
-**How it works:** The dashboard fetches live traffic data directly from a public GitHub repository that is updated every hour. No local database is needed to use the dashboard — just open it and go.
+**TraffiCOracle** is a web platform that visualises road traffic data for **Bengaluru (Bangalore)** — with **no backend required**.
 
-The PostgreSQL database and API server are infrastructure that's ready for when you want to store historical data locally, run custom queries, or build additional services on top.
+## No Backend. No Database. Just Open It and Go.
+
+This is what makes TraffiCOracle different. The dashboard fetches live traffic data directly from a public GitHub repository that is updated every hour. There is no server to configure, no database to provision, no API keys to manage. You clone the repo, run one command, and start exploring traffic patterns in your browser.
+
+The PostgreSQL database and Express API server are **optional infrastructure** — ready for when you want to store historical data locally, run custom queries, or build additional services. But they are not required to use the dashboard.
+
+> **Zero-backend architecture:** The entire data pipeline runs client-side. PapaParse downloads and parses CSV files from GitHub in the browser. All computation — filtering, aggregation, verdict logic, chart rendering — happens in React. Your data never touches a server unless you choose to send it somewhere.
 
 ---
 
-## What You'll See
+## Three Ways to Explore Traffic
 
-### Traffic Map
-A Leaflet-based map of Bengaluru with route polylines color-coded by traffic speed:
+The dashboard presents Bengaluru's traffic data through three complementary viewing modes, each answering a different question:
+
+### 1. Map View — _Where is traffic moving?_
+
+An interactive Leaflet map of Bengaluru with route polylines color-coded by traffic speed:
+
 - 🟢 **Green** = fast traffic
 - 🟡 **Yellow** = moderate traffic
 - 🔴 **Red** = slow/heavy traffic
 
-### Dashboard Panels
-- **Baseline Window** — Pick a date range to establish "normal" traffic conditions
-- **Verdict Panel** — Compare routes side-by-side; see which days were good or bad
-- **Data Calendar** — A collapsible heatmap showing daily speed patterns
-- **CSV Export** — Download filtered data for your own analysis
-- **Share** — Copy a URL that encodes your current view and filters
+Click any route to select it and drill into detailed analysis. The Airport Expressway is always highlighted with a dashed green line as the speed benchmark.
 
-### Configuration
-The dashboard reads settings from `artifacts/blr-traffic/src/config.json`:
+### 2. Route Cards — _Which routes are getting better or worse?_
 
-```json
-{
-  "worst_case_percentile": 95,
-  "verdict_threshold_kmh": 0.5,
-  "baseline_default_start": "2025-10-20",
-  "baseline_default_end": "2025-12-15"
-}
-```
+A side-by-side comparison of all monitored routes, each showing:
 
-- **worst_case_percentile**: Which percentile of slow speeds to highlight (default: 95th)
-- **verdict_threshold_kmh**: Speed difference threshold for "good" vs "bad" verdicts (default: 0.5 km/h)
-- **baseline_default_start / end**: Default date range for the baseline window
+- A **sparkline** of weekly average speeds over the last 6 months
+- A **delta indicator** (▲/▼) comparing recent performance against your chosen baseline window
+- Visual flags for the **top 3 routes that worsened the most**
+
+Tap any card to jump to that route on the map. This is the fastest way to scan the entire network.
+
+### 3. Trend Analysis — _How does traffic change over time?_
+
+Two chart panels plus a calendar heatmap:
+
+- **Speed Over Time** — Area chart showing weekly average speed with baseline and recent bands
+- **Trip Duration Over Time** — Line chart comparing average trip duration vs. bad-day (95th percentile) duration
+- **Data Calendar** — A GitHub-style heatmap of daily traffic speeds. Click any day to see the full speed breakdown. Scroll through months to spot seasonal patterns
 
 ---
 
 ## Quick Start
 
-These steps get you a working local setup in about 5 minutes.
+Get a working local setup in about 2 minutes.
 
 ### 1. Install Prerequisites
-
-You need three things installed on your machine:
 
 | Tool | Minimum Version | Install |
 |------|----------------|---------|
@@ -65,7 +72,7 @@ node --version   # Should show v24+
 psql --version   # Should show 16+
 ```
 
-### 2. Clone and Install
+### 2. Clone and Run
 
 ```bash
 git clone <repo-url> && cd TraffiCOracle
@@ -74,42 +81,14 @@ bun install
 
 This installs all dependencies with supply-chain protection (packages must be at least 24 hours old).
 
-### 3. Typecheck (optional but recommended)
-
-```bash
-bun run typecheck
-```
-
-This verifies the entire project compiles correctly. Should exit with `0` (success).
-
-### 4. Set Up the Database *(optional)*
-
-The dashboard works without a local database — it fetches live data from GitHub. If you want to store data locally or run the API server, set up PostgreSQL:
-
-```bash
-cp .env.example .env
-# Edit .env — set DATABASE_URL to your PostgreSQL connection string
-cd lib/db && bun run push
-```
-
-### 5. Start the API Server *(optional)*
-
-```bash
-cd artifacts/api-server && bun run dev
-```
-
-This builds and starts the Express API server with source maps. Default port: `9000`.
-
-### 6. Start the Dashboard
-
-In a **separate terminal**:
+### 3. Start the Dashboard
 
 ```bash
 cd artifacts/blr-traffic
 PORT=5173 BASE_PATH=/ bun run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **http://localhost:5173** in your browser. That's it — no database, no API server, no `.env` file needed. The dashboard will fetch live data from GitHub automatically.
 
 ---
 
@@ -119,20 +98,24 @@ Open **http://localhost:5173** in your browser.
 
 The dashboard is a single-page application with these main areas:
 
-1. **Map View** — Central interactive map showing traffic routes
-2. **Sidebar** — Filters, date pickers, and configuration panels
-3. **Verdict Panel** — Route comparison cards showing good/bad days
-4. **Data Calendar** — Heatmap of daily traffic speeds (click to drill down)
+1. **Header** — TraffiCOracle branding, theme toggle (Colour / Gray / Pastel), and Share button
+2. **Hero Question Bar** — Clickable chips for question mode (worsened/improved), route, time of day, and period
+3. **Map View** — Central interactive map showing traffic routes
+4. **Baseline Slider** — Pick a date range to establish "normal" traffic conditions
+5. **Verdict Panel** — Is traffic better or worse? Compare baseline vs. recent at a glance
+6. **KPI Cards** — Avg speed, median trip, bad-day trip, and total readings
+7. **Trend Charts** — Speed and duration over time with Recharts
+8. **Data Calendar** — Heatmap of daily traffic speeds (click to drill down)
+9. **Route Cards** — All-route overview with sparklines and delta indicators
 
 ### Typical Workflow
 
-1. **Select a route** on the map or from the dropdown
+1. **Select a route** on the map or from the route cards
 2. **Set your baseline window** — the date range you consider "normal"
-3. **Adjust the verdict threshold** — how sensitive the good/bad classification is
-4. **Explore the calendar** — click any day to see its speed profile
-5. **Compare routes** — use the verdict panel to see which routes perform better
-6. **Export data** — click CSV export to download filtered results
-7. **Share your view** — copy the URL from the address bar; it encodes all your filters
+3. **Adjust time of day and period** to focus on relevant traffic conditions
+4. **Toggle question mode** — "worsened" or "improved" — to flip the analysis lens
+5. **Explore the calendar** — click any day to see its speed profile
+6. **Share your view** — copy the URL; it encodes all your filters
 
 ### Data Sources
 
@@ -143,49 +126,45 @@ The dashboard fetches live data directly from the **[blr-traffic-monitor](https:
 | `csv-bangalore_traffic.csv` | Speed/duration readings per route and timestamp |
 | `csv-routes.csv` | Route metadata (names, codes, coordinates) |
 
-These files are downloaded and parsed client-side using PapaParse — no local database is required to use the dashboard.
-
-The PostgreSQL database and API server (steps 4–5 below) are optional infrastructure for storing historical data locally or building custom services.
+These files are downloaded and parsed client-side using PapaParse — no local database is required.
 
 ---
 
 ## Running the System
 
-### All-in-One (Development)
-
-**Just the dashboard** (works without a database — fetches live data from GitHub):
+### Just the Dashboard (No Backend)
 
 ```bash
 cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run dev
 ```
 
-**Full stack** (dashboard + API server + database):
+This is all you need for the primary use case. The dashboard fetches live data from GitHub.
+
+### Full Stack (Dashboard + API + Database)
 
 ```bash
-# Terminal 1: Start the API server
+# Terminal 1: Set up database (one time)
+cp .env.example .env
+# Edit .env with your PostgreSQL connection string
+cd lib/db && bun run push
+
+# Terminal 2: Start the API server
 cd artifacts/api-server && bun run dev
 
-# Terminal 2: Start the dashboard
+# Terminal 3: Start the dashboard
 cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run dev
 ```
 
 ### Production Build
 
 ```bash
-# Build all packages
+# Build everything
 bun run build
 
 # Or build individually:
 cd artifacts/api-server && bun run build   # → dist/index.mjs
-cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run build  # → dist/public/
-cd artifacts/mockup-sandbox && PORT=5174 BASE_PATH=/ bun run build  # → dist/
-```
-
-### Start the Built API Server
-
-```bash
-cd artifacts/api-server
-node --enable-source-maps ./dist/index.mjs
+cd artifacts/blr-traffic && bun run build  # → dist/public/
+cd artifacts/mockup-sandbox && bun run build  # → dist/
 ```
 
 ---
@@ -201,7 +180,16 @@ TraffiCOracle/
 │   └── api-spec/               # OpenAPI spec + code generation config
 ├── artifacts/                  # Applications you can run
 │   ├── api-server/             # Express 5 REST API (Node.js)
-│   ├── blr-traffic/            # Traffic dashboard (React + Vite)
+│   ├── blr-traffic/            # Traffic dashboard (React + Vite) ← the star
+│   │   ├── public/
+│   │   │   ├── favicon.svg
+│   │   │   ├── trafficoracle-dark.png   # Logo for light themes
+│   │   │   └── trafficoracle-light.png  # Logo for dark themes
+│   │   └── src/
+│   │       ├── pages/Dashboard.tsx      # Main dashboard with all 3 views
+│   │       ├── components/TrafficMap.tsx # Map View (Leaflet)
+│   │       ├── lib/useTrafficData.ts    # Data fetching & processing
+│   │       └── lib/config.ts            # AppConfig type
 │   └── mockup-sandbox/         # UI component playground
 ├── scripts/                    # Utility scripts (post-merge automation)
 ├── bunfig.toml                 # Bun workspace & security configuration
@@ -209,6 +197,7 @@ TraffiCOracle/
 ├── tsconfig.json               # TypeScript project references
 ├── tsconfig.base.json          # Shared TypeScript settings
 ├── bun.lock                    # Dependency lockfile (committed to VCS)
+├── .env.example                # Database connection template
 └── README.md                   # You are here
 ```
 
@@ -218,33 +207,36 @@ TraffiCOracle/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-|| `DATABASE_URL` | Only if using DB/API | PostgreSQL connection string (e.g., `postgresql://user:***@localhost:5432/dbname`) |
+| `DATABASE_URL` | Only if using DB/API | PostgreSQL connection string (e.g., `postgresql://user:***@localhost:5432/dbname`) |
 | `PORT` | Yes (dev) | Port for the dev server (dashboard uses `5173`, API uses `9000`) |
 | `BASE_PATH` | Yes (dev) | URL path prefix (use `/` for local development) |
 | `NODE_ENV` | No | `production` or `development` |
 | `REPL_ID` | No | Replit environment ID (only needed on Replit) |
 
-Create a `.env` file in the repository root with your values.
+Create a `.env` file in the repository root with your values. The dashboard does **not** need a `.env` file — it reads all settings from `config.json` and fetches data from GitHub.
 
 ---
 
 ## Key Commands Reference
 
 ### Typechecking
+
 ```bash
 bun run typecheck              # Check entire project
 bun run typecheck:libs         # Check shared libraries only
 ```
 
 ### Development
+
 ```bash
 bun install                         # Install dependencies
-cd lib/db && bun run push # Push database schema
-cd artifacts/api-server && bun run dev  # Start API
-cd artifacts/blr-traffic && bun run dev      # Start dashboard
+cd lib/db && bun run push           # Push database schema (optional)
+cd artifacts/api-server && bun run dev  # Start API (optional)
+cd artifacts/blr-traffic && bun run dev  # Start dashboard ← this is all you need
 ```
 
 ### Building
+
 ```bash
 bun run build                  # Build everything
 cd artifacts/api-server && bun run build    # Build API server
@@ -252,6 +244,7 @@ cd artifacts/blr-traffic && bun run build   # Build dashboard
 ```
 
 ### Database
+
 ```bash
 cd lib/db && bun run push      # Dev push (drops + recreates tables)
 cd lib/db && bun run migrate   # Generate SQL migration files
@@ -259,6 +252,7 @@ cd lib/db && bun run generate  # Generate Drizzle snapshots
 ```
 
 ### Regenerating API Client
+
 ```bash
 cd lib/api-spec && bun run codegen
 ```
@@ -301,6 +295,7 @@ The dashboard's `config.json` lives outside the `src/` directory. This is intent
 | Typecheck fails after pulling changes | Run `bun install` then `bun run typecheck` |
 | Database connection refused | Ensure PostgreSQL is running and `DATABASE_URL` is correct |
 | Stale build artifacts | Delete `dist/` directories and run `bun run build` again |
+| Dashboard shows no data | Check internet connection — data is fetched from GitHub |
 
 ---
 

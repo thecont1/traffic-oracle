@@ -1210,7 +1210,13 @@ function DashboardInner() {
           <div style={{ maxWidth:1320, margin:"0 auto", padding:"0.75rem 1.5rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:26 }}>🚦</span>
+              <img
+                src={thm.isDark
+                  ? "/trafficoracle-light.png"
+                  : "/trafficoracle-dark.png"}
+                alt="TraffiCOracle"
+                style={{ height:32, width:"auto", flexShrink:0 }}
+              />
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>
                   <span style={{

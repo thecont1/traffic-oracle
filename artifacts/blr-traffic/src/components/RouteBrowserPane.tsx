@@ -81,12 +81,13 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect,
+  card, thm, isSelected, onSelect, isLast,
 }: {
   card: RouteCardData;
   thm: AppTheme;
   isSelected: boolean;
   onSelect: (label: string) => void;
+  isLast: boolean;
 }) {
   const THRESHOLD = 0.5;
   const dir = card.delta !== null && !card.isBaseline
@@ -100,24 +101,16 @@ function RouteCard({
     : dir === "down" ? thm.speedBad
     : thm.textMuted;
 
-  let cardBg: string = thm.cardBg;
-  if (card.isTop3Worst) {
-    cardBg = thm.key === "colour" ? "rgba(240,138,93,0.08)"
-           : thm.key === "gray"   ? "rgba(0,0,0,0.04)"
-           : "rgba(224,106,62,0.07)";
+  let cardBg: string = "transparent";
+  if (isSelected) {
+    cardBg = thm.key === "colour" ? "rgba(125,183,232,0.08)"
+             : thm.key === "pastel" ? "rgba(58,134,200,0.07)"
+             : "rgba(0,0,0,0.03)";
+  } else if (card.isTop3Worst) {
+    cardBg = thm.key === "colour" ? "rgba(240,138,93,0.05)"
+           : thm.key === "pastel" ? "rgba(224,106,62,0.05)"
+           : "rgba(0,0,0,0.02)";
   }
-
-  const cardBorder = card.isBaseline
-    ? "1.5px solid #F59E0B"
-    : isSelected
-    ? `2px solid ${thm.chart.line1}`
-    : thm.cardBorder as string;
-
-  const selectedShadow = isSelected
-    ? (thm.key === "colour"
-        ? `0 0 0 1px ${thm.chart.line1}, 0 4px 16px rgba(125,183,232,0.15)`
-        : `0 0 0 1px ${thm.chart.line1}, 0 4px 16px rgba(58,134,200,0.12)`)
-    : thm.cardShadow as string;
 
   return (
     <div
@@ -127,43 +120,22 @@ function RouteCard({
         : undefined}
       style={{
         background: cardBg,
-        border: cardBorder,
-        boxShadow: selectedShadow,
-        borderRadius: 12,
-        padding: "9px 11px",
+        borderRadius: 8,
+        padding: "8px 10px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         gap: 4,
-        transition: "transform 0.12s, box-shadow 0.15s, border-color 0.15s",
+        transition: "background 0.15s",
         position: "relative",
       }}
-      onMouseEnter={e => {
-        const el = e.currentTarget;
-        el.style.transform = "translateY(-2px)";
-        if (!isSelected) el.style.boxShadow = "0 6px 20px rgba(0,0,0,0.14)";
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget;
-        el.style.transform = "";
-        el.style.boxShadow = selectedShadow;
-      }}
     >
-      {isSelected && (
-        <div style={{
-          position: "absolute", top: 8, right: 8,
-          width: 6, height: 6, borderRadius: "50%",
-          background: thm.chart.line1,
-          boxShadow: `0 0 6px ${thm.chart.line1}`,
-        }} />
-      )}
       {/* Row 1: title + delta badge */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
         <p style={{
           fontSize: 12, fontWeight: 700,
           color: isSelected ? thm.chart.line1 : thm.textPrimary,
           lineHeight: 1.3, margin: 0,
-          paddingRight: isSelected ? 12 : 0,
           transition: "color 0.15s",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           flex: 1, minWidth: 0,
@@ -186,15 +158,24 @@ function RouteCard({
           </span>
         )}
       </div>
-      {/* Row 2: small sparkline */}
+      {/* Row 2: sparkline */}
       <MiniSparkline points={card.sparkPoints} color={sparkColor} />
+      {/* Separator line — 80% width, centered */}
+      {!isLast && (
+        <div style={{
+          height: 1,
+          width: "80%",
+          margin: "4px auto 0",
+          background: thm.key === "colour" ? "rgba(71,65,60,0.12)" : "rgba(0,0,0,0.08)",
+        }} />
+      )}
     </div>
   );
 }
 
 /* ── Desktop slide-over pane ──────────────────────────────────── */
 function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle }: PaneProps) {
-  const PANE_WIDTH = 170;
+  const PANE_WIDTH = 200;
   const RAIL_WIDTH = 36;
 
   return (
@@ -260,9 +241,10 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 No routes found
               </p>
             ) : (
-              cards.map(card => (
+              cards.map((card, i) => (
                 <RouteCard key={card.label} card={card} thm={thm}
-                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect} />
+                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect}
+                  isLast={i === cards.length - 1} />
               ))
             )}
           </div>
@@ -355,9 +337,10 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 Computing route summaries…
               </p>
             ) : (
-              cards.map(card => (
+              cards.map((card, i) => (
                 <RouteCard key={card.label} card={card} thm={thm}
-                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect} />
+                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect}
+                  isLast={i === cards.length - 1} />
               ))
             )}
           </div>

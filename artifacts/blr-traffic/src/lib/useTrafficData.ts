@@ -17,7 +17,7 @@ const TRAFFIC_URL =
     : "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv";
 
 /** Append a cache-busting query param so CDNs never serve a stale copy. */
-function bust(url: string): string {
+export function bust(url: string): string {
   return `${url}?t=${Date.now()}`;
 }
 
@@ -67,7 +67,7 @@ export type TimeOfDay =
   | "weekends"
   | "all";
 
-function getCol(row: Record<string, string>, ...keys: string[]): string {
+export function getCol(row: Record<string, string>, ...keys: string[]): string {
   for (const k of keys) {
     if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
     const lk = k.toLowerCase().trim();
@@ -78,12 +78,12 @@ function getCol(row: Record<string, string>, ...keys: string[]): string {
   return "";
 }
 
-function parseNum(s: string): number {
+export function parseNum(s: string): number {
   const n = parseFloat(s.replace(/,/g, "").trim());
   return isNaN(n) ? 0 : n;
 }
 
-function toWeekKey(d: Date): string {
+export function toWeekKey(d: Date): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const mon = new Date(d.getFullYear(), d.getMonth(), diff);
@@ -93,7 +93,7 @@ function toWeekKey(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
-function percentile(sorted: number[], p: number): number {
+export function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = (p / 100) * (sorted.length - 1);
   const lower = Math.floor(idx);
@@ -139,7 +139,7 @@ export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
     });
 }
 
-function computeStats(rows: TrafficRow[]): StatsResult {
+export function computeStats(rows: TrafficRow[]): StatsResult {
   if (rows.length === 0)
     return { mean: 0, median: 0, p95: 0, avgSpeed: 0, count: 0 };
   const durations = rows.map((r) => r.duration_min).sort((a, b) => a - b);
@@ -155,7 +155,7 @@ function computeStats(rows: TrafficRow[]): StatsResult {
 
 /* ── Core fetch — uses fetch() with cache:'no-store' so browsers,
  * CDNs and proxies can never serve a stale CSV response. ──────────── */
-function fetchTrafficData(
+export function fetchTrafficData(
   signal: AbortSignal | undefined,
 ): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
   const fetchCsv = async (url: string): Promise<Record<string, string>[]> => {

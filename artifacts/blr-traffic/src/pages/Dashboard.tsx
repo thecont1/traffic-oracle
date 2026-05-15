@@ -1225,14 +1225,25 @@ function DashboardInner() {
 
             {lastUpdated && (
               <div style={{
-                fontSize:11, color: thm.textMuted,
-                display:"flex", alignItems:"center", gap:4,
+                textAlign: "right",
+                display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1,
               }}>
-                <span style={{ fontSize:12 }}>🕐</span>
-                {lastUpdated.toLocaleTimeString("en-IN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                <div style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+                  color: thm.textSecondary, textTransform: "uppercase",
+                }}>
+                  {lastUpdated.toLocaleDateString("en-IN", {
+                    weekday: "short", day: "2-digit", month: "short", year: "numeric",
+                  }).toUpperCase()}
+                </div>
+                <div style={{
+                  fontSize: 13, fontWeight: 800, color: thm.textPrimary,
+                  letterSpacing: 0.3,
+                }}>
+                  {lastUpdated.toLocaleTimeString("en-IN", {
+                    hour: "2-digit", minute: "2-digit", second: "2-digit",
+                  })}
+                </div>
               </div>
             )}
 

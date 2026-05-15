@@ -20,17 +20,18 @@ interface PaneProps {
   onToggle: () => void;
 }
 
-/* ── Sparkline ─────────────────────────────────────────────────── */
+/* ── Sparkline — responsive width ─────────────────────────────── */
 function MiniSparkline({ points, color }: { points: number[]; color: string }) {
-  if (points.length < 2) return <div style={{ width: 60, height: 28, flexShrink: 0 }} />;
-  const W = 60, H = 28, PY = 3;
+  if (points.length < 2) return <div style={{ height: 28, flexShrink: 0 }} />;
+  const H = 28, PY = 3;
   const minV  = Math.min(...points), maxV = Math.max(...points);
   const range = maxV - minV || 1;
-  const toX = (i: number) => (i / (points.length - 1)) * W;
   const toY = (v: number) => PY + (H - PY * 2) * (1 - (v - minV) / range);
-  const pts  = points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  const step = 100 / (points.length - 1);
+  const pts  = points.map((v, i) => `${(i * step).toFixed(1)}%,${toY(v).toFixed(1)}`).join(" ");
   return (
-    <svg width={W} height={H} style={{ display: "block", overflow: "visible", flexShrink: 0 }}>
+    <svg width="100%" height={H} viewBox={`0 0 100 ${H}`} preserveAspectRatio="none"
+      style={{ display: "block", overflow: "visible", flex: 1 }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5}
         strokeLinejoin="round" strokeLinecap="round" />
     </svg>
@@ -159,17 +160,17 @@ function RouteCard({
         <MiniSparkline points={card.sparkPoints} color={sparkColor} />
         {card.isBaseline ? (
           <span style={{ fontSize: 11, fontWeight: 700,
-            color: "#F59E0B", whiteSpace: "nowrap" }}>
+            color: "#F59E0B", whiteSpace: "nowrap", flexShrink: 0 }}>
             ⚡ Speed benchmark
           </span>
         ) : card.delta === null ? (
-          <span style={{ fontSize: 11, color: thm.textMuted }}>— no data</span>
+          <span style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0 }}>— no data</span>
         ) : Math.abs(card.delta) < THRESHOLD ? (
-          <span style={{ fontSize: 11, color: thm.textMuted }}>— steady</span>
+          <span style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0 }}>— steady</span>
         ) : (
           <span style={{ fontSize: 12, fontWeight: 700,
             color: card.delta > 0 ? thm.speedGood : thm.speedBad,
-            whiteSpace: "nowrap" }}>
+            whiteSpace: "nowrap", flexShrink: 0 }}>
             {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)} km/h
           </span>
         )}
@@ -182,84 +183,21 @@ function RouteCard({
 function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle }: PaneProps) {
   const PANE_WIDTH = 340;
   const RAIL_WIDTH = 40;
-  const HEADER_HEIGHT = 52; // approximate header height
 
   return (
     <div style={{
-      position: "fixed",
-      top: HEADER_HEIGHT,
-      right: 0,
-      bottom: 0,
-      zIndex: 400,
-      display: "flex",
+      flexShrink: 0,
       width: isOpen ? PANE_WIDTH + RAIL_WIDTH : RAIL_WIDTH,
       transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
       overflow: "hidden",
-      boxShadow: isOpen ? "-4px 0 24px rgba(0,0,0,0.08)" : "none",
+      display: "flex",
+      background: thm.sectionBg,
+      borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
     }}>
-      {/* Slim rail / handle — always visible */}
-      <div
-        onClick={onToggle}
-        title={isOpen ? "Close route browser" : "Browse all routes"}
-        style={{
-          width: RAIL_WIDTH,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          paddingTop: 18,
-          cursor: "pointer",
-          background: thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
-          borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-          transition: "background 0.2s",
-          position: "relative",
-          zIndex: 2,
-        }}
-        onMouseEnter={e => {
-          (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#2A2725" : thm.key === "pastel" ? "#EDE5D5" : "#eeeeee";
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
-        }}
-      >
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 6,
-          writingMode: "vertical-rl",
-          textOrientation: "mixed",
-          transform: "rotate(180deg)",
-        }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>🗺️</span>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: thm.textMuted,
-            whiteSpace: "nowrap",
-          }}>
-            Routes
-          </span>
-        </div>
-        <div style={{
-          marginTop: 12,
-          fontSize: 12,
-          color: thm.textMuted,
-          transform: isOpen ? "rotate(90deg)" : "rotate(-90deg)",
-          transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
-        }}>▸</div>
-      </div>
-
-      {/* Scrollable pane content */}
+      {/* Scrollable pane content — on the left */}
       <div style={{
         width: PANE_WIDTH,
         flexShrink: 0,
-        background: thm.sectionBg,
-        borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -341,6 +279,61 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             )}
           </div>
         </div>
+      </div>
+
+      {/* Slim rail / handle — on the right edge */}
+      <div
+        onClick={onToggle}
+        title={isOpen ? "Close route browser" : "Browse all routes"}
+        style={{
+          width: RAIL_WIDTH,
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          paddingTop: 18,
+          cursor: "pointer",
+          background: thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
+          borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+          transition: "background 0.2s",
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background =
+            thm.key === "colour" ? "#2A2725" : thm.key === "pastel" ? "#EDE5D5" : "#eeeeee";
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background =
+            thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
+        }}
+      >
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+          writingMode: "vertical-rl",
+          textOrientation: "mixed",
+          transform: "rotate(180deg)",
+        }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>🗺️</span>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: thm.textMuted,
+            whiteSpace: "nowrap",
+          }}>
+            Routes
+          </span>
+        </div>
+        <div style={{
+          marginTop: 12,
+          fontSize: 12,
+          color: thm.textMuted,
+          transform: isOpen ? "rotate(90deg)" : "rotate(-90deg)",
+          transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
+        }}>▸</div>
       </div>
     </div>
   );

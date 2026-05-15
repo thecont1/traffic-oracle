@@ -1067,7 +1067,7 @@ function DashboardInner() {
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className={thm.isDark ? "dark" : ""}>
-      <div className="min-h-screen transition-colors" style={{ background: thm.bodyBg }}>
+      <div className="min-h-screen transition-colors" style={{ background: thm.bodyBg, display: "flex", flexDirection: "column" }}>
 
         {/* ── Header ──────────────────────────────────────────── */}
         <header style={{
@@ -1075,6 +1075,7 @@ function DashboardInner() {
           backdropFilter: "blur(12px)",
           borderBottom: `1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
           position:"sticky", top:0, zIndex:500,
+          flexShrink: 0,
         }}>
           <div style={{ maxWidth:1320, margin:"0 auto", padding:"0.75rem 1.5rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
@@ -1170,25 +1171,30 @@ function DashboardInner() {
           </div>
         </header>
 
-        {/* ── Route browser pane: desktop hangs from header, mobile is bottom sheet ── */}
-        {!isMobile && (
-          <RouteBrowserPane
-            cards={allRouteCards}
-            selectedRoute={selectedRoute}
-            onRouteSelect={handleRouteSelectFromPane}
-            mobile={false}
-          />
-        )}
+        {/* ── Below-header area: main content + route pane ─────────── */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
-        {/* ── Main content ────────────────────────────────────────── */}
-        <main style={{
-          maxWidth: isMobile ? "100%" : 1320,
-          margin: "0 auto",
-          padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.5rem",
-        }}>
+          {/* ── Route browser pane (desktop) ──────────────────────── */}
+          {!isMobile && (
+            <RouteBrowserPane
+              cards={allRouteCards}
+              selectedRoute={selectedRoute}
+              onRouteSelect={handleRouteSelectFromPane}
+              mobile={false}
+            />
+          )}
+
+          {/* ── Main content ──────────────────────────────────────── */}
+          <main style={{
+            flex: 1,
+            minWidth: 0,
+            maxWidth: isMobile ? "100%" : 1320,
+            margin: "0 auto",
+            padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.5rem",
+          }}>
 
           {/* ── Hero question ────────────────────────────────── */}
           <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem" }}>
@@ -1583,6 +1589,8 @@ function DashboardInner() {
           )}
 
         </main>
+
+        </div>
 
         {/* ── Mobile route browser (bottom sheet) ──────────────────── */}
       {isMobile && (

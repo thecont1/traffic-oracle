@@ -1197,13 +1197,13 @@ function DashboardInner() {
               justifyContent:"center", gap:"0.3em",
             }}>
               <span>Has traffic</span>
-              <Chip icon={questionMode==="worsened"?"":"✅"} variant={questionMode}
+              <Chip icon={questionMode==="worsened"?"👎":"👍"} variant={questionMode}
                 onClick={toggleMode} animate={!!chipAnim.mode}>{questionMode}</Chip>
               <span>on</span>
-              <Chip icon="🛣️" variant="route"
+              <Chip icon="🚦" variant="route"
                 onClick={nextRoute} animate={!!chipAnim.route}>{selectedRoute}</Chip>
               <span>during</span>
-              <Chip icon="⏰" variant="tod"
+              <Chip icon="⏱️" variant="tod"
                 onClick={nextTod} animate={!!chipAnim.tod}>{todLabel}</Chip>
               <span>over the past</span>
               <Chip icon="📅" variant="period"

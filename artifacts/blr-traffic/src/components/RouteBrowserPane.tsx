@@ -129,12 +129,12 @@ function RouteCard({
         background: cardBg,
         border: cardBorder,
         boxShadow: selectedShadow,
-        borderRadius: 14,
-        padding: "11px 13px",
+        borderRadius: 12,
+        padding: "9px 11px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 7,
+        gap: 4,
         transition: "transform 0.12s, box-shadow 0.15s, border-color 0.15s",
         position: "relative",
       }}
@@ -151,47 +151,51 @@ function RouteCard({
     >
       {isSelected && (
         <div style={{
-          position: "absolute", top: 10, right: 10,
-          width: 7, height: 7, borderRadius: "50%",
+          position: "absolute", top: 8, right: 8,
+          width: 6, height: 6, borderRadius: "50%",
           background: thm.chart.line1,
           boxShadow: `0 0 6px ${thm.chart.line1}`,
         }} />
       )}
-      <p style={{
-        fontSize: 13, fontWeight: 700,
-        color: isSelected ? thm.chart.line1 : thm.textPrimary,
-        lineHeight: 1.3, margin: 0,
-        paddingRight: isSelected ? 14 : 0,
-        transition: "color 0.15s",
-      }}>
-        {card.label}
-      </p>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <MiniSparkline points={card.sparkPoints} color={sparkColor} />
+      {/* Row 1: title + delta badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        <p style={{
+          fontSize: 12, fontWeight: 700,
+          color: isSelected ? thm.chart.line1 : thm.textPrimary,
+          lineHeight: 1.3, margin: 0,
+          paddingRight: isSelected ? 12 : 0,
+          transition: "color 0.15s",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          flex: 1, minWidth: 0,
+        }}>
+          {card.label}
+        </p>
         {card.isBaseline ? (
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", whiteSpace: "nowrap", flexShrink: 0 }}>
-            ⚡ Speed benchmark
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", whiteSpace: "nowrap", flexShrink: 0 }}>
+            ⚡ benchmark
           </span>
         ) : card.delta === null ? (
-          <span style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0 }}>— no data</span>
+          <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>—</span>
         ) : Math.abs(card.delta) < THRESHOLD ? (
-          <span style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0 }}>— steady</span>
+          <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>steady</span>
         ) : (
-          <span style={{ fontSize: 12, fontWeight: 700,
+          <span style={{ fontSize: 11, fontWeight: 700,
             color: card.delta > 0 ? thm.speedGood : thm.speedBad,
             whiteSpace: "nowrap", flexShrink: 0 }}>
-            {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)} km/h
+            {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)}
           </span>
         )}
       </div>
+      {/* Row 2: small sparkline */}
+      <MiniSparkline points={card.sparkPoints} color={sparkColor} />
     </div>
   );
 }
 
 /* ── Desktop slide-over pane ──────────────────────────────────── */
 function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle }: PaneProps) {
-  const PANE_WIDTH = 340;
-  const RAIL_WIDTH = 40;
+  const PANE_WIDTH = 170;
+  const RAIL_WIDTH = 36;
 
   return (
     <div style={{

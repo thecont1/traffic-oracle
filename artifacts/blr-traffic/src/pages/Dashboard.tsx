@@ -1086,15 +1086,19 @@ function DashboardInner() {
               />
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>
-                  <Chip icon="📍" variant="city" onClick={() => {}} inert>Bangalore</Chip>
+                  <div style={{ height: 34, display: "inline-flex", alignItems: "center" }}>
+                    <Chip icon="📍" variant="city" onClick={() => {}} inert>Bangalore</Chip>
+                  </div>
                 </div>
               </div>
             </div>
 
             {lastUpdated && (
               <div style={{
-                textAlign: "right",
-                display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1,
+                textAlign: "center",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                marginLeft: "auto",
+                marginRight: 12,
               }}>
                 <div style={{
                   fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
@@ -1166,25 +1170,25 @@ function DashboardInner() {
           </div>
         </header>
 
-        {/* ── Main content + route browser pane ─────────────────── */}
-        <div style={{
+        {/* ── Route browser pane: desktop hangs from header, mobile is bottom sheet ── */}
+        {!isMobile && (
+          <RouteBrowserPane
+            cards={allRouteCards}
+            selectedRoute={selectedRoute}
+            onRouteSelect={handleRouteSelectFromPane}
+            mobile={false}
+          />
+        )}
+
+        {/* ── Main content ────────────────────────────────────────── */}
+        <main style={{
+          maxWidth: isMobile ? "100%" : 1320,
+          margin: "0 auto",
+          padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
           display: "flex",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
+          flexDirection: "column",
+          gap: "1.5rem",
         }}>
-          {/* ── Main content column ──────────────────────────────── */}
-          <main style={{
-            flex: 1,
-            minWidth: 0,
-            maxWidth: isMobile ? "100%" : 1320,
-            margin: "0 auto",
-            padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1.5rem",
-            overflowY: isMobile ? "auto" : "visible",
-          }}>
 
           {/* ── Hero question ────────────────────────────────── */}
           <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem" }}>
@@ -1578,19 +1582,9 @@ function DashboardInner() {
             </>
           )}
 
-          {/* ── Route browser pane (desktop: right slide-over, mobile: bottom sheet) ── */}
-          {!isMobile && (
-            <RouteBrowserPane
-              cards={allRouteCards}
-              selectedRoute={selectedRoute}
-              onRouteSelect={handleRouteSelectFromPane}
-              mobile={false}
-            />
-          )}
         </main>
-      </div>
 
-      {/* ── Mobile route browser (bottom sheet) ──────────────────── */}
+        {/* ── Mobile route browser (bottom sheet) ──────────────────── */}
       {isMobile && (
         <RouteBrowserPane
           cards={allRouteCards}

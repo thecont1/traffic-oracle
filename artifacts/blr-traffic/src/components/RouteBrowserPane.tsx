@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 
@@ -182,15 +182,20 @@ function RouteCard({
 function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle }: PaneProps) {
   const PANE_WIDTH = 340;
   const RAIL_WIDTH = 40;
+  const HEADER_HEIGHT = 52; // approximate header height
 
   return (
     <div style={{
-      position: "relative",
-      flexShrink: 0,
+      position: "fixed",
+      top: HEADER_HEIGHT,
+      right: 0,
+      bottom: 0,
+      zIndex: 400,
+      display: "flex",
       width: isOpen ? PANE_WIDTH + RAIL_WIDTH : RAIL_WIDTH,
       transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
       overflow: "hidden",
-      display: "flex",
+      boxShadow: isOpen ? "-4px 0 24px rgba(0,0,0,0.08)" : "none",
     }}>
       {/* Slim rail / handle — always visible */}
       <div

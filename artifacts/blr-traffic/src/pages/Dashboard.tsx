@@ -953,6 +953,10 @@ function DashboardInner() {
   const baselineEndDate   = allRouteWeeks[safeRight]?.weekKey;
   const recentStartDate   = recentWeeks[0]?.weekKey;
   const lastDate          = allRouteWeeks[allRouteWeeks.length - 1]?.weekKey;
+  /** Actual last data point in the ToD-filtered dataset — may be later than
+   *  the last week's weekKey (e.g. weekKey is Monday May 11 but last row is Friday May 15).
+   *  Used for display only so the slider boundary matches what the user sees in the header. */
+  const lastDataDate = allRouteWeeks[allRouteWeeks.length - 1]?.lastDate;
 
   /* ── Route browser pane state ─────────────────────────────────── */
   const allRouteCardsRef = useRef<RouteCardData[] | null>(null);
@@ -1063,7 +1067,7 @@ function DashboardInner() {
   const colors = thm.chart;
 
   const verdictSubtext = verdictKey !== "insufficient" && baselineStartDate
-    ? `Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${fmtShortDate(lastDate)}) · ${routeEndpoints} · ${todLabel}`
+    ? `Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${lastDataDate ? fmtShortDate(lastDataDate.toISOString()) : fmtShortDate(lastDate)}) · ${routeEndpoints} · ${todLabel}`
     : undefined;
 
   /* ── Shared KPI card/label/value styles ─────────────────────── */
@@ -1385,7 +1389,7 @@ function DashboardInner() {
                   <div style={{ display:"flex", justifyContent:"space-between",
                     fontSize:10, fontWeight:400, color: thm.textMuted, marginTop:6 }}>
                     <span>{fmtDate(allRouteWeeks[0]?.weekKey)}</span>
-                    <span>{fmtDate(lastDate)}</span>
+                    <span>{lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate)}</span>
                   </div>
 
                   {/* Overlap warning */}
@@ -1445,7 +1449,7 @@ function DashboardInner() {
                           bStart: fmtDate(baselineStartDate),
                           bEnd:   fmtDate(baselineEndDate),
                           rStart: fmtDate(recentStartDate),
-                          rEnd:   fmtDate(lastDate),
+                          rEnd:   lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate),
                         }}
                       />
                     </div>

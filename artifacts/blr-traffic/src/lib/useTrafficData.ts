@@ -42,6 +42,10 @@ export interface TrafficRow {
 export interface WeeklyAggregate {
   weekKey: string;
   weekStart: Date;
+  /** Actual last timestamp of any row in this week — may be later than weekStart
+   *  (e.g. weekKey "2026-05-04" runs Mon–Sun but the last data row could be Friday).
+   *  Used for display so the slider shows the real data boundary, not the ISO week start. */
+  lastDate: Date;
   avgSpeed: number;
   avgDuration: number;
   medianDuration: number;
@@ -130,6 +134,7 @@ export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
       return {
         weekKey,
         weekStart: new Date(weekKey),
+        lastDate: new Date(wrows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0)),
         avgSpeed: Math.round(avgSpeed * 10) / 10,
         avgDuration: Math.round(avgDuration * 10) / 10,
         medianDuration: Math.round(percentile(durations, 50) * 10) / 10,

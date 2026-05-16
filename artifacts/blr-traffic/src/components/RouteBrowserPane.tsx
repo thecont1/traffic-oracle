@@ -30,11 +30,11 @@ function InfoTip({ thm }: { thm: AppTheme }) {
 type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
 
 interface RouteTODStats {
-  min: number;
-  max: number;
-  mean: number;
-  median: number;
-  std: number;
+  p10: number;
+  p15: number;
+  p50: number;
+  p85: number;
+  p90: number;
   count: number;
 }
 
@@ -121,12 +121,13 @@ function TrafficNowBar({
   const rangeColor = thm.key === 'gray' ? '#CCCCCC' : 'rgba(0,0,0,0.2)';
   const typicalColor = thm.key === 'gray' ? '#999999' : 'rgba(0,0,0,0.15)';
   
-  // Calculate positions on the city-wide scale
+  // Calculate positions on the city-wide scale using percentiles
   const cityRange = cityMax - cityMin || 1;
   const livePos = hasData ? ((liveSpeed! - cityMin) / cityRange) * 100 : 50;
-  const typicalMinPos = hasData ? ((typical!.min - cityMin) / cityRange) * 100 : 30;
-  const typicalMaxPos = hasData ? ((typical!.max - cityMin) / cityRange) * 100 : 70;
-  const typicalMeanPos = hasData ? ((typical!.mean - cityMin) / cityRange) * 100 : 50;
+  // Use p15-p85 as the "typical" range (70% of observations, excludes outliers)
+  const typicalMinPos = hasData ? ((typical!.p15 - cityMin) / cityRange) * 100 : 30;
+  const typicalMaxPos = hasData ? ((typical!.p85 - cityMin) / cityRange) * 100 : 70;
+  const typicalMedianPos = hasData ? ((typical!.p50 - cityMin) / cityRange) * 100 : 50;
   
   // Format speed
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
@@ -185,11 +186,11 @@ function TrafficNowBar({
           }} />
         )}
         
-        {/* Typical mean marker (small tick in the box) */}
+        {/* Typical median marker (small tick in the box) */}
         {hasData && (
           <div style={{
             position: 'absolute',
-            left: `${typicalMeanPos}%`,
+            left: `${typicalMedianPos}%`,
             top: 4,
             width: 2,
             height: 6,
@@ -476,7 +477,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "8px 6px",
+            height: "100%", overflowY: "auto", padding: "8px 2px",
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (
@@ -574,7 +575,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "6px 10px 12px",
+            height: "100%", overflowY: "auto", padding: "6px 4px 12px",
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (

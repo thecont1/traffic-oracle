@@ -791,12 +791,13 @@ function CalendarWidget({
 type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
 
 // Statistics for a route's typical behavior at a given time-of-day
+// Uses percentiles (industry standard) instead of std dev because traffic data is skewed
 interface RouteTODStats {
-  min: number;
-  max: number;
-  mean: number;
-  median: number;
-  std: number;
+  p10: number;    // 10th percentile - fast end of typical
+  p15: number;    // 15th percentile
+  p50: number;    // Median - typical center
+  p85: number;    // 85th percentile
+  p90: number;    // 90th percentile - slow end of typical
   count: number;
 }
 
@@ -819,23 +820,20 @@ interface RouteCardData {
   sortKey: string;
 }
 
-/** Compute live status based on how current speed compares to typical TOD range */
+/** Compute live status based on percentiles - industry standard for traffic */
 function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | null): { status: LiveStatus; statusText: string } {
   if (liveSpeed === null || typical === null) {
     return { status: 'no-data', statusText: 'no data' };
   }
   
-  // Calculate standard deviations from mean
-  const stdDevs = typical.std > 0 ? (liveSpeed - typical.mean) / typical.std : 0;
+  // Use percentile-based thresholds (industry standard for skewed traffic data)
+  // p15-p85 covers the "typical" 70% of observations (excludes outliers)
+  // p10-p90 covers the "normal" 80% of observations
   
-  // Thresholds based on standard deviations from typical
-  // ±0.5 std dev = "as expected" (within normal variance)
-  // ±0.5 to ±1.5 = slightly faster/slower
-  // > ±1.5 = much faster/slower
-  if (stdDevs > 1.5) return { status: 'much-faster', statusText: 'much faster than typical' };
-  if (stdDevs > 0.5) return { status: 'faster', statusText: 'faster than typical' };
-  if (stdDevs < -1.5) return { status: 'much-slower', statusText: 'much slower than typical' };
-  if (stdDevs < -0.5) return { status: 'slower', statusText: 'slower than typical' };
+  if (liveSpeed > typical.p90) return { status: 'much-faster', statusText: 'much faster than typical' };
+  if (liveSpeed > typical.p85) return { status: 'faster', statusText: 'faster than typical' };
+  if (liveSpeed < typical.p10) return { status: 'much-slower', statusText: 'much slower than typical' };
+  if (liveSpeed < typical.p15) return { status: 'slower', statusText: 'slower than typical' };
   return { status: 'as-expected', statusText: 'as expected for this hour' };
 }
 
@@ -865,15 +863,28 @@ function computeTODStats(
   
   if (relevantRows.length < 3) return null;
   
+  // Sort speeds for percentile calculation
   const speeds = relevantRows.map(r => r.speed_kmh).sort((a, b) => a - b);
-  const min = speeds[0];
-  const max = speeds[speeds.length - 1];
-  const mean = speeds.reduce((s, v) => s + v, 0) / speeds.length;
-  const median = speeds[Math.floor(speeds.length / 2)];
-  const variance = speeds.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / speeds.length;
-  const std = Math.sqrt(variance);
+  const n = speeds.length;
   
-  return { min, max, mean, median, std, count: speeds.length };
+  // Percentile calculation using linear interpolation
+  const percentile = (p: number) => {
+    const idx = (p / 100) * (n - 1);
+    const lower = Math.floor(idx);
+    const upper = Math.ceil(idx);
+    const weight = idx - lower;
+    if (upper >= n) return speeds[n - 1];
+    return speeds[lower] * (1 - weight) + speeds[upper] * weight;
+  };
+  
+  return {
+    p10: percentile(10),
+    p15: percentile(15),
+    p50: percentile(50),  // Median
+    p85: percentile(85),
+    p90: percentile(90),
+    count: n,
+  };
 }
 
 function computeAllRouteCards(

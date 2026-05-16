@@ -6,19 +6,21 @@ import type { AppTheme } from "@/lib/theme";
 function InfoTip({ thm }: { thm: AppTheme }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
       <button
-        onClick={() => setOpen(v => !v)}
         aria-label="How to read these charts"
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 18, height: 18, borderRadius: "50%",
           border: `1.5px solid ${open ? thm.chart.line1 : thm.textMuted}`,
-          fontSize: 10, fontWeight: 700, cursor: "pointer",
+          fontSize: 10, fontWeight: 700, cursor: "help",
           color: open ? thm.chart.line1 : thm.textMuted,
           background: open ? (thm.key === "colour" ? "rgba(125,183,232,0.12)" : "rgba(58,134,200,0.08)") : "transparent",
           flexShrink: 0, lineHeight: 1, padding: 0,
           transition: "all 0.15s",
+          pointerEvents: "none",
         }}
       >i</button>
       {open && (
@@ -36,6 +38,7 @@ function InfoTip({ thm }: { thm: AppTheme }) {
           width: 240,
           zIndex: 200,
           animation: "callout-in 0.2s cubic-bezier(0.4,0,0.2,1) both",
+          pointerEvents: "none",
         }}>
           {/* Arrow pointer */}
           <div aria-hidden style={{
@@ -56,19 +59,16 @@ function InfoTip({ thm }: { thm: AppTheme }) {
             marginTop: 1,
           }} />
           <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12 }}>
-            How to read these charts
+            Speed Snapshot
           </p>
           <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            Each mini chart shows <strong style={{ color: thm.textPrimary }}>daily average speed (km/h)</strong> for that route, over the last 60 days.
+            <strong style={{ color: thm.textPrimary }}>Two-State Comparison.</strong> In each card, the left segment is your baseline period, right segment is recent 4 weeks.
           </p>
           <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>Higher = faster.</strong> The Y-axis is auto-scaled to each route's own range — compare trends, not absolute speeds across routes.
+            <strong style={{ color: thm.textPrimary }}>Wider = faster.</strong> Segment width shows relative speed, not absolute values. Colors indicate the trend direction.
           </p>
           <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            The <strong style={{ color: thm.textPrimary }}>▲ / ▼ badge</strong> shows how the last 4 weeks compare to your baseline window (set by the slider). The number is the speed difference in km/h.
-          </p>
-          <p style={{ margin: 0, color: thm.textMuted, fontSize: 10, fontStyle: "italic" }}>
-            ⚡ Benchmark = the fastest route, sets what's achievable without breaking traffic laws.
+            <strong style={{ color: thm.textPrimary }}>60-day smoothed trend line</strong> (on hover). <strong style={{ color: thm.speedGood }}>positive</strong> = getting faster, <strong style={{ color: thm.speedBad }}>negative</strong> = getting slower, neutral = flat overall.
           </p>
         </div>
       )}
@@ -77,14 +77,24 @@ function InfoTip({ thm }: { thm: AppTheme }) {
 }
 
 /* ── Types ─────────────────────────────────────────────────────── */
+type StatusGroup = 'much-slower' | 'slower' | 'steady' | 'faster' | 'much-faster' | 'no-data';
+
 interface RouteCardData {
   label: string;
   origin: string;
   destination: string;
   sparkPoints: number[];
-  delta: number | null;
-  isBaseline: boolean;
-  isTop3Worst: boolean;
+  // Comparison data for two-state bar
+  baselineAvg: number;
+  recentAvg: number;
+  comparisonDelta: number | null;
+  // Status grouping and display
+  statusGroup: StatusGroup;
+  statusText: string; // "much slower", "slower", "steady", "faster", "much faster", "no data"
+  // Trend description for hover state
+  trendText: string; // "a bit faster lately", "flat overall", "slowing down lately", etc.
+  // For stable sorting tiebreaker
+  sortKey: string;
 }
 
 interface PaneProps {
@@ -95,51 +105,6 @@ interface PaneProps {
   isOpen: boolean;
   onToggle: () => void;
   paneWidth: number;
-}
-
-/* ── Sparkline — responsive via ResizeObserver ─────────────────── */
-function MiniSparkline({ points, color, isSelected, thm }: {
-  points: number[]; color: string; isSelected: boolean; thm: AppTheme;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(160);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(entries => {
-      const bw = entries[0]?.contentRect.width;
-      if (bw && bw > 0) setW(Math.round(bw));
-    });
-    obs.observe(el);
-    setW(el.getBoundingClientRect().width || 160);
-    return () => obs.disconnect();
-  }, []);
-
-  if (points.length < 2) return <div ref={containerRef} style={{ height: 22, flex: 1 }} />;
-
-  const H = 22, PY = 2;
-  const minV = Math.min(...points), maxV = Math.max(...points);
-  const range = maxV - minV || 1;
-  const toX = (i: number) => (i / (points.length - 1)) * w;
-  const toY = (v: number) => PY + (H - PY * 2) * (1 - (v - minV) / range);
-  const pts = points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-
-  // WCAG contrast: selected gets full color + thicker stroke,
-  // non-selected gets a muted but still visible color
-  const strokeWidth = isSelected ? 2.5 : 1.5;
-  const strokeColor = isSelected
-    ? color
-    : thm.key === "colour" ? "rgba(140,126,107,0.45)" : "rgba(0,0,0,0.2)";
-
-  return (
-    <div ref={containerRef} style={{ flex: 1, minWidth: 30, height: H }}>
-      <svg width={w} height={H} style={{ display: "block", overflow: "visible" }}>
-        <polyline points={pts} fill="none" stroke={strokeColor} strokeWidth={strokeWidth}
-          strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-    </div>
-  );
 }
 
 /* ── Progressive blur edge ─────────────────────────────────────── */
@@ -157,6 +122,200 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
   );
 }
 
+/* ── Two-state comparison bar (default view) ───────────────────── */
+function TwoStateBar({ 
+  baselineAvg, 
+  recentAvg, 
+  statusGroup,
+  thm 
+}: { 
+  baselineAvg: number; 
+  recentAvg: number; 
+  statusGroup: StatusGroup;
+  thm: AppTheme;
+}) {
+  // Fixed-size bar - segments show relative proportion, not absolute speeds
+  const hasData = baselineAvg > 0 && recentAvg > 0;
+  const maxSpeed = Math.max(baselineAvg, recentAvg, 1);
+  const baselineWidth = hasData ? (baselineAvg / maxSpeed) * 50 : 50; // 50% max each side
+  const recentWidth = hasData ? (recentAvg / maxSpeed) * 50 : 50;
+  
+  // Colors based on statusGroup - per theme specs from user
+  const getRecentColor = () => {
+    if (!hasData) return thm.textMuted;
+    
+    // Theme-specific color palettes as specified by user
+    if (thm.key === 'gray') {
+      // Scale me gray!: strict grayscale, use line weight for status
+      switch (statusGroup) {
+        case 'much-faster':
+        case 'faster': return '#E2E2E2'; // Lighter = better
+        case 'much-slower':
+        case 'slower': return '#6B6B6B'; // Darker = worse (but still gray)
+        case 'steady':
+        default: return '#AAAAAA';
+      }
+    }
+    
+    if (thm.key === 'pastel') {
+      // Clear as day!: blue family default, sparing green/orange
+      switch (statusGroup) {
+        case 'much-faster':
+        case 'faster': return '#8CCB7A'; // Improvement accent (sparing)
+        case 'much-slower':
+        case 'slower': return '#F2A65A'; // Worsening accent (sparing)
+        case 'steady':
+        default: return '#6FA8DC'; // Recent/change default
+      }
+    }
+    
+    // Colour me surprised!: dark with hard colours
+    switch (statusGroup) {
+      case 'much-faster':
+      case 'faster': return '#4CD964'; // Hard green
+      case 'much-slower':
+      case 'slower': return '#FF8A3D'; // Hard orange
+      case 'steady':
+      default: return '#4DA3FF'; // Recent/change default
+    }
+  };
+  
+  const getBaselineColor = () => {
+    if (thm.key === 'gray') return '#6B6B6B'; // Earlier/reference
+    if (thm.key === 'pastel') return '#A9B7C6'; // Earlier/reference
+    return '#5F6B7A'; // Colour: earlier/reference
+  };
+  
+  const baselineColor = getBaselineColor();
+  const recentColor = getRecentColor();
+  
+  return (
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: 2,
+      height: 8,
+      width: '100%',
+    }}>
+      {/* Earlier segment (left) */}
+      <div style={{
+        width: `${baselineWidth}%`,
+        height: '100%',
+        background: baselineColor,
+        borderRadius: '2px 0 0 2px',
+        opacity: 0.7,
+      }} />
+      {/* Recent segment (right) */}
+      <div style={{
+        width: `${recentWidth}%`,
+        height: '100%',
+        background: recentColor,
+        borderRadius: '0 2px 2px 0',
+        opacity: 0.9,
+      }} />
+    </div>
+  );
+}
+
+/** Compute 7-day rolling average for smoothing */
+function computeRollingAverage(points: number[], windowSize: number = 7): number[] {
+  if (points.length < windowSize) return points;
+  
+  const result: number[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const start = Math.max(0, i - windowSize + 1);
+    const window = points.slice(start, i + 1);
+    const avg = window.reduce((sum, v) => sum + v, 0) / window.length;
+    result.push(avg);
+  }
+  return result;
+}
+
+/* ── Mini line chart for hover state ──────────────────────────── */
+function MiniLineChart({ 
+  points, 
+  thm,
+  startLabel,
+  endLabel,
+  trendText,
+}: { 
+  points: number[]; 
+  thm: AppTheme;
+  startLabel: string;
+  endLabel: string;
+  trendText: string;
+}) {
+  if (points.length < 2) return null;
+  
+  const W = 200;  // Wider viewBox for smoother curves when stretched
+  const H = 40;
+  const PAD = 4;  // Vertical padding only
+  
+  // Compute smoothed 7-day rolling average
+  const smoothedPoints = computeRollingAverage(points, 7);
+  
+  // Use combined range for consistent scaling
+  const allValues = [...points, ...smoothedPoints];
+  const minV = Math.min(...allValues);
+  const maxV = Math.max(...allValues);
+  const range = maxV - minV || 1;
+  
+  // Full-width X: no horizontal padding, spans entire viewBox
+  const toX = (i: number, len: number) => (i / (len - 1)) * W;
+  // Y with vertical padding only
+  const toY = (v: number) => PAD + (H - PAD * 2) * (1 - (v - minV) / range);
+  
+  // Raw line path (faint)
+  const rawD = points.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i, points.length).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ');
+  
+  // Smoothed line path (prominent)
+  const smoothD = smoothedPoints.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i, smoothedPoints.length).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ');
+  
+  // Color for smoothed line based on trend direction
+  const getTrendColor = () => {
+    if (trendText.includes('faster')) return thm.speedGood;
+    if (trendText.includes('slower')) return thm.speedBad;
+    return thm.chart.line1;
+  };
+  
+  return (
+    <div style={{ width: '100%', marginTop: 4 }}>
+      <svg width="calc(100% + 24px)" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', marginLeft: -12, marginRight: -12 }}>
+        {/* Raw line - faint background texture */}
+        <path 
+          d={rawD} 
+          fill="none" 
+          stroke={thm.textMuted}
+          strokeWidth={1}
+          strokeOpacity={0.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Smoothed line - primary signal */}
+        <path 
+          d={smoothD} 
+          fill="none" 
+          stroke={getTrendColor()}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 8,
+        color: thm.textMuted,
+        marginTop: 2,
+      }}>
+        <span>{startLabel}</span>
+        <span>{endLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
   card, thm, isSelected, onSelect, isLast,
@@ -165,14 +324,33 @@ function RouteCard({
   onSelect: (label: string) => void; isLast: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
-  const THRESHOLD = 0.5;
-  const dir = card.delta !== null && !card.isBaseline
-    ? card.delta > THRESHOLD ? "up" : card.delta < -THRESHOLD ? "down" : "flat"
-    : "flat";
-  const sparkColor = card.isBaseline
-    ? (thm.key === "colour" ? "#7DB7E8" : "#8A8176")
-    : dir === "up" ? thm.speedGood : dir === "down" ? thm.speedBad : thm.textMuted;
-
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleMouseEnter = useCallback(() => {
+    // Clear any pending close timeout
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHovered(true);
+  }, []);
+  
+  const handleMouseLeave = useCallback(() => {
+    // Delay closing by 500ms for better UX
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHovered(false);
+    }, 500);
+  }, []);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+  
   // Full-width background: selected gets strong tint, hover gets subtle tint
   let cardBg = "transparent";
   if (isSelected) {
@@ -183,24 +361,41 @@ function RouteCard({
     cardBg = thm.key === "colour" ? "rgba(125,183,232,0.08)"
              : thm.key === "pastel" ? "rgba(58,134,200,0.07)"
              : "rgba(0,0,0,0.04)";
-  } else if (card.isTop3Worst) {
-    cardBg = thm.key === "colour" ? "rgba(240,138,93,0.06)"
-             : thm.key === "pastel" ? "rgba(224,106,62,0.05)"
-             : "rgba(0,0,0,0.03)";
   }
 
   const endpoints = card.destination
     ? `${card.origin} → ${card.destination}`
     : card.origin;
+  
+  // Compute date labels for mini chart
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const today = new Date();
+  const startLabel = sixtyDaysAgo.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+  const endLabel = today.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+  
+  // Status text color - per theme specs
+  const getStatusColor = () => {
+    if (thm.key === 'gray') {
+      // Scale me gray!: use weight/contrast instead of hue
+      return thm.textPrimary;
+    }
+    
+    // For pastel and colour: use semantic colors sparingly
+    switch (card.statusGroup) {
+      case 'much-faster':
+      case 'faster': return thm.speedGood;
+      case 'much-slower':
+      case 'slower': return thm.speedBad;
+      default: return thm.textMuted;
+    }
+  };
 
   return (
     <div
       onClick={() => onSelect(card.label)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={card.isBaseline
-        ? "The fastest road in Bangalore — sets the upper bound for what's achievable without breaking traffic laws."
-        : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
         background: cardBg,
         borderRadius: 6,
@@ -208,11 +403,11 @@ function RouteCard({
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 4,
         transition: "background 0.12s",
       }}
     >
-      {/* Row 1: short name + delta */}
+      {/* Row 1: route name + status */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
         <p style={{
           fontSize: 12, fontWeight: 700,
@@ -224,22 +419,18 @@ function RouteCard({
         }}>
           {card.label}
         </p>
-        {card.isBaseline ? (
-          <span style={{ fontSize: 9, fontWeight: 700, color: "#F59E0B", whiteSpace: "nowrap", flexShrink: 0 }}>
-            ⚡ benchmark
-          </span>
-        ) : card.delta === null ? (
-          <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>—</span>
-        ) : Math.abs(card.delta) < THRESHOLD ? (
-          <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>steady</span>
-        ) : (
-          <span style={{ fontSize: 11, fontWeight: 700,
-            color: card.delta > 0 ? thm.speedGood : thm.speedBad,
-            whiteSpace: "nowrap", flexShrink: 0 }}>
-            {card.delta > 0 ? "▲" : "▼"} {Math.abs(card.delta).toFixed(1)}
-          </span>
-        )}
+        <span style={{ 
+          fontSize: 9, 
+          fontWeight: 500,
+          color: getStatusColor(),
+          whiteSpace: "nowrap", 
+          flexShrink: 0,
+          fontStyle: 'italic',
+        }}>
+          {card.trendText}
+        </span>
       </div>
+      
       {/* Row 2: origin → destination */}
       <p style={{
         fontSize: 10, color: thm.textMuted,
@@ -248,8 +439,34 @@ function RouteCard({
       }}>
         {endpoints}
       </p>
-      {/* Row 3: sparkline */}
-      <MiniSparkline points={card.sparkPoints} color={sparkColor} isSelected={isSelected} thm={thm} />
+      
+      {/* Row 3: Two-state comparison bar (always visible) */}
+      <TwoStateBar 
+        baselineAvg={card.baselineAvg} 
+        recentAvg={card.recentAvg}
+        statusGroup={card.statusGroup}
+        thm={thm}
+      />
+      
+      {/* Row 4: Additive mini line chart on hover - with gentle smooth transition */}
+      {card.sparkPoints.length > 1 && (
+        <div style={{
+          maxHeight: hovered ? 60 : 0,
+          opacity: hovered ? 1 : 0,
+          overflow: 'hidden',
+          marginTop: hovered ? 2 : 0,
+          transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.3s ease',
+        }}>
+          <MiniLineChart 
+            points={card.sparkPoints}
+            thm={thm}
+            startLabel={startLabel}
+            endLabel={endLabel}
+            trendText={card.trendText}
+          />
+        </div>
+      )}
+      
       {/* Separator */}
       {!isLast && (
         <div style={{

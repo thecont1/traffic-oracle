@@ -815,9 +815,6 @@ interface RouteCardData {
   // Verdict
   status: LiveStatus;
   statusText: string; // "much faster", "faster", "as expected", "slower", "much slower", "no data"
-  // Sparkline for 90-day history on hover
-  sparkPoints: number[];
-  sparkDates: Date[];
   // Stable sorting
   sortKey: string;
 }
@@ -840,69 +837,6 @@ function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | nu
   if (stdDevs < -1.5) return { status: 'much-slower', statusText: 'much slower than typical' };
   if (stdDevs < -0.5) return { status: 'slower', statusText: 'slower than typical' };
   return { status: 'as-expected', statusText: 'as expected for this hour' };
-}
-
-/** Compute 7-day rolling average for smoothing */
-function computeRollingAverage(points: number[], windowSize: number = 7): number[] {
-  if (points.length < windowSize) return points;
-  
-  const result: number[] = [];
-  for (let i = 0; i < points.length; i++) {
-    const start = Math.max(0, i - windowSize + 1);
-    const window = points.slice(start, i + 1);
-    const avg = window.reduce((sum, v) => sum + v, 0) / window.length;
-    result.push(avg);
-  }
-  return result;
-}
-
-/** Compute trend text based on smoothed recent trajectory */
-function computeTrendText(sparkPoints: number[]): string {
-  if (sparkPoints.length < 14) return 'not enough data';
-  
-  // Smooth with 7-day rolling average
-  const smoothed = computeRollingAverage(sparkPoints, 7);
-  
-  // Split into first half and second half
-  const midPoint = Math.floor(smoothed.length / 2);
-  const firstHalf = smoothed.slice(0, midPoint);
-  const secondHalf = smoothed.slice(midPoint);
-  
-  const firstAvg = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
-  const secondAvg = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
-  
-  const trendDelta = secondAvg - firstAvg;
-  const trendPercent = (trendDelta / firstAvg) * 100;
-  
-  // Determine direction and magnitude
-  const absPercent = Math.abs(trendPercent);
-  const direction = trendDelta > 0 ? 'faster' : 'slower';
-  
-  if (absPercent < 1.5) {
-    // Check for flat pattern - compare variance
-    const firstTrend = firstHalf[firstHalf.length - 1] - firstHalf[0];
-    const secondTrend = secondHalf[secondHalf.length - 1] - secondHalf[0];
-    
-    if (Math.abs(firstTrend) < 1 && Math.abs(secondTrend) < 1) {
-      return 'flat overall';
-    }
-    
-    // Recent direction matters more
-    const recentSlice = smoothed.slice(-7);
-    const recentTrend = recentSlice[recentSlice.length - 1] - recentSlice[0];
-    if (Math.abs(recentTrend) < 0.5) {
-      return 'flat overall';
-    }
-    return recentTrend > 0 ? 'a bit faster lately' : 'a bit slower lately';
-  }
-  
-  if (absPercent < 4) {
-    return `a bit ${direction} lately`;
-  }
-  if (absPercent < 8) {
-    return `getting ${direction} lately`;
-  }
-  return `much ${direction} lately`;
 }
 
 /** Compute TOD statistics from historical data within ±90 min window over 90 days */
@@ -942,35 +876,6 @@ function computeTODStats(
   return { min, max, mean, median, std, count: speeds.length };
 }
 
-/** Compute sparkline points (90 days of daily averages) */
-function computeSparkline(routeRows: TrafficRow[], days: number = 90): { points: number[]; dates: Date[] } {
-  const lastTs = routeRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
-  const lastDate = lastTs ? new Date(lastTs) : new Date();
-  const cutoff = new Date(lastDate.getTime() - days * 24 * 60 * 60 * 1000);
-  
-  const byDay = new Map<string, { speeds: number[]; date: Date }>();
-  for (const r of routeRows) {
-    if (r.timestamp < cutoff) continue;
-    const dayKey = `${r.timestamp.getFullYear()}-${String(r.timestamp.getMonth() + 1).padStart(2, "0")}-${String(r.timestamp.getDate()).padStart(2, "0")}`;
-    if (!byDay.has(dayKey)) {
-      byDay.set(dayKey, { speeds: [], date: new Date(r.timestamp.getFullYear(), r.timestamp.getMonth(), r.timestamp.getDate()) });
-    }
-    byDay.get(dayKey)!.speeds.push(r.speed_kmh);
-  }
-  
-  const sorted = Array.from(byDay.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, data]) => ({
-      avg: data.speeds.reduce((s, v) => s + v, 0) / data.speeds.length,
-      date: data.date,
-    }));
-  
-  return {
-    points: sorted.map(d => d.avg),
-    dates: sorted.map(d => d.date),
-  };
-}
-
 function computeAllRouteCards(
   allRows: TrafficRow[],
   routeOptions: string[],
@@ -1002,13 +907,9 @@ function computeAllRouteCards(
     // Compute typical stats for this TOD (±90 min over 90 days)
     const typical = computeTODStats(routeRows, lastDataDate, 90, 90);
     
-    // Compute sparkline (90 days)
-    const { points: sparkPoints, dates: sparkDates } = computeSparkline(routeRows, 90);
-    
     return {
       label, origin, destination,
       liveSpeed, liveTimestamp, typical,
-      sparkPoints, sparkDates,
       sortKey: label.toLowerCase(),
     };
   });
@@ -1039,8 +940,6 @@ function computeAllRouteCards(
       cityMax: effectiveMax,
       status,
       statusText,
-      sparkPoints: card.sparkPoints,
-      sparkDates: card.sparkDates,
       sortKey: card.sortKey,
     };
   });

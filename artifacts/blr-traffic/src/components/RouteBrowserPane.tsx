@@ -2,84 +2,31 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 
-/* ── Info tip callout ──────────────────────────────────────────── */
+/* ── Info tip ────────────────────────────────────────────────── */
 function InfoTip({ thm }: { thm: AppTheme }) {
-  const [open, setOpen] = useState(false);
+  const tooltipText = "Live vs typical for this hour. Circle = current speed, gray bar = typical range (90-day history, ±90 min), line = city-wide min→max. Left of bar = slower, right = faster.";
+  
   return (
-    <div style={{ position: "relative" }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}>
-      <button
-        aria-label="How to read these charts"
-        style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 18, height: 18, borderRadius: "50%",
-          border: `1.5px solid ${open ? thm.chart.line1 : thm.textMuted}`,
-          fontSize: 10, fontWeight: 700, cursor: "help",
-          color: open ? thm.chart.line1 : thm.textMuted,
-          background: open ? (thm.key === "colour" ? "rgba(125,183,232,0.12)" : "rgba(58,134,200,0.08)") : "transparent",
-          flexShrink: 0, lineHeight: 1, padding: 0,
-          transition: "all 0.15s",
-          pointerEvents: "none",
-        }}
-      >i</button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "100%", left: "50%",
-          transform: "translateX(-50%)",
-          marginTop: 8,
-          padding: "12px 14px",
-          borderRadius: 12,
-          background: thm.key === "colour" ? "#2A2725" : "#FFFFFF",
-          border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
-          fontSize: 11, lineHeight: 1.55,
-          color: thm.textPrimary,
-          width: 240,
-          zIndex: 200,
-          animation: "callout-in 0.2s cubic-bezier(0.4,0,0.2,1) both",
-          pointerEvents: "none",
-        }}>
-          {/* Arrow pointer */}
-          <div aria-hidden style={{
-            position: "absolute", bottom: "100%", left: "50%",
-            transform: "translateX(-50%)",
-            width: 0, height: 0,
-            borderLeft: "6px solid transparent",
-            borderRight: "6px solid transparent",
-            borderBottom: `6px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-          }} />
-          <div aria-hidden style={{
-            position: "absolute", bottom: "100%", left: "50%",
-            transform: "translateX(-50%)",
-            width: 0, height: 0,
-            borderLeft: "5px solid transparent",
-            borderRight: "5px solid transparent",
-            borderBottom: `5px solid ${thm.key === "colour" ? "#2A2725" : "#FFFFFF"}`,
-            marginTop: 1,
-          }} />
-          <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12 }}>
-            Traffic NOW!
-          </p>
-          <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>Live vs Typical.</strong> Colored circle ● shows current speed. Gray bar shows typical range for this hour (90-day history ±90 min). Line spans city-wide min→max.
-          </p>
-          <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>Position matters.</strong> Circle left of gray bar = slower than typical. Right of bar = faster. Centered = as expected. Verdict: <strong style={{ color: thm.speedGood }}>green</strong> = faster, <strong style={{ color: thm.speedBad }}>red</strong> = slower, <strong style={{ color: thm.chart.line1 }}>blue</strong> = typical.
-          </p>
-          <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>Hover</strong> for 90-day trend line. Use this pane for quick "should I leave now?" decisions.
-          </p>
-        </div>
-      )}
-    </div>
+    <button
+      aria-label={tooltipText}
+      title={tooltipText}
+      style={{
+        width: 18, height: 18, borderRadius: 999,
+        border: `1.5px solid ${thm.textMuted}`,
+        color: thm.textMuted, background: "transparent",
+        fontSize: 11, fontWeight: 700, lineHeight: 1,
+        cursor: "help", display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 0,
+      }}
+    >
+      i
+    </button>
   );
 }
 
 /* ── Types ─────────────────────────────────────────────────────── */
 // RouteCardData is defined in Dashboard.tsx and passed as props
-// Fields: label, origin, destination, liveSpeed, liveTimestamp, typical, 
-// cityMin, cityMax, status, statusText, sparkPoints, sparkDates, sortKey
+// cityMin, cityMax, status, statusText, sortKey
 type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
 
 interface RouteTODStats {
@@ -102,8 +49,6 @@ interface RouteCardData {
   cityMax: number;
   status: LiveStatus;
   statusText: string;
-  sparkPoints: number[];
-  sparkDates: Date[];
   sortKey: string;
 }
 
@@ -200,9 +145,9 @@ function TrafficNowBar({
           left: 0,
           right: 0,
           top: 6,
-          height: 2,
-          background: rangeColor,
-          borderRadius: 1,
+          height: 1,
+          background: '#000000',
+          borderRadius: 0,
         }} />
         
         {/* City min marker (left cap) */}
@@ -293,105 +238,6 @@ function TrafficNowBar({
   );
 }
 
-/** Compute 7-day rolling average for smoothing */
-function computeRollingAverage(points: number[], windowSize: number = 7): number[] {
-  if (points.length < windowSize) return points;
-  
-  const result: number[] = [];
-  for (let i = 0; i < points.length; i++) {
-    const start = Math.max(0, i - windowSize + 1);
-    const window = points.slice(start, i + 1);
-    const avg = window.reduce((sum, v) => sum + v, 0) / window.length;
-    result.push(avg);
-  }
-  return result;
-}
-
-/* ── Mini line chart for hover state ──────────────────────────── */
-function MiniLineChart({ 
-  points, 
-  thm,
-  startLabel,
-  endLabel,
-  status,
-}: { 
-  points: number[]; 
-  thm: AppTheme;
-  startLabel: string;
-  endLabel: string;
-  status: LiveStatus;
-}) {
-  if (points.length < 2) return null;
-  
-  const W = 200;  // Wider viewBox for smoother curves when stretched
-  const H = 40;
-  const PAD = 4;  // Vertical padding only
-  
-  // Compute smoothed 7-day rolling average
-  const smoothedPoints = computeRollingAverage(points, 7);
-  
-  // Use combined range for consistent scaling
-  const allValues = [...points, ...smoothedPoints];
-  const minV = Math.min(...allValues);
-  const maxV = Math.max(...allValues);
-  const range = maxV - minV || 1;
-  
-  // Full-width X: no horizontal padding, spans entire viewBox
-  const toX = (i: number, len: number) => (i / (len - 1)) * W;
-  // Y with vertical padding only
-  const toY = (v: number) => PAD + (H - PAD * 2) * (1 - (v - minV) / range);
-  
-  // Raw line path (faint)
-  const rawD = points.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i, points.length).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ');
-  
-  // Smoothed line path (prominent)
-  const smoothD = smoothedPoints.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i, smoothedPoints.length).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ');
-  
-  // Color for smoothed line based on status
-  const getTrendColor = () => {
-    if (status === 'much-faster' || status === 'faster') return thm.speedGood;
-    if (status === 'much-slower' || status === 'slower') return thm.speedBad;
-    return thm.chart.line1;
-  };
-  
-  return (
-    <div style={{ width: '100%', marginTop: 4 }}>
-      <svg width="calc(100% + 24px)" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', marginLeft: -12, marginRight: -12 }}>
-        {/* Raw line - faint background texture */}
-        <path 
-          d={rawD} 
-          fill="none" 
-          stroke={thm.textMuted}
-          strokeWidth={1}
-          strokeOpacity={0.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Smoothed line - primary signal */}
-        <path 
-          d={smoothD} 
-          fill="none" 
-          stroke={getTrendColor()}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontSize: 8,
-        color: thm.textMuted,
-        marginTop: 2,
-      }}>
-        <span>{startLabel}</span>
-        <span>{endLabel}</span>
-      </div>
-    </div>
-  );
-}
-
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
   card, thm, isSelected, onSelect, isLast,
@@ -443,13 +289,6 @@ function RouteCard({
     ? `${card.origin} → ${card.destination}`
     : card.origin;
   
-  // Compute date labels for mini chart
-  const sixtyDaysAgo = new Date();
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const today = new Date();
-  const startLabel = sixtyDaysAgo.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-  const endLabel = today.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-  
   // Status text color - per theme specs
   const getStatusColor = () => {
     if (thm.key === 'gray') {
@@ -475,11 +314,11 @@ function RouteCard({
       style={{
         background: cardBg,
         borderRadius: 6,
-        padding: "7px 8px",
+        padding: "10px 10px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: 6,
         transition: "background 0.12s",
       }}
     >
@@ -526,29 +365,11 @@ function RouteCard({
         thm={thm}
       />
       
-      {/* Row 4: Additive mini line chart on hover - with gentle smooth transition */}
-      {card.sparkPoints.length > 1 && (
-        <div style={{
-          maxHeight: hovered ? 60 : 0,
-          opacity: hovered ? 1 : 0,
-          overflow: 'hidden',
-          marginTop: hovered ? 2 : 0,
-          transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.3s ease',
-        }}>
-          <MiniLineChart 
-            points={card.sparkPoints}
-            thm={thm}
-            startLabel={startLabel}
-            endLabel={endLabel}
-            status={card.status}
-          />
-        </div>
-      )}
       
       {/* Separator */}
       {!isLast && (
         <div style={{
-          height: 1, width: "80%", margin: "2px auto 0",
+          height: 1, width: "80%", margin: "4px auto 0",
           background: thm.key === "colour" ? "rgba(71,65,60,0.08)" : "rgba(0,0,0,0.06)",
         }} />
       )}
@@ -603,7 +424,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           onMouseDown={onDragStart}
           style={{
             position: "absolute", left: 0, top: 0, bottom: 0,
-            width: 8, cursor: "col-resize", zIndex: 3,
+            width: 1, cursor: "col-resize", zIndex: 3,
             background: dragging
               ? (thm.key === "colour" ? "rgba(125,183,232,0.25)" : "rgba(58,134,200,0.18)")
               : "transparent",

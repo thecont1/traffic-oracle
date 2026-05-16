@@ -680,6 +680,7 @@ function computeAllRouteCards(
   const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
   const lastDataDate = lastTs ? new Date(lastTs) : new Date();
   const fourWkAgo = new Date(lastDataDate.getTime() - 28 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgo = new Date(lastDataDate.getTime() - 60 * 24 * 60 * 60 * 1000);
   const sixMoAgo  = new Date(lastDataDate);
   sixMoAgo.setMonth(sixMoAgo.getMonth() - 6);
 
@@ -692,15 +693,16 @@ function computeAllRouteCards(
     const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
     const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
 
-    /* sparkline: weekly avg speeds over last 6 months */
-    const byWeek = new Map<string, number[]>();
+    /* sparkline: daily avg speeds over last 60 days */
+    const byDay = new Map<string, number[]>();
     for (const r of routeRows) {
-      if (r.timestamp < sixMoAgo) continue;
-      const arr = byWeek.get(r.weekKey) ?? [];
+      if (r.timestamp < sixtyDaysAgo) continue;
+      const dayKey = `${r.timestamp.getFullYear()}-${String(r.timestamp.getMonth() + 1).padStart(2, "0")}-${String(r.timestamp.getDate()).padStart(2, "0")}`;
+      const arr = byDay.get(dayKey) ?? [];
       arr.push(r.speed_kmh);
-      byWeek.set(r.weekKey, arr);
+      byDay.set(dayKey, arr);
     }
-    const sparkPoints = Array.from(byWeek.entries())
+    const sparkPoints = Array.from(byDay.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, speeds]) => speeds.reduce((s, v) => s + v, 0) / speeds.length);
 
@@ -1124,38 +1126,6 @@ function DashboardInner() {
                 </div>
               </div>
             </div>
-
-            {dataTimestamp && (
-              <div style={{
-                textAlign: "center",
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
-                marginLeft: "auto",
-                marginRight: 12,
-              }}>
-                <div style={{
-                  fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
-                  color: thm.textMuted, textTransform: "uppercase",
-                }}>
-                  Data up to
-                </div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
-                  color: thm.textSecondary,
-                }}>
-                  {dataTimestamp.toLocaleDateString("en-IN", {
-                    weekday: "short", day: "2-digit", month: "short", year: "numeric",
-                  }).toUpperCase()}
-                </div>
-                <div style={{
-                  fontSize: 13, fontWeight: 800, color: thm.textPrimary,
-                  letterSpacing: 0.3,
-                }}>
-                  {dataTimestamp.toLocaleTimeString("en-IN", {
-                    hour: "2-digit", minute: "2-digit", second: "2-digit",
-                  })}
-                </div>
-              </div>
-            )}
 
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               {!loading && rowCount > 0 && (
@@ -1654,7 +1624,18 @@ function DashboardInner() {
             </svg>
             thecont1/blr-traffic-monitor
           </a>
-          {" "} · Live data{rowCount > 0 ? ` · ${rowCount.toLocaleString()} rows` : ""}. Refresh page for latest data.
+          {" · "}
+          {dataTimestamp && (() => {
+            const d = dataTimestamp;
+            const dayName = d.toLocaleDateString("en-IN", { weekday: "long" });
+            const day = d.getDate();
+            const month = d.toLocaleDateString("en-IN", { month: "short" }).toUpperCase();
+            const year = d.getFullYear();
+            const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            return <span>Live data up to {dayName}, {day} {month} {year} {time}</span>;
+          })()}
+          {rowCount > 0 && <span> · {rowCount.toLocaleString()} rows</span>}
+          . Hit Refresh for latest data.
         </footer>
 
       </div>

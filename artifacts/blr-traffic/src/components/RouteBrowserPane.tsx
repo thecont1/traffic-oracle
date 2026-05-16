@@ -2,6 +2,80 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 
+/* ── Info tip callout ──────────────────────────────────────────── */
+function InfoTip({ thm }: { thm: AppTheme }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        aria-label="How to read these charts"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 18, height: 18, borderRadius: "50%",
+          border: `1.5px solid ${open ? thm.chart.line1 : thm.textMuted}`,
+          fontSize: 10, fontWeight: 700, cursor: "pointer",
+          color: open ? thm.chart.line1 : thm.textMuted,
+          background: open ? (thm.key === "colour" ? "rgba(125,183,232,0.12)" : "rgba(58,134,200,0.08)") : "transparent",
+          flexShrink: 0, lineHeight: 1, padding: 0,
+          transition: "all 0.15s",
+        }}
+      >i</button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: "50%",
+          transform: "translateX(-50%)",
+          marginTop: 8,
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: thm.key === "colour" ? "#2A2725" : "#FFFFFF",
+          border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
+          fontSize: 11, lineHeight: 1.55,
+          color: thm.textPrimary,
+          width: 240,
+          zIndex: 200,
+          animation: "callout-in 0.2s cubic-bezier(0.4,0,0.2,1) both",
+        }}>
+          {/* Arrow pointer */}
+          <div aria-hidden style={{
+            position: "absolute", bottom: "100%", left: "50%",
+            transform: "translateX(-50%)",
+            width: 0, height: 0,
+            borderLeft: "6px solid transparent",
+            borderRight: "6px solid transparent",
+            borderBottom: `6px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+          }} />
+          <div aria-hidden style={{
+            position: "absolute", bottom: "100%", left: "50%",
+            transform: "translateX(-50%)",
+            width: 0, height: 0,
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderBottom: `5px solid ${thm.key === "colour" ? "#2A2725" : "#FFFFFF"}`,
+            marginTop: 1,
+          }} />
+          <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12 }}>
+            How to read these charts
+          </p>
+          <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
+            Each mini chart shows <strong style={{ color: thm.textPrimary }}>daily average speed (km/h)</strong> for that route, over the last 60 days.
+          </p>
+          <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
+            <strong style={{ color: thm.textPrimary }}>Higher = faster.</strong> The Y-axis is auto-scaled to each route's own range — compare trends, not absolute speeds across routes.
+          </p>
+          <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
+            The <strong style={{ color: thm.textPrimary }}>▲ / ▼ badge</strong> shows how the last 4 weeks compare to your baseline window (set by the slider). The number is the speed difference in km/h.
+          </p>
+          <p style={{ margin: 0, color: thm.textMuted, fontSize: 10, fontStyle: "italic" }}>
+            ⚡ Benchmark = the fastest route, sets what's achievable without breaking traffic laws.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Types ─────────────────────────────────────────────────────── */
 interface RouteCardData {
   label: string;
@@ -267,50 +341,8 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               }}>
                 🗺️ Speed Snapshot
               </span>
-              {/* Info tooltip */}
-              <div style={{ position: "relative" }} className="pane-info-tip">
-                <span style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 16, height: 16, borderRadius: "50%",
-                  border: `1.5px solid ${thm.textMuted}`,
-                  fontSize: 9, fontWeight: 700, cursor: "help",
-                  color: thm.textMuted, flexShrink: 0,
-                  lineHeight: 1,
-                }}>i</span>
-                <div style={{
-                  position: "absolute", bottom: "100%", left: "50%",
-                  transform: "translateX(-50%)",
-                  marginBottom: 8,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  background: thm.key === "colour" ? "#2A2725" : "#FFFFFF",
-                  border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-                  boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
-                  fontSize: 11, lineHeight: 1.55,
-                  color: thm.textPrimary,
-                  width: 220,
-                  zIndex: 100,
-                  pointerEvents: "none",
-                  opacity: 0,
-                  transition: "opacity 0.15s",
-                }} className="pane-info-tip__bubble">
-                  <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12 }}>
-                    How to read these charts
-                  </p>
-                  <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-                    Each mini chart shows <strong style={{ color: thm.textPrimary }}>weekly average speed (km/h)</strong> for that route, over the last 6 months.
-                  </p>
-                  <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-                    <strong style={{ color: thm.textPrimary }}>Higher = faster.</strong> The Y-axis is auto-scaled to each route's own range, so you can compare trends — not absolute speeds across routes.
-                  </p>
-                  <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-                    The <strong style={{ color: thm.textPrimary }}>▲ / ▼ badge</strong> shows how the last 4 weeks compare to your baseline window (set by the slider). The number is the speed difference in km/h.
-                  </p>
-                  <p style={{ margin: 0, color: thm.textMuted, fontSize: 10, fontStyle: "italic" }}>
-                    ⚡ Benchmark = the fastest route, sets what's achievable without breaking traffic laws.
-                  </p>
-                </div>
-              </div>
+              {/* Info tooltip — click to toggle animated callout */}
+              <InfoTip thm={thm} />
             </div>
             <button onClick={onToggle} title="Close"
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,

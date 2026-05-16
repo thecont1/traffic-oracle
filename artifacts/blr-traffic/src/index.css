@@ -466,11 +466,16 @@
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
 }
 
-/* ── Pane info tooltip ────────────────────────────────────────── */
-.pane-info-tip:hover .pane-info-tip__bubble,
-.pane-info-tip:focus-within .pane-info-tip__bubble {
-  opacity: 1;
-  pointer-events: auto;
+/* ── Pane info tooltip callout ─────────────────────────────────── */
+@keyframes callout-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
 @media print {

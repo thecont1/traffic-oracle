@@ -457,11 +457,11 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
               <span style={{
                 fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
               }}>
-                � Traffic NOW!
+                Traffic NOW!
               </span>
               {/* Info tooltip — click to toggle animated callout */}
               <InfoTip thm={thm} />
@@ -533,7 +533,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",
           writingMode: "vertical-rl", textOrientation: "mixed", transform: "rotate(180deg)",
         }}>
-          ROUTES
+          TRAFFIC NOW!
         </span>
         <div style={{
           marginTop: 8, fontSize: 11, color: thm.textMuted,

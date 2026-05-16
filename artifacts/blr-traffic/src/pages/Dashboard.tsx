@@ -808,7 +808,7 @@ function DashboardInner() {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   /* data */
-  const { routes, allRows, loading, error, rowCount, lastUpdated, refresh } =
+  const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
     useTrafficData();
 
   const routeOptions = useMemo(() => {
@@ -1121,18 +1121,24 @@ function DashboardInner() {
               </div>
             </div>
 
-            {lastUpdated && (
+            {dataTimestamp && (
               <div style={{
                 textAlign: "center",
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
                 marginLeft: "auto",
                 marginRight: 12,
               }}>
                 <div style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
-                  color: thm.textSecondary, textTransform: "uppercase",
+                  fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+                  color: thm.textMuted, textTransform: "uppercase",
                 }}>
-                  {lastUpdated.toLocaleDateString("en-IN", {
+                  Data up to
+                </div>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
+                  color: thm.textSecondary,
+                }}>
+                  {dataTimestamp.toLocaleDateString("en-IN", {
                     weekday: "short", day: "2-digit", month: "short", year: "numeric",
                   }).toUpperCase()}
                 </div>
@@ -1140,7 +1146,7 @@ function DashboardInner() {
                   fontSize: 13, fontWeight: 800, color: thm.textPrimary,
                   letterSpacing: 0.3,
                 }}>
-                  {lastUpdated.toLocaleTimeString("en-IN", {
+                  {dataTimestamp.toLocaleTimeString("en-IN", {
                     hour: "2-digit", minute: "2-digit", second: "2-digit",
                   })}
                 </div>

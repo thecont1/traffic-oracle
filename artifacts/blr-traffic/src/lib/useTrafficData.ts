@@ -169,8 +169,12 @@ export function fetchTrafficData(
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${url}`);
     const text = await resp.text();
+    // Normalize Windows line endings (\r\n → \n) so Papa.parse doesn't
+    // embed \r into the last field of each row, which corrupts parsing
+    // of the final ~1400 rows of the CSV.
+    const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     return new Promise<Record<string, string>[]>((resolve, reject) => {
-      Papa.parse(text, {
+      Papa.parse(normalized, {
         header: true,
         skipEmptyLines: true,
         complete: (r) => resolve(r.data as Record<string, string>[]),
@@ -245,6 +249,7 @@ export function useTrafficData() {
   const [error, setError] = useState<string | null>(null);
   const [rowCount, setRowCount] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [dataTimestamp, setDataTimestamp] = useState<Date | null>(null);
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
@@ -257,6 +262,14 @@ export function useTrafficData() {
           setAllRows(ar);
           setRowCount(rc);
           setLastUpdated(new Date());
+          // Compute the actual latest data timestamp so users know
+          // how fresh the data is (not just when it was fetched)
+          let maxTs = 0;
+          for (const row of ar) {
+            const t = row.timestamp.getTime();
+            if (t > maxTs) maxTs = t;
+          }
+          setDataTimestamp(maxTs > 0 ? new Date(maxTs) : null);
           setLoading(false);
         })
         .catch((e) => {
@@ -291,7 +304,7 @@ export function useTrafficData() {
     };
   }, [fetchData]);
 
-  return { routes, allRows, loading, error, rowCount, lastUpdated, refresh };
+  return { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh };
 }
 
 export interface DayStats {

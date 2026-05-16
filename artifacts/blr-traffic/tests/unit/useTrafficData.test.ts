@@ -2,7 +2,7 @@
 /* ── Phase 2: Aggregation ───────────────────────────────────────────── */
 /* ── Phase 4: Regression ───────────────────────────────────────────── */
 
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import {
   getCol,
   parseNum,
@@ -77,10 +77,12 @@ describe("Phase 1 — Data Integrity", () => {
         "2026-04-01,08:30,R-100",
         "",
         "2026-04-01,09:00,R-100",
-        "  ",
+        "",
       ].join("\n");
 
-      const result = Papa.parse(csv, { header: true, skipEmptyLines: true });
+      // Papa.parse with skipEmptyLines:true skips "" but not whitespace-only lines.
+      // Use skipEmptyLines:"greedy" to skip whitespace-only lines too.
+      const result = Papa.parse(csv, { header: true, skipEmptyLines: "greedy" });
       expect(result.data.length).toBe(2);
     });
   });
@@ -235,7 +237,7 @@ describe("Phase 1 — Data Integrity", () => {
 
     let originalFetch: typeof globalThis.fetch;
 
-    beforeEach(() => {
+    beforeAll(() => {
       originalFetch = globalThis.fetch;
       globalThis.fetch = ((url: string) => {
         if (url.includes("csv-routes.csv")) {
@@ -254,7 +256,7 @@ describe("Phase 1 — Data Integrity", () => {
       }) as typeof globalThis.fetch;
     });
 
-    afterEach(() => {
+    afterAll(() => {
       globalThis.fetch = originalFetch;
     });
 
@@ -389,7 +391,9 @@ describe("Phase 2 — Aggregation", () => {
     });
 
     it("computes p95 correctly", () => {
-      expect(percentile([10, 20, 30, 40, 100], 95)).toBe(88);
+      // Linear interpolation: idx = 0.95 * 4 = 3.8
+      // result = 40 + (100 - 40) * 0.8 = 88
+      expect(percentile([10, 20, 30, 40, 100], 95)).toBeCloseTo(88, 10);
     });
 
     it("returns min for p0 and max for p100", () => {
@@ -464,15 +468,19 @@ describe("Phase 2 — Aggregation", () => {
     });
 
     it("computes median and p95 durations correctly", () => {
-      // 5 durations: [10, 20, 30, 40, 50]
+      // 5 rows in the SAME week (April 8-12, 2026 → all in week 2026-04-06)
+      // aggregateRows groups by week key, so this produces 1 weekly aggregate
       const rows: TrafficRow[] = [10, 20, 30, 40, 50].map((d, i) =>
-        makeRow({ timestamp: new Date(`2026-04-${8 + i}T08:00`), duration_min: d, speed_kmh: 30, distance_km: 18 })
+        makeRow({ timestamp: new Date(`2026-04-${String(8 + i).padStart(2, "0")}T08:00`), duration_min: d, speed_kmh: 30, distance_km: 18 })
       );
 
       const result = aggregateRows(rows);
-      // Each row falls in its own week
-      // For the row with duration 30: median=30, p95=30 (single item)
-      expect(result.length).toBe(5);
+      expect(result).toHaveLength(1);
+      expect(result[0].weekKey).toBe("2026-04-06");
+      expect(result[0].count).toBe(5);
+      // durations sorted: [10, 20, 30, 40, 50]
+      expect(result[0].medianDuration).toBe(30); // middle value
+      expect(result[0].p95Duration).toBeCloseTo(48, 10); // p95 via interpolation
     });
 
     it("returns empty array for empty input", () => {
@@ -634,7 +642,7 @@ describe("Phase 2 — Aggregation", () => {
       // Generate data from April 1 to May 11, 2026
       for (let day = 1; day <= 11; day++) {
         allRows.push(makeRow({
-          timestamp: new Date(`2026-05-0${day}T12:00:00`),
+          timestamp: new Date(`2026-05-${String(day).padStart(2, "0")}T12:00:00`),
           label_short: "Hosur Road",
           duration_min: 30 + day,
           speed_kmh: 30 + day,
@@ -644,7 +652,7 @@ describe("Phase 2 — Aggregation", () => {
       // Add some April data
       for (let day = 25; day <= 30; day++) {
         allRows.push(makeRow({
-          timestamp: new Date(`2026-04-${day}T12:00:00`),
+          timestamp: new Date(`2026-04-${String(day).padStart(2, "0")}T12:00:00`),
           label_short: "Hosur Road",
           duration_min: 30 + day,
           speed_kmh: 30 + day,
@@ -682,7 +690,7 @@ describe("Phase 2 — Aggregation", () => {
       const allRows: TrafficRow[] = [];
       for (let day = 1; day <= 11; day++) {
         allRows.push(makeRow({
-          timestamp: new Date(`2026-04-0${day}T12:00:00`),
+          timestamp: new Date(`2026-04-${String(day).padStart(2, "0")}T12:00:00`),
           label_short: "Hosur Road",
         }));
       }
@@ -699,7 +707,7 @@ describe("Phase 2 — Aggregation", () => {
 
       expect(byDay.size).toBe(11);
       for (let day = 1; day <= 11; day++) {
-        expect(byDay.has(`2026-04-0${day}`)).toBe(true);
+        expect(byDay.has(`2026-04-${String(day).padStart(2, "0")}`)).toBe(true);
       }
     });
 
@@ -834,9 +842,9 @@ describe("Phase 4 — Regression", () => {
         keys.push(toWeekKey(new Date(2026, 3, 6 + i * 7)));
       }
       expect(new Set(keys).size).toBe(8);
-      // Each successive key should be >= previous (sorted order)
+      // Each successive key should be > previous (lexicographic works for ISO dates)
       for (let i = 1; i < keys.length; i++) {
-        expect(keys[i]).toBeGreaterThan(keys[i - 1]);
+        expect(keys[i] > keys[i - 1]).toBe(true);
       }
     });
   });

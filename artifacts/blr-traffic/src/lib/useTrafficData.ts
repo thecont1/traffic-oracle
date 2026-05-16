@@ -76,7 +76,7 @@ export function getCol(row: Record<string, string>, ...keys: string[]): string {
     if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
     const lk = k.toLowerCase().trim();
     for (const rk of Object.keys(row)) {
-      if (rk.toLowerCase().trim() === lk) return row[rk];
+      if (rk.toLowerCase().trim() === lk && row[rk] !== "") return row[rk];
     }
   }
   return "";

@@ -4,7 +4,7 @@ import type { AppTheme } from "@/lib/theme";
 
 /* ── Info tip ────────────────────────────────────────────────── */
 function InfoTip({ thm }: { thm: AppTheme }) {
-  const tooltipText = "Live vs typical for this hour. Circle = current speed, gray bar = typical range (90-day history, ±90 min), line = city-wide min→max. Left of bar = slower, right = faster.";
+  const tooltipText = "See if traffic is normal right now. The colored dot shows current speed; the gray bar shows what's typical for this hour (based on 90 days of data). Dot left of the bar = slower than usual, right = faster, centered = as expected. Tap any route to explore it on the main charts.";
   
   return (
     <button
@@ -60,6 +60,7 @@ interface PaneProps {
   isOpen: boolean;
   onToggle: () => void;
   paneWidth: number;
+  dataTimestamp: Date | null;
 }
 
 /* ── Progressive blur edge ─────────────────────────────────────── */
@@ -151,27 +152,6 @@ function TrafficNowBar({
           borderRadius: 0,
         }} />
         
-        {/* City min marker (left cap) */}
-        <div style={{
-          position: 'absolute',
-          left: 0,
-          top: 4,
-          width: 3,
-          height: 6,
-          background: rangeColor,
-          borderRadius: '1px 0 0 1px',
-        }} />
-        
-        {/* City max marker (right cap) */}
-        <div style={{
-          position: 'absolute',
-          right: 0,
-          top: 4,
-          width: 3,
-          height: 6,
-          background: rangeColor,
-          borderRadius: '0 1px 1px 0',
-        }} />
         
         {/* Typical range bar (the "box") */}
         {hasData && (
@@ -379,7 +359,7 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp }: PaneProps) {
   const RAIL_WIDTH = 36;
   const MIN_WIDTH = 140;
   const MAX_WIDTH = 500;
@@ -470,6 +450,11 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <p style={{ fontSize: 10, color: thm.textMuted, margin: "2px 0 0" }}>
             Live vs typical for this hour
           </p>
+          {dataTimestamp && (
+            <p style={{ fontSize: 9, color: thm.textMuted, margin: "4px 0 0", opacity: 0.8 }}>
+              Data: {dataTimestamp.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} {dataTimestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
         </div>
 
         {/* Scrollable list */}
@@ -477,7 +462,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "8px 2px",
+            height: "100%", overflowY: "auto", padding: "8px 2px 8px 0",
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (
@@ -539,7 +524,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 }
 
 /* ── Mobile bottom sheet ───────────────────────────────────────── */
-function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle }: PaneProps) {
+function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp }: PaneProps) {
   return (
     <>
       {isOpen && (
@@ -570,12 +555,17 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
             }}>Traffic NOW!</span>
           </div>
+          {dataTimestamp && (
+            <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0" }}>
+              {dataTimestamp.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} {dataTimestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
         </div>
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "6px 4px 12px",
+            height: "100%", overflowY: "auto", padding: "6px 2px 12px 0",
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (
@@ -616,7 +606,8 @@ interface Props {
   cards: RouteCardData[] | null;
   selectedRoute: string;
   onRouteSelect: (label: string) => void;
-  mobile: boolean;
+  dataTimestamp: Date | null;
+  mobile?: boolean;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -641,6 +632,7 @@ export default function RouteBrowserPane(props: Props) {
   const paneProps: PaneProps = {
     cards: props.cards, selectedRoute: props.selectedRoute,
     onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle, paneWidth,
+    dataTimestamp: props.dataTimestamp,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

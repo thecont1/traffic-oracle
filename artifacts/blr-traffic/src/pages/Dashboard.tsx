@@ -164,6 +164,7 @@ function LocationDropdown({ thm }: { thm: AppTheme }) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
+    return undefined;
   }, [isOpen]);
   
   const tok = thm.chips.city;
@@ -786,36 +787,59 @@ function CalendarWidget({
   );
 }
 
-/* ── All-roads overview panel ──────────────────────────────────── */
-type StatusGroup = 'much-slower' | 'slower' | 'steady' | 'faster' | 'much-faster' | 'no-data';
+/* ── Traffic NOW! live overview panel ──────────────────────────── */
+type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
+
+// Statistics for a route's typical behavior at a given time-of-day
+interface RouteTODStats {
+  min: number;
+  max: number;
+  mean: number;
+  median: number;
+  std: number;
+  count: number;
+}
 
 interface RouteCardData {
   label: string;
   origin: string;
   destination: string;
+  // Live current reading
+  liveSpeed: number | null;
+  liveTimestamp: Date | null;
+  // Typical stats for this time-of-day (±90 min window over 90 days)
+  typical: RouteTODStats | null;
+  // Where this route falls on the city-wide range (for positioning)
+  cityMin: number; // Slowest route in the city right now
+  cityMax: number; // Fastest route in the city right now
+  // Verdict
+  status: LiveStatus;
+  statusText: string; // "much faster", "faster", "as expected", "slower", "much slower", "no data"
+  // Sparkline for 90-day history on hover
   sparkPoints: number[];
-  // Comparison data for two-state bar
-  baselineAvg: number;
-  recentAvg: number;
-  comparisonDelta: number | null;
-  // Status grouping and display
-  statusGroup: StatusGroup;
-  statusText: string; // "much slower", "slower", "steady", "faster", "much faster", "no data"
-  // Trend description for hover state
-  trendText: string; // "a bit faster lately", "flat overall", "slowing down lately", etc.
-  // For stable sorting tiebreaker
+  sparkDates: Date[];
+  // Stable sorting
   sortKey: string;
 }
 
-function computeStatusFromDelta(delta: number | null): { statusGroup: StatusGroup; statusText: string } {
-  if (delta === null) return { statusGroup: 'no-data', statusText: 'no data' };
+/** Compute live status based on how current speed compares to typical TOD range */
+function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | null): { status: LiveStatus; statusText: string } {
+  if (liveSpeed === null || typical === null) {
+    return { status: 'no-data', statusText: 'no data' };
+  }
   
-  // Thresholds per user spec
-  if (delta > 2.0) return { statusGroup: 'much-faster', statusText: 'much faster' };
-  if (delta > 0.75) return { statusGroup: 'faster', statusText: 'faster' };
-  if (delta >= -0.75) return { statusGroup: 'steady', statusText: 'steady' };
-  if (delta >= -2.0) return { statusGroup: 'slower', statusText: 'slower' };
-  return { statusGroup: 'much-slower', statusText: 'much slower' };
+  // Calculate standard deviations from mean
+  const stdDevs = typical.std > 0 ? (liveSpeed - typical.mean) / typical.std : 0;
+  
+  // Thresholds based on standard deviations from typical
+  // ±0.5 std dev = "as expected" (within normal variance)
+  // ±0.5 to ±1.5 = slightly faster/slower
+  // > ±1.5 = much faster/slower
+  if (stdDevs > 1.5) return { status: 'much-faster', statusText: 'much faster than typical' };
+  if (stdDevs > 0.5) return { status: 'faster', statusText: 'faster than typical' };
+  if (stdDevs < -1.5) return { status: 'much-slower', statusText: 'much slower than typical' };
+  if (stdDevs < -0.5) return { status: 'slower', statusText: 'slower than typical' };
+  return { status: 'as-expected', statusText: 'as expected for this hour' };
 }
 
 /** Compute 7-day rolling average for smoothing */
@@ -881,71 +905,146 @@ function computeTrendText(sparkPoints: number[]): string {
   return `much ${direction} lately`;
 }
 
+/** Compute TOD statistics from historical data within ±90 min window over 90 days */
+function computeTODStats(
+  routeRows: TrafficRow[],
+  referenceTime: Date,
+  daysBack: number = 90,
+  windowMinutes: number = 90,
+): RouteTODStats | null {
+  const cutoff = new Date(referenceTime.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const refHour = referenceTime.getHours();
+  const refMin = referenceTime.getMinutes();
+  const refTimeVal = refHour * 60 + refMin;
+  
+  // Filter to rows within ±windowMinutes of the reference time
+  const relevantRows = routeRows.filter(r => {
+    if (r.timestamp < cutoff) return false;
+    const rowHour = r.timestamp.getHours();
+    const rowMin = r.timestamp.getMinutes();
+    const rowTimeVal = rowHour * 60 + rowMin;
+    // Handle wraparound at midnight
+    let diff = Math.abs(rowTimeVal - refTimeVal);
+    if (diff > 720) diff = 1440 - diff; // Adjust for crossing midnight
+    return diff <= windowMinutes;
+  });
+  
+  if (relevantRows.length < 3) return null;
+  
+  const speeds = relevantRows.map(r => r.speed_kmh).sort((a, b) => a - b);
+  const min = speeds[0];
+  const max = speeds[speeds.length - 1];
+  const mean = speeds.reduce((s, v) => s + v, 0) / speeds.length;
+  const median = speeds[Math.floor(speeds.length / 2)];
+  const variance = speeds.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / speeds.length;
+  const std = Math.sqrt(variance);
+  
+  return { min, max, mean, median, std, count: speeds.length };
+}
+
+/** Compute sparkline points (90 days of daily averages) */
+function computeSparkline(routeRows: TrafficRow[], days: number = 90): { points: number[]; dates: Date[] } {
+  const lastTs = routeRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
+  const lastDate = lastTs ? new Date(lastTs) : new Date();
+  const cutoff = new Date(lastDate.getTime() - days * 24 * 60 * 60 * 1000);
+  
+  const byDay = new Map<string, { speeds: number[]; date: Date }>();
+  for (const r of routeRows) {
+    if (r.timestamp < cutoff) continue;
+    const dayKey = `${r.timestamp.getFullYear()}-${String(r.timestamp.getMonth() + 1).padStart(2, "0")}-${String(r.timestamp.getDate()).padStart(2, "0")}`;
+    if (!byDay.has(dayKey)) {
+      byDay.set(dayKey, { speeds: [], date: new Date(r.timestamp.getFullYear(), r.timestamp.getMonth(), r.timestamp.getDate()) });
+    }
+    byDay.get(dayKey)!.speeds.push(r.speed_kmh);
+  }
+  
+  const sorted = Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, data]) => ({
+      avg: data.speeds.reduce((s, v) => s + v, 0) / data.speeds.length,
+      date: data.date,
+    }));
+  
+  return {
+    points: sorted.map(d => d.avg),
+    dates: sorted.map(d => d.date),
+  };
+}
+
 function computeAllRouteCards(
   allRows: TrafficRow[],
   routeOptions: string[],
-  baselineStartDate: string | undefined,
-  baselineEndDate: string | undefined,
   routes: { label_short: string; label_full: string }[],
 ): RouteCardData[] {
+  // Find the most recent data timestamp across all routes
   const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
   const lastDataDate = lastTs ? new Date(lastTs) : new Date();
-  const fourWkAgo = new Date(lastDataDate.getTime() - 28 * 24 * 60 * 60 * 1000);
-  const sixtyDaysAgo = new Date(lastDataDate.getTime() - 60 * 24 * 60 * 60 * 1000);
-
-  const cards = routeOptions.map((label): RouteCardData => {
+  const ninetyDaysAgo = new Date(lastDataDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+  
+  // First pass: compute all route data
+  const preliminaryCards = routeOptions.map((label) => {
     const routeRows = allRows.filter(r => r.label_short === label);
-
-    /* extract origin/destination from routes lookup */
+    
+    // Extract origin/destination
     const labelFull = routes.find(r => r.label_short === label)?.label_full ?? label;
     const arrowIdx = labelFull.indexOf("→");
     const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
     const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
-
-    /* sparkline: daily avg speeds over last 60 days */
-    const byDay = new Map<string, number[]>();
-    for (const r of routeRows) {
-      if (r.timestamp < sixtyDaysAgo) continue;
-      const dayKey = `${r.timestamp.getFullYear()}-${String(r.timestamp.getMonth() + 1).padStart(2, "0")}-${String(r.timestamp.getDate()).padStart(2, "0")}`;
-      const arr = byDay.get(dayKey) ?? [];
-      arr.push(r.speed_kmh);
-      byDay.set(dayKey, arr);
-    }
-    const sparkPoints = Array.from(byDay.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, speeds]) => speeds.reduce((s, v) => s + v, 0) / speeds.length);
-
-    /* baseline avg speed (slider window) */
-    let baselineAvg = 0;
-    if (baselineStartDate && baselineEndDate) {
-      const bRows = routeRows.filter(
-        r => r.weekKey >= baselineStartDate && r.weekKey <= baselineEndDate,
-      );
-      if (bRows.length > 0)
-        baselineAvg = bRows.reduce((s, r) => s + r.speed_kmh, 0) / bRows.length;
-    }
-
-    /* recent 4-week avg speed */
-    const recentRows = routeRows.filter(r => r.timestamp >= fourWkAgo);
-    const recentAvg  = recentRows.length > 0
-      ? recentRows.reduce((s, r) => s + r.speed_kmh, 0) / recentRows.length
-      : 0;
-
-    const comparisonDelta = baselineAvg > 0 && recentAvg > 0
-      ? Math.round((recentAvg - baselineAvg) * 10) / 10
+    
+    // Get most recent reading (live speed)
+    const recentRows = routeRows.filter(r => r.timestamp >= ninetyDaysAgo);
+    const mostRecent = recentRows.length > 0
+      ? recentRows.reduce((latest, r) => r.timestamp > latest.timestamp ? r : latest, recentRows[0])
       : null;
-
-    const { statusGroup, statusText } = computeStatusFromDelta(comparisonDelta);
-    const trendText = computeTrendText(sparkPoints);
-
-    return { 
-      label, origin, destination, sparkPoints, 
-      baselineAvg, recentAvg, comparisonDelta,
-      statusGroup, statusText, trendText,
+    const liveSpeed = mostRecent ? mostRecent.speed_kmh : null;
+    const liveTimestamp = mostRecent ? mostRecent.timestamp : null;
+    
+    // Compute typical stats for this TOD (±90 min over 90 days)
+    const typical = computeTODStats(routeRows, lastDataDate, 90, 90);
+    
+    // Compute sparkline (90 days)
+    const { points: sparkPoints, dates: sparkDates } = computeSparkline(routeRows, 90);
+    
+    return {
+      label, origin, destination,
+      liveSpeed, liveTimestamp, typical,
+      sparkPoints, sparkDates,
       sortKey: label.toLowerCase(),
     };
   });
-
+  
+  // Second pass: compute city-wide min/max from live speeds only
+  const liveSpeeds = preliminaryCards
+    .map(c => c.liveSpeed)
+    .filter((s): s is number => s !== null);
+  const cityMin = liveSpeeds.length > 0 ? Math.min(...liveSpeeds) : 0;
+  const cityMax = liveSpeeds.length > 0 ? Math.max(...liveSpeeds) : 80;
+  
+  // Ensure reasonable range
+  const effectiveMin = Math.min(cityMin, cityMax * 0.3);
+  const effectiveMax = Math.max(cityMax, effectiveMin + 20);
+  
+  // Final pass: compute status and build final cards
+  const cards: RouteCardData[] = preliminaryCards.map(card => {
+    const { status, statusText } = computeLiveStatus(card.liveSpeed, card.typical);
+    
+    return {
+      label: card.label,
+      origin: card.origin,
+      destination: card.destination,
+      liveSpeed: card.liveSpeed,
+      liveTimestamp: card.liveTimestamp,
+      typical: card.typical,
+      cityMin: effectiveMin,
+      cityMax: effectiveMax,
+      status,
+      statusText,
+      sparkPoints: card.sparkPoints,
+      sparkDates: card.sparkDates,
+      sortKey: card.sortKey,
+    };
+  });
+  
   return cards;
 }
 
@@ -1173,7 +1272,7 @@ function DashboardInner() {
     if (allRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, baselineStartDate, baselineEndDate, routes);
+    const computed = computeAllRouteCards(allRows, routeOptions, routes);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;

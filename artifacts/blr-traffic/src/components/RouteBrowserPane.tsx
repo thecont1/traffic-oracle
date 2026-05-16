@@ -59,16 +59,16 @@ function InfoTip({ thm }: { thm: AppTheme }) {
             marginTop: 1,
           }} />
           <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12 }}>
-            Speed Snapshot
+            Traffic NOW!
           </p>
           <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>Two-State Comparison.</strong> In each card, the left segment is your baseline period, right segment is recent 4 weeks.
+            <strong style={{ color: thm.textPrimary }}>Live vs Typical.</strong> Colored circle ● shows current speed. Gray bar shows typical range for this hour (90-day history ±90 min). Line spans city-wide min→max.
           </p>
           <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>Wider = faster.</strong> Segment width shows relative speed, not absolute values. Colors indicate the trend direction.
+            <strong style={{ color: thm.textPrimary }}>Position matters.</strong> Circle left of gray bar = slower than typical. Right of bar = faster. Centered = as expected. Verdict: <strong style={{ color: thm.speedGood }}>green</strong> = faster, <strong style={{ color: thm.speedBad }}>red</strong> = slower, <strong style={{ color: thm.chart.line1 }}>blue</strong> = typical.
           </p>
           <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
-            <strong style={{ color: thm.textPrimary }}>60-day smoothed trend line</strong> (on hover). <strong style={{ color: thm.speedGood }}>positive</strong> = getting faster, <strong style={{ color: thm.speedBad }}>negative</strong> = getting slower, neutral = flat overall.
+            <strong style={{ color: thm.textPrimary }}>Hover</strong> for 90-day trend line. Use this pane for quick "should I leave now?" decisions.
           </p>
         </div>
       )}
@@ -77,23 +77,33 @@ function InfoTip({ thm }: { thm: AppTheme }) {
 }
 
 /* ── Types ─────────────────────────────────────────────────────── */
-type StatusGroup = 'much-slower' | 'slower' | 'steady' | 'faster' | 'much-faster' | 'no-data';
+// RouteCardData is defined in Dashboard.tsx and passed as props
+// Fields: label, origin, destination, liveSpeed, liveTimestamp, typical, 
+// cityMin, cityMax, status, statusText, sparkPoints, sparkDates, sortKey
+type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
+
+interface RouteTODStats {
+  min: number;
+  max: number;
+  mean: number;
+  median: number;
+  std: number;
+  count: number;
+}
 
 interface RouteCardData {
   label: string;
   origin: string;
   destination: string;
+  liveSpeed: number | null;
+  liveTimestamp: Date | null;
+  typical: RouteTODStats | null;
+  cityMin: number;
+  cityMax: number;
+  status: LiveStatus;
+  statusText: string;
   sparkPoints: number[];
-  // Comparison data for two-state bar
-  baselineAvg: number;
-  recentAvg: number;
-  comparisonDelta: number | null;
-  // Status grouping and display
-  statusGroup: StatusGroup;
-  statusText: string; // "much slower", "slower", "steady", "faster", "much faster", "no data"
-  // Trend description for hover state
-  trendText: string; // "a bit faster lately", "flat overall", "slowing down lately", etc.
-  // For stable sorting tiebreaker
+  sparkDates: Date[];
   sortKey: string;
 }
 
@@ -122,97 +132,163 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
   );
 }
 
-/* ── Two-state comparison bar (default view) ───────────────────── */
-function TwoStateBar({ 
-  baselineAvg, 
-  recentAvg, 
-  statusGroup,
-  thm 
+/* ── Traffic NOW! bar - city-wide range with route position ────── */
+function TrafficNowBar({ 
+  liveSpeed,
+  typical,
+  cityMin,
+  cityMax,
+  status,
+  thm,
 }: { 
-  baselineAvg: number; 
-  recentAvg: number; 
-  statusGroup: StatusGroup;
+  liveSpeed: number | null;
+  typical: RouteTODStats | null;
+  cityMin: number;
+  cityMax: number;
+  status: LiveStatus;
   thm: AppTheme;
 }) {
-  // Fixed-size bar - segments show relative proportion, not absolute speeds
-  const hasData = baselineAvg > 0 && recentAvg > 0;
-  const maxSpeed = Math.max(baselineAvg, recentAvg, 1);
-  const baselineWidth = hasData ? (baselineAvg / maxSpeed) * 50 : 50; // 50% max each side
-  const recentWidth = hasData ? (recentAvg / maxSpeed) * 50 : 50;
+  const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
   
-  // Colors based on statusGroup - per theme specs from user
-  const getRecentColor = () => {
-    if (!hasData) return thm.textMuted;
-    
-    // Theme-specific color palettes as specified by user
+  // Determine status direction for colors
+  const isFaster = status === 'much-faster' || status === 'faster';
+  const isSlower = status === 'much-slower' || status === 'slower';
+  const isExpected = status === 'as-expected';
+  
+  // Get status color
+  const getStatusColor = () => {
     if (thm.key === 'gray') {
-      // Scale me gray!: strict grayscale, use line weight for status
-      switch (statusGroup) {
-        case 'much-faster':
-        case 'faster': return '#E2E2E2'; // Lighter = better
-        case 'much-slower':
-        case 'slower': return '#6B6B6B'; // Darker = worse (but still gray)
-        case 'steady':
-        default: return '#AAAAAA';
-      }
+      if (isFaster) return '#E2E2E2';
+      if (isSlower) return '#4A4A4A';
+      return '#888888';
     }
-    
     if (thm.key === 'pastel') {
-      // Clear as day!: blue family default, sparing green/orange
-      switch (statusGroup) {
-        case 'much-faster':
-        case 'faster': return '#8CCB7A'; // Improvement accent (sparing)
-        case 'much-slower':
-        case 'slower': return '#F2A65A'; // Worsening accent (sparing)
-        case 'steady':
-        default: return '#6FA8DC'; // Recent/change default
-      }
+      if (isFaster) return '#8CCB7A';
+      if (isSlower) return '#F2A65A';
+      return '#6FA8DC';
     }
-    
-    // Colour me surprised!: dark with hard colours
-    switch (statusGroup) {
-      case 'much-faster':
-      case 'faster': return '#4CD964'; // Hard green
-      case 'much-slower':
-      case 'slower': return '#FF8A3D'; // Hard orange
-      case 'steady':
-      default: return '#4DA3FF'; // Recent/change default
-    }
+    if (isFaster) return '#4CD964';
+    if (isSlower) return '#FF3B30';
+    return '#4DA3FF';
   };
   
-  const getBaselineColor = () => {
-    if (thm.key === 'gray') return '#6B6B6B'; // Earlier/reference
-    if (thm.key === 'pastel') return '#A9B7C6'; // Earlier/reference
-    return '#5F6B7A'; // Colour: earlier/reference
-  };
+  const statusColor = getStatusColor();
+  const rangeColor = thm.key === 'gray' ? '#CCCCCC' : 'rgba(0,0,0,0.2)';
+  const typicalColor = thm.key === 'gray' ? '#999999' : 'rgba(0,0,0,0.15)';
   
-  const baselineColor = getBaselineColor();
-  const recentColor = getRecentColor();
+  // Calculate positions on the city-wide scale
+  const cityRange = cityMax - cityMin || 1;
+  const livePos = hasData ? ((liveSpeed! - cityMin) / cityRange) * 100 : 50;
+  const typicalMinPos = hasData ? ((typical!.min - cityMin) / cityRange) * 100 : 30;
+  const typicalMaxPos = hasData ? ((typical!.max - cityMin) / cityRange) * 100 : 70;
+  const typicalMeanPos = hasData ? ((typical!.mean - cityMin) / cityRange) * 100 : 50;
+  
+  // Format speed
+  const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
   
   return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: 2,
-      height: 8,
-      width: '100%',
-    }}>
-      {/* Earlier segment (left) */}
+    <div style={{ width: '100%' }}>
+      {/* Box-and-whisker style bar */}
+      <div style={{ 
+        position: 'relative',
+        height: 14,
+        marginBottom: 2,
+      }}>
+        {/* City-wide range track */}
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 6,
+          height: 2,
+          background: rangeColor,
+          borderRadius: 1,
+        }} />
+        
+        {/* City min marker (left cap) */}
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          top: 4,
+          width: 3,
+          height: 6,
+          background: rangeColor,
+          borderRadius: '1px 0 0 1px',
+        }} />
+        
+        {/* City max marker (right cap) */}
+        <div style={{
+          position: 'absolute',
+          right: 0,
+          top: 4,
+          width: 3,
+          height: 6,
+          background: rangeColor,
+          borderRadius: '0 1px 1px 0',
+        }} />
+        
+        {/* Typical range bar (the "box") */}
+        {hasData && (
+          <div style={{
+            position: 'absolute',
+            left: `${typicalMinPos}%`,
+            right: `${100 - typicalMaxPos}%`,
+            top: 5,
+            height: 4,
+            background: typicalColor,
+            borderRadius: 2,
+          }} />
+        )}
+        
+        {/* Typical mean marker (small tick in the box) */}
+        {hasData && (
+          <div style={{
+            position: 'absolute',
+            left: `${typicalMeanPos}%`,
+            top: 4,
+            width: 2,
+            height: 6,
+            background: thm.textMuted,
+            transform: 'translateX(-50%)',
+            opacity: 0.5,
+          }} />
+        )}
+        
+        {/* Live speed marker (prominent circle) */}
+        {hasData && (
+          <div style={{
+            position: 'absolute',
+            left: `${livePos}%`,
+            top: 1,
+            width: 12,
+            height: 12,
+            background: statusColor,
+            borderRadius: '50%',
+            transform: 'translateX(-50%)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            zIndex: 3,
+            border: `2px solid ${thm.sectionBg}`,
+          }} />
+        )}
+      </div>
+      
+      {/* Speed labels */}
       <div style={{
-        width: `${baselineWidth}%`,
-        height: '100%',
-        background: baselineColor,
-        borderRadius: '2px 0 0 2px',
-        opacity: 0.7,
-      }} />
-      {/* Recent segment (right) */}
-      <div style={{
-        width: `${recentWidth}%`,
-        height: '100%',
-        background: recentColor,
-        borderRadius: '0 2px 2px 0',
-        opacity: 0.9,
-      }} />
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 9,
+        color: thm.textMuted,
+        lineHeight: 1,
+      }}>
+        <span>{fmt(cityMin)}</span>
+        <span style={{ 
+          color: statusColor, 
+          fontWeight: (isFaster || isSlower) ? 600 : 400,
+        }}>
+          {fmt(liveSpeed)} km/h
+        </span>
+        <span>{fmt(cityMax)}</span>
+      </div>
     </div>
   );
 }
@@ -237,13 +313,13 @@ function MiniLineChart({
   thm,
   startLabel,
   endLabel,
-  trendText,
+  status,
 }: { 
   points: number[]; 
   thm: AppTheme;
   startLabel: string;
   endLabel: string;
-  trendText: string;
+  status: LiveStatus;
 }) {
   if (points.length < 2) return null;
   
@@ -271,10 +347,10 @@ function MiniLineChart({
   // Smoothed line path (prominent)
   const smoothD = smoothedPoints.map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i, smoothedPoints.length).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ');
   
-  // Color for smoothed line based on trend direction
+  // Color for smoothed line based on status
   const getTrendColor = () => {
-    if (trendText.includes('faster')) return thm.speedGood;
-    if (trendText.includes('slower')) return thm.speedBad;
+    if (status === 'much-faster' || status === 'faster') return thm.speedGood;
+    if (status === 'much-slower' || status === 'slower') return thm.speedBad;
     return thm.chart.line1;
   };
   
@@ -382,7 +458,7 @@ function RouteCard({
     }
     
     // For pastel and colour: use semantic colors sparingly
-    switch (card.statusGroup) {
+    switch (card.status) {
       case 'much-faster':
       case 'faster': return thm.speedGood;
       case 'much-slower':
@@ -427,7 +503,7 @@ function RouteCard({
           flexShrink: 0,
           fontStyle: 'italic',
         }}>
-          {card.trendText}
+          {card.statusText}
         </span>
       </div>
       
@@ -440,11 +516,13 @@ function RouteCard({
         {endpoints}
       </p>
       
-      {/* Row 3: Two-state comparison bar (always visible) */}
-      <TwoStateBar 
-        baselineAvg={card.baselineAvg} 
-        recentAvg={card.recentAvg}
-        statusGroup={card.statusGroup}
+      {/* Row 3: Traffic NOW! bar - city-wide range with route position */}
+      <TrafficNowBar 
+        liveSpeed={card.liveSpeed}
+        typical={card.typical}
+        cityMin={card.cityMin}
+        cityMax={card.cityMax}
+        status={card.status}
         thm={thm}
       />
       
@@ -462,7 +540,7 @@ function RouteCard({
             thm={thm}
             startLabel={startLabel}
             endLabel={endLabel}
-            trendText={card.trendText}
+            status={card.status}
           />
         </div>
       )}
@@ -556,7 +634,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               <span style={{
                 fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
               }}>
-                🗺️ Speed Snapshot
+                � Traffic NOW!
               </span>
               {/* Info tooltip — click to toggle animated callout */}
               <InfoTip thm={thm} />
@@ -568,7 +646,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             </button>
           </div>
           <p style={{ fontSize: 10, color: thm.textMuted, margin: "2px 0 0" }}>
-            Tap a route to explore it
+            Live vs typical for this hour
           </p>
         </div>
 
@@ -668,7 +746,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             <span style={{ fontSize: 13 }}>🗺️</span>
             <span style={{
               fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
-            }}>Speed Snapshot by Route</span>
+            }}>Traffic NOW!</span>
           </div>
         </div>
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>

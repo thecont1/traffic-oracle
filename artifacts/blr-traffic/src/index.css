@@ -466,6 +466,13 @@
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
 }
 
+/* ── Pane info tooltip ────────────────────────────────────────── */
+.pane-info-tip:hover .pane-info-tip__bubble,
+.pane-info-tip:focus-within .pane-info-tip__bubble {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 @media print {
   @page { margin: 0; }
   body { margin: 0.5in; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

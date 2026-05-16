@@ -261,11 +261,46 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{
-              fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
-            }}>
-              🗺️ Speed Snapshot
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{
+                fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
+              }}>
+                🗺️ Speed Snapshot
+              </span>
+              {/* Info tooltip */}
+              <div style={{ position: "relative" }} className="pane-info-tip">
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 16, height: 16, borderRadius: "50%",
+                  border: `1.5px solid ${thm.textMuted}`,
+                  fontSize: 9, fontWeight: 700, cursor: "help",
+                  color: thm.textMuted, flexShrink: 0,
+                  lineHeight: 1,
+                }}>i</span>
+                <div style={{
+                  position: "absolute", bottom: "100%", left: "50%",
+                  transform: "translateX(-50%)",
+                  marginBottom: 6,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: thm.key === "colour" ? "#2A2725" : "#FFFFFF",
+                  border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                  fontSize: 11, lineHeight: 1.5,
+                  color: thm.textPrimary,
+                  width: 200,
+                  zIndex: 100,
+                  pointerEvents: "none",
+                  opacity: 0,
+                  transition: "opacity 0.15s",
+                }} className="pane-info-tip__bubble">
+                  <p style={{ margin: "0 0 4px", fontWeight: 700 }}>What's this?</p>
+                  <p style={{ margin: 0, color: thm.textMuted }}>
+                    Each mini chart shows <strong style={{ color: thm.textPrimary }}>weekly average speed</strong> over the last 6 months. Higher = faster. The ▲/▼ badge compares recent 4 weeks to your baseline window.
+                  </p>
+                </div>
+              </div>
+            </div>
             <button onClick={onToggle} title="Close"
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,
                 color: thm.textMuted, padding: 2, borderRadius: 4, lineHeight: 1 }}>

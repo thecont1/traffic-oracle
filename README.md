@@ -119,15 +119,22 @@ Click any route to select it and drill into detailed analysis. The Airport Expre
 
 Routes are rendered as quadratic Bézier arcs with curve direction determined by a hash of the route name, preventing overlap on parallel corridors.
 
-### 2. Route Cards — _Which routes are getting better or worse?_
+### 2. Traffic NOW! — _Is traffic normal right now?_
 
-A side-by-side comparison of all monitored routes, each showing:
+A live traffic indicator comparing current speed against typical speeds for this hour. Uses 90 days of historical data (±90 minutes around current time) to establish a statistical baseline.
 
-- A **sparkline** of weekly average speeds over the last 6 months
-- A **delta indicator** (▲/▼) comparing recent performance against your chosen baseline window
-- Visual flags for the **top 3 routes that worsened the most**
+**How it works:**
+- **Colored dot** = current live speed for the route
+- **Gray bar** = "typical" range (15th–85th percentile, covering 70% of normal traffic)
+- **Black line** = full city-wide speed range (0–80 km/h baseline)
+- **Status indicator** = verdict based on percentiles:
+  - >90th percentile: "much faster than typical"
+  - 85th–90th: "faster than typical"
+  - 15th–85th: "as expected for this hour"
+  - 10th–15th: "slower than typical"
+  - <10th percentile: "much slower than typical"
 
-Tap any card to jump to that route on the map.
+Tap any route card to select it on the main map and charts.
 
 ### 3. Trend Analysis — _How does traffic change over time?_
 
@@ -222,6 +229,7 @@ Data is aggregated at multiple granularities:
 
 - **Weekly** (`aggregateRows`): Groups by Monday-based week key, computes avg speed, avg/median/p95 duration
 - **Daily** (`useDailyStats`): Groups by date string, filtered by route + time-of-day
+- **Traffic NOW! Stats** (`computeTODStats`): Uses percentile-based statistics (p10, p15, p50, p85, p90) computed from 90-day historical window ±90 min around current time
 - **Overall** (`computeStats`): Mean, median, p95, avg speed, count for any row set
 
 ### Step 5: Compare (Baseline)
@@ -252,9 +260,23 @@ Weekly aggregates are merged side-by-side for chart rendering.
 
 `toWeekKey(date)` generates a Monday-based ISO week identifier (`YYYY-MM-DD`). All days in the same week resolve to the same key, enabling correct weekly grouping across month/year boundaries.
 
-### Percentile Calculation
+### Percentile-Based Statistics (Traffic NOW!)
 
-`percentile(sorted, p)` uses linear interpolation for non-integer indices, matching standard statistical conventions. Handles edge cases: empty arrays → 0, p=0 → min, p=100 → max.
+Traffic data is **right-skewed** — congestion creates a long tail of slow speeds while fast speeds have an upper bound. Standard deviation assumes normal distribution, which is statistically invalid for traffic.
+
+**Industry standard: Percentiles**
+
+Used by INRIX, TomTom, Google Maps for skewed traffic data:
+
+| Statistic | Meaning | Usage |
+|-----------|---------|-------|
+| **p10** | Fast end of "normal" | Threshold: "much slower" if below |
+| **p15** | Lower typical bound | Threshold: "slower" if below |
+| **p50** | Median — typical center | Visual marker in the confidence bar |
+| **p85** | Upper typical bound | Threshold: "faster" if above |
+| **p90** | Slow end of "normal" | Threshold: "much faster" if above |
+
+`percentile(sorted, p)` uses linear interpolation for non-integer indices. The 15th–85th percentile range (70% of observations) defines "typical" traffic for a given time-of-day.
 
 ### URL Parameters
 

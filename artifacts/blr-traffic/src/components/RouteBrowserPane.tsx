@@ -4,23 +4,53 @@ import type { AppTheme } from "@/lib/theme";
 
 /* ── Info tip ────────────────────────────────────────────────── */
 function InfoTip({ thm }: { thm: AppTheme }) {
+  const tipRef = useRef<HTMLDivElement>(null);
   const tooltipText = "See if traffic is normal right now. The colored dot shows current speed; the gray bar shows what's typical for this hour (based on 90 days of data). Dot left of the bar = slower than usual, right = faster, centered = as expected. Tap any route to explore it on the main charts.";
   
+  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
+    const el = tipRef.current;
+    if (!el) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const TW = el.offsetWidth || 240;
+    const TH = el.offsetHeight || 64;
+    const vw = window.innerWidth;
+    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
+    el.style.left = left + "px";
+    el.style.top = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
+    el.style.opacity = "1";
+  };
+  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
+  
   return (
-    <button
-      aria-label={tooltipText}
-      title={tooltipText}
-      style={{
-        width: 18, height: 18, borderRadius: 999,
-        border: `1.5px solid ${thm.textMuted}`,
-        color: thm.textMuted, background: "transparent",
-        fontSize: 11, fontWeight: 700, lineHeight: 1,
-        cursor: "help", display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 0,
-      }}
-    >
-      i
-    </button>
+    <>
+      <span
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 14, height: 14, borderRadius: "50%",
+          border: `1.5px solid ${thm.textMuted}`,
+          fontSize: 8, fontWeight: 900, cursor: "help",
+          color: thm.textMuted,
+          marginLeft: 5, userSelect: "none",
+          textTransform: "none", letterSpacing: "normal",
+          lineHeight: 1, flexShrink: 0,
+        }}
+      >
+        i
+      </span>
+      <div ref={tipRef} style={{
+        position: "fixed", pointerEvents: "none",
+        opacity: 0, transition: "opacity 0.15s ease",
+        background: thm.key === "colour" ? "#262321" : thm.key === "pastel" ? "#2A2520" : "#1a1a1a",
+        borderRadius: 10, padding: "9px 12px",
+        boxShadow: "0 6px 28px rgba(0,0,0,0.45)",
+        zIndex: 2000, maxWidth: 240,
+        fontSize: 12, lineHeight: 1.5, color: thm.textPrimary,
+      }}>
+        {tooltipText}
+      </div>
+    </>
   );
 }
 
@@ -447,12 +477,9 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               ✕
             </button>
           </div>
-          <p style={{ fontSize: 10, color: thm.textMuted, margin: "2px 0 0" }}>
-            Live vs typical for this hour
-          </p>
           {dataTimestamp && (
-            <p style={{ fontSize: 9, color: thm.textMuted, margin: "4px 0 0", opacity: 0.8 }}>
-              Data: {dataTimestamp.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} {dataTimestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0", opacity: 0.8 }}>
+              {dataTimestamp.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} {dataTimestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
             </p>
           )}
         </div>
@@ -462,7 +489,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "8px 2px 8px 0",
+            height: "100%", overflowY: "auto", padding: "8px 8px 8px 0",
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (
@@ -565,7 +592,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
           <div style={{
-            height: "100%", overflowY: "auto", padding: "6px 2px 12px 0",
+            height: "100%", overflowY: "auto", padding: "6px 8px 12px 0",
             display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
           }}>
             {!cards ? (

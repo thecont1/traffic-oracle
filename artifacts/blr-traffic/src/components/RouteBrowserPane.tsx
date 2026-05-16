@@ -42,11 +42,13 @@ function InfoTip({ thm }: { thm: AppTheme }) {
       <div ref={tipRef} style={{
         position: "fixed", pointerEvents: "none",
         opacity: 0, transition: "opacity 0.15s ease",
-        background: thm.key === "colour" ? "#262321" : thm.key === "pastel" ? "#2A2520" : "#1a1a1a",
+        background: thm.key === "gray" ? "#f0f0f0" : "#262321",
+        border: thm.key === "gray" ? "1px solid #d0d0d0" : "none",
         borderRadius: 10, padding: "9px 12px",
         boxShadow: "0 6px 28px rgba(0,0,0,0.45)",
         zIndex: 2000, maxWidth: 240,
-        fontSize: 12, lineHeight: 1.5, color: thm.textPrimary,
+        fontSize: 12, lineHeight: 1.5, 
+        color: thm.key === "gray" ? "#333333" : "#F3EBDD",
       }}>
         {tooltipText}
       </div>
@@ -149,8 +151,8 @@ function TrafficNowBar({
   };
   
   const statusColor = getStatusColor();
-  const rangeColor = thm.key === 'gray' ? '#CCCCCC' : 'rgba(0,0,0,0.2)';
-  const typicalColor = thm.key === 'gray' ? '#999999' : 'rgba(0,0,0,0.15)';
+  const rangeColor = thm.key === 'gray' ? '#CCCCCC' : thm.key === 'pastel' ? 'rgba(80,70,60,0.35)' : 'rgba(60,55,50,0.4)';
+  const typicalColor = thm.key === 'gray' ? '#888888' : thm.key === 'pastel' ? 'rgba(80,70,60,0.5)' : 'rgba(60,55,50,0.55)';
   
   // Calculate positions on the city-wide scale using percentiles
   const cityRange = cityMax - cityMin || 1;
@@ -228,22 +230,15 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Speed labels */}
+      {/* Live speed display */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontSize: 9,
-        color: thm.textMuted,
+        textAlign: 'center',
+        fontSize: 10,
+        color: statusColor,
+        fontWeight: (isFaster || isSlower) ? 600 : 400,
         lineHeight: 1,
       }}>
-        <span>{fmt(cityMin)}</span>
-        <span style={{ 
-          color: statusColor, 
-          fontWeight: (isFaster || isSlower) ? 600 : 400,
-        }}>
-          {fmt(liveSpeed)} km/h
-        </span>
-        <span>{fmt(cityMax)}</span>
+        {fmt(liveSpeed)} km/h
       </div>
     </div>
   );

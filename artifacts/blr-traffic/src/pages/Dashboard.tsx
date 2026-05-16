@@ -12,7 +12,7 @@ import {
 import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
-import type { ChipVariant } from "@/lib/theme";
+import type { ChipVariant, AppTheme } from "@/lib/theme";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 
 /* ── Filter options ───────────────────────────────────────────── */
@@ -129,10 +129,137 @@ function Chip({ children, icon, variant, onClick, animate, inert }: {
       className={`chip chip-${variant} ${animate?"animate-pop":""}`}
       onClick={inert ? undefined : onClick}
       title={inert ? "Multi-city support coming soon" : "Tap to explore differently"}
-      style={inert ? { cursor:"default", opacity:0.9, ...styleOverride } : styleOverride}
+      style={inert ? { cursor:"default", opacity:0.9, display:"flex", alignItems:"center", gap:6, padding:"6px 44px", ...styleOverride } : { display:"flex", alignItems:"center", gap:6, padding:"4px 34px", ...styleOverride }}
     >
       <span>{icon}</span>{children}
     </button>
+  );
+}
+
+/* ── Location Dropdown ─────────────────────────────────────────── */
+const CITIES = [
+  { name: "Bangalore", ready: true },
+  { name: "Chennai", ready: false },
+  { name: "Delhi", ready: false },
+  { name: "Kolkata", ready: false },
+  { name: "Mumbai", ready: false },
+  { name: "Kochi", ready: false },
+  { name: "Hyderabad", ready: false },
+  { name: "Jaipur", ready: false },
+];
+
+function LocationDropdown({ thm }: { thm: AppTheme }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("Bangalore");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Close when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+  
+  const tok = thm.chips.city;
+  const styleOverride: React.CSSProperties | undefined = thm.key !== "colour" ? {
+    background: tok.bg,
+    color: tok.color,
+    border: `1.5px solid ${tok.border}`,
+    boxShadow: tok.shadow,
+  } : undefined;
+  
+  return (
+    <div ref={dropdownRef} style={{ position: "relative" }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          height: 34,
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "0 12px",
+          borderRadius: 9999,
+          cursor: "pointer",
+          fontSize: 12,
+          fontWeight: 600,
+          fontFamily: "var(--app-font-display)",
+          ...styleOverride,
+        }}
+      >
+        <span>📍</span>
+        <span>{selectedCity}</span>
+        <span style={{ 
+          marginLeft: 2, 
+          fontSize: 10,
+          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform 0.2s",
+        }}>▼</span>
+      </button>
+      
+      {isOpen && (
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 4px)",
+          left: 0,
+          minWidth: 140,
+          background: thm.sectionBg,
+          border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+          borderRadius: 8,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          padding: "4px 0",
+          zIndex: 1000,
+        }}>
+          {CITIES.map((city) => (
+            <button
+              key={city.name}
+              onClick={() => {
+                if (city.ready) {
+                  setSelectedCity(city.name);
+                  setIsOpen(false);
+                }
+              }}
+              disabled={!city.ready}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                padding: "8px 12px",
+                border: "none",
+                background: "transparent",
+                cursor: city.ready ? "pointer" : "not-allowed",
+                opacity: city.ready ? 1 : 0.4,
+                fontSize: 12,
+                fontFamily: "var(--app-font-display)",
+                color: city.name === selectedCity ? thm.chart.line1 : thm.textSecondary,
+                fontWeight: city.name === selectedCity ? 600 : 400,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 10 }}>
+                {city.name === selectedCity ? "●" : city.ready ? "○" : "◌"}
+              </span>
+              <span>{city.name}</span>
+              {!city.ready && (
+                <span style={{ 
+                  marginLeft: "auto", 
+                  fontSize: 9, 
+                  color: thm.textMuted,
+                  fontStyle: "italic",
+                  fontFamily: "var(--app-font)",
+                }}>soon</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -660,14 +787,98 @@ function CalendarWidget({
 }
 
 /* ── All-roads overview panel ──────────────────────────────────── */
+type StatusGroup = 'much-slower' | 'slower' | 'steady' | 'faster' | 'much-faster' | 'no-data';
+
 interface RouteCardData {
   label: string;
   origin: string;
   destination: string;
   sparkPoints: number[];
-  delta: number | null;
-  isBaseline: boolean;
-  isTop3Worst: boolean;
+  // Comparison data for two-state bar
+  baselineAvg: number;
+  recentAvg: number;
+  comparisonDelta: number | null;
+  // Status grouping and display
+  statusGroup: StatusGroup;
+  statusText: string; // "much slower", "slower", "steady", "faster", "much faster", "no data"
+  // Trend description for hover state
+  trendText: string; // "a bit faster lately", "flat overall", "slowing down lately", etc.
+  // For stable sorting tiebreaker
+  sortKey: string;
+}
+
+function computeStatusFromDelta(delta: number | null): { statusGroup: StatusGroup; statusText: string } {
+  if (delta === null) return { statusGroup: 'no-data', statusText: 'no data' };
+  
+  // Thresholds per user spec
+  if (delta > 2.0) return { statusGroup: 'much-faster', statusText: 'much faster' };
+  if (delta > 0.75) return { statusGroup: 'faster', statusText: 'faster' };
+  if (delta >= -0.75) return { statusGroup: 'steady', statusText: 'steady' };
+  if (delta >= -2.0) return { statusGroup: 'slower', statusText: 'slower' };
+  return { statusGroup: 'much-slower', statusText: 'much slower' };
+}
+
+/** Compute 7-day rolling average for smoothing */
+function computeRollingAverage(points: number[], windowSize: number = 7): number[] {
+  if (points.length < windowSize) return points;
+  
+  const result: number[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const start = Math.max(0, i - windowSize + 1);
+    const window = points.slice(start, i + 1);
+    const avg = window.reduce((sum, v) => sum + v, 0) / window.length;
+    result.push(avg);
+  }
+  return result;
+}
+
+/** Compute trend text based on smoothed recent trajectory */
+function computeTrendText(sparkPoints: number[]): string {
+  if (sparkPoints.length < 14) return 'not enough data';
+  
+  // Smooth with 7-day rolling average
+  const smoothed = computeRollingAverage(sparkPoints, 7);
+  
+  // Split into first half and second half
+  const midPoint = Math.floor(smoothed.length / 2);
+  const firstHalf = smoothed.slice(0, midPoint);
+  const secondHalf = smoothed.slice(midPoint);
+  
+  const firstAvg = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
+  const secondAvg = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
+  
+  const trendDelta = secondAvg - firstAvg;
+  const trendPercent = (trendDelta / firstAvg) * 100;
+  
+  // Determine direction and magnitude
+  const absPercent = Math.abs(trendPercent);
+  const direction = trendDelta > 0 ? 'faster' : 'slower';
+  
+  if (absPercent < 1.5) {
+    // Check for flat pattern - compare variance
+    const firstTrend = firstHalf[firstHalf.length - 1] - firstHalf[0];
+    const secondTrend = secondHalf[secondHalf.length - 1] - secondHalf[0];
+    
+    if (Math.abs(firstTrend) < 1 && Math.abs(secondTrend) < 1) {
+      return 'flat overall';
+    }
+    
+    // Recent direction matters more
+    const recentSlice = smoothed.slice(-7);
+    const recentTrend = recentSlice[recentSlice.length - 1] - recentSlice[0];
+    if (Math.abs(recentTrend) < 0.5) {
+      return 'flat overall';
+    }
+    return recentTrend > 0 ? 'a bit faster lately' : 'a bit slower lately';
+  }
+  
+  if (absPercent < 4) {
+    return `a bit ${direction} lately`;
+  }
+  if (absPercent < 8) {
+    return `getting ${direction} lately`;
+  }
+  return `much ${direction} lately`;
 }
 
 function computeAllRouteCards(
@@ -681,8 +892,6 @@ function computeAllRouteCards(
   const lastDataDate = lastTs ? new Date(lastTs) : new Date();
   const fourWkAgo = new Date(lastDataDate.getTime() - 28 * 24 * 60 * 60 * 1000);
   const sixtyDaysAgo = new Date(lastDataDate.getTime() - 60 * 24 * 60 * 60 * 1000);
-  const sixMoAgo  = new Date(lastDataDate);
-  sixMoAgo.setMonth(sixMoAgo.getMonth() - 6);
 
   const cards = routeOptions.map((label): RouteCardData => {
     const routeRows = allRows.filter(r => r.label_short === label);
@@ -722,30 +931,21 @@ function computeAllRouteCards(
       ? recentRows.reduce((s, r) => s + r.speed_kmh, 0) / recentRows.length
       : 0;
 
-    const delta = baselineAvg > 0 && recentAvg > 0
+    const comparisonDelta = baselineAvg > 0 && recentAvg > 0
       ? Math.round((recentAvg - baselineAvg) * 10) / 10
       : null;
 
-    const isBaseline = label.toLowerCase().includes("airport expy");
-    return { label, origin, destination, sparkPoints, delta, isBaseline, isTop3Worst: false };
+    const { statusGroup, statusText } = computeStatusFromDelta(comparisonDelta);
+    const trendText = computeTrendText(sparkPoints);
+
+    return { 
+      label, origin, destination, sparkPoints, 
+      baselineAvg, recentAvg, comparisonDelta,
+      statusGroup, statusText, trendText,
+      sortKey: label.toLowerCase(),
+    };
   });
 
-  /* sort: worst delta first; null after; baseline always last */
-  cards.sort((a, b) => {
-    if (a.isBaseline) return 1;
-    if (b.isBaseline) return -1;
-    if (a.delta === null && b.delta === null) return 0;
-    if (a.delta === null) return 1;
-    if (b.delta === null) return -1;
-    return a.delta - b.delta;
-  });
-
-  /* mark top 3 genuinely worsened cards */
-  let worstCount = 0;
-  for (const c of cards) {
-    if (c.isBaseline || c.delta === null || c.delta >= -0.5) continue;
-    if (worstCount < 3) { c.isTop3Worst = true; worstCount++; }
-  }
   return cards;
 }
 
@@ -779,6 +979,7 @@ function DashboardInner() {
 
   /* slider */
   const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
+  const [sliderManuallySet, setSliderManuallySet] = useState(false);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [overlapWarning, setOverlapWarning] = useState(false);
@@ -855,6 +1056,9 @@ function DashboardInner() {
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
+    // If user has manually set the slider, don't reset it on tod/period changes
+    if (sliderManuallySet) return;
+    
     const maxI = allRouteWeeks.length - 1;
     const p = urlParamsRef.current;
     if (p.bl !== undefined && p.br !== undefined) {
@@ -881,7 +1085,7 @@ function DashboardInner() {
       if (idx >= 0) rightIdx = idx;
     }
     setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
-  }, [tod, allRouteWeeks.length]);
+  }, [tod, allRouteWeeks.length, sliderManuallySet]);
 
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
@@ -1022,6 +1226,7 @@ function DashboardInner() {
       overlapTimer.current = setTimeout(() => setOverlapWarning(false), 3000);
     }
     setSliderVals([l, r]);
+    setSliderManuallySet(true); // Mark slider as manually set
     const win = r - l;
     if ((win <= 1 || win >= allRouteWeeks.length * 0.85) && !showSparkle) {
       setShowSparkle(true);
@@ -1110,29 +1315,25 @@ function DashboardInner() {
           position:"sticky", top:0, zIndex:500,
           flexShrink: 0,
         }}>
-          <div style={{ maxWidth:1320, margin:"0 auto", padding:"0.75rem 1.5rem",
+          <div style={{ margin:"0 auto", padding:"0.75rem 1rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            {/* Left: Logo + Location */}
+            <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
               <img
                 src="/trafficoracle-light.png"
                 alt="TraffiCOracle"
                 style={{ height:32, width:"auto", flexShrink:0 }}
               />
-              <div>
-                <div style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.2 }}>
-                  <div style={{ height: 34, display: "inline-flex", alignItems: "center" }}>
-                    <Chip icon="📍" variant="city" onClick={() => {}} inert>Bangalore</Chip>
-                  </div>
-                </div>
-              </div>
+              <LocationDropdown thm={thm} />
             </div>
 
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {/* Right: Share + Refresh + Theme */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
               {!loading && rowCount > 0 && (
                 <button onClick={handleShare} style={{
                   display:"flex", alignItems:"center", gap:5, fontSize:12,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  borderRadius:9999, padding:"5px 12px",
+                  borderRadius:9999, height:34, padding:"0 12px",
                   color: copied ? thm.speedGood : thm.textMuted,
                   background: copied ? "rgba(111,174,99,0.1)" : "transparent",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
@@ -1141,11 +1342,10 @@ function DashboardInner() {
                   {copied ? "Copied!" : "Share"}
                 </button>
               )}
-              {/* Three-way theme toggle */}
               <button onClick={refresh} disabled={loading} style={{
                 display:"flex", alignItems:"center", gap:5, fontSize:12,
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                borderRadius:9999, padding:"5px 12px",
+                borderRadius:9999, height:34, padding:"0 12px",
                 color: thm.textMuted,
                 background: "transparent",
                 cursor: loading ? "default" : "pointer",
@@ -1218,7 +1418,7 @@ function DashboardInner() {
               <span>?</span>
             </h1>
             <p style={{ marginTop:"0.25rem", fontSize:12, color: thm.textMuted }}>
-              Tap any highlighted word to explore a different question.
+              <br></br>(Tap any highlighted word to explore a different question.)
             </p>
           </div>
 
@@ -1501,7 +1701,7 @@ function DashboardInner() {
                         Weekly avg km/h — higher is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
-                        <AreaChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
+                        <AreaChart data={merged} margin={{top:4,right:8,left:8,bottom:0}}>
                           <defs>
                             <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>

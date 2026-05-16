@@ -280,23 +280,34 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 <div style={{
                   position: "absolute", bottom: "100%", left: "50%",
                   transform: "translateX(-50%)",
-                  marginBottom: 6,
-                  padding: "8px 10px",
-                  borderRadius: 8,
+                  marginBottom: 8,
+                  padding: "10px 12px",
+                  borderRadius: 10,
                   background: thm.key === "colour" ? "#2A2725" : "#FFFFFF",
                   border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                  fontSize: 11, lineHeight: 1.5,
+                  boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
+                  fontSize: 11, lineHeight: 1.55,
                   color: thm.textPrimary,
-                  width: 200,
+                  width: 220,
                   zIndex: 100,
                   pointerEvents: "none",
                   opacity: 0,
                   transition: "opacity 0.15s",
                 }} className="pane-info-tip__bubble">
-                  <p style={{ margin: "0 0 4px", fontWeight: 700 }}>What's this?</p>
-                  <p style={{ margin: 0, color: thm.textMuted }}>
-                    Each mini chart shows <strong style={{ color: thm.textPrimary }}>weekly average speed</strong> over the last 6 months. Higher = faster. The ▲/▼ badge compares recent 4 weeks to your baseline window.
+                  <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12 }}>
+                    How to read these charts
+                  </p>
+                  <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
+                    Each mini chart shows <strong style={{ color: thm.textPrimary }}>weekly average speed (km/h)</strong> for that route, over the last 6 months.
+                  </p>
+                  <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
+                    <strong style={{ color: thm.textPrimary }}>Higher = faster.</strong> The Y-axis is auto-scaled to each route's own range, so you can compare trends — not absolute speeds across routes.
+                  </p>
+                  <p style={{ margin: "0 0 5px", color: thm.textMuted }}>
+                    The <strong style={{ color: thm.textPrimary }}>▲ / ▼ badge</strong> shows how the last 4 weeks compare to your baseline window (set by the slider). The number is the speed difference in km/h.
+                  </p>
+                  <p style={{ margin: 0, color: thm.textMuted, fontSize: 10, fontStyle: "italic" }}>
+                    ⚡ Benchmark = the fastest route, sets what's achievable without breaking traffic laws.
                   </p>
                 </div>
               </div>

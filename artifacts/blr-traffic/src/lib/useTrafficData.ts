@@ -407,8 +407,8 @@ export function useFilteredData(
   baselineRoute: string = "Hosur Road",
 ) {
   return useMemo(() => {
-    const now = new Date();
-    const cutoff = new Date(now);
+    const lastDataMs = allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0);
+    const cutoff = new Date(lastDataMs || Date.now());
     if (period === "1m") cutoff.setMonth(cutoff.getMonth() - 1);
     else if (period === "3m") cutoff.setMonth(cutoff.getMonth() - 3);
     else if (period === "6m") cutoff.setMonth(cutoff.getMonth() - 6);

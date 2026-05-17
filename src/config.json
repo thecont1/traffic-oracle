@@ -55,5 +55,9 @@
     "width": 400,
     "max_width": 600,
     "polling_interval_min": 10
+  },
+  "zoom": {
+    "default": 1.00,
+    "steps": [0.80, 0.90, 1.00, 1.10, 1.20]
   }
 }

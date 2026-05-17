@@ -80,7 +80,6 @@
 
 :root {
   color-scheme: light;
-  zoom: 1.15;
   --app-font-display: 'Poppins', sans-serif;
   --app-font-sans: 'Inter', 'Poppins', sans-serif;
   --app-font-serif: Georgia, serif;
@@ -219,6 +218,7 @@
 
 @layer base {
   * { @apply border-border; }
+  html, body { height: 100%; margin: 0; }
   body { @apply antialiased bg-background text-foreground; font-family: var(--app-font-sans); }
   button { cursor: pointer; }
 

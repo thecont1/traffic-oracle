@@ -1250,6 +1250,9 @@ function DashboardInner() {
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
     cfg.percentile.verdict_threshold_kmh;
+  /* "1 in N" from the worst-case percentile (e.g. p95 → 1-in-20) */
+  const badDayN = Math.round(100 / (100 - cfg.percentile.worst_case));
+
 
   type DataTrend = "improved" | "worsened" | "stable" | "insufficient";
   const dataTrend: DataTrend =
@@ -1672,9 +1675,9 @@ function DashboardInner() {
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
                     {/*<span style={{ fontSize:28 }}>🔥</span>*/}
-                    <div style={kpiLabel}>Bad day trip <KpiInfo text="On a bad day, your trip could take this long. Specifically, 1 in every 20 trips (the 95th percentile) is at least this slow." /></div>
+                    <div style={kpiLabel}>Bad day trip <KpiInfo text={`On a bad day, your trip could take this long. Specifically, 1 in every ${badDayN} trips (the ${cfg.percentile.worst_case}${cfg.percentile.worst_case === 11 ? "st" : cfg.percentile.worst_case === 12 ? "nd" : cfg.percentile.worst_case === 13 ? "rd" : "th"} percentile) is at least this slow.`} /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
-                    <p style={kpiSub}>1-in-20 trips take this long</p>
+                    <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>

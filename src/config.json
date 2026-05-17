@@ -7,22 +7,22 @@
     }
   },
   "percentile": {
-    "worst_case": 95,
+    "worst_case": 90,
     "verdict_threshold_kmh": 0.5
   },
   "baseline": {
-    "default_start": "2025-10-20",
-    "default_end": "2025-12-15"
+    "default_start": "2026-01-05",
+    "default_end": "2026-03-02"
   },
   "defaults": {
-    "period": "6m",
-    "time_of_day": "weekday_afternoon",
+    "period": "1m",
+    "time_of_day": "weekday_morning",
     "question_mode": "worsened"
   },
   "route_pane": {
     "open": true,
-    "width": 200,
-    "min_width": 140,
+    "width": 300,
+    "min_width": 200,
     "max_width": 500
   }
 }

@@ -18,6 +18,10 @@ import {
   type TimePeriod,
 } from "../../src/lib/useTrafficData";
 import * as Papa from "papaparse";
+import appConfig from "../../src/config.json";
+import type { AppConfig } from "../../src/lib/config";
+
+const cfg = appConfig as AppConfig;
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
 
@@ -467,7 +471,7 @@ describe("Phase 2 — Aggregation", () => {
       expect(result.map(r => r.weekKey)).toEqual(["2026-04-06", "2026-04-13", "2026-04-20"]);
     });
 
-    it("computes median and p95 durations correctly", () => {
+    it("computes median and bad-day durations correctly", () => {
       // 5 rows in the SAME week (April 8-12, 2026 → all in week 2026-04-06)
       // aggregateRows groups by week key, so this produces 1 weekly aggregate
       const rows: TrafficRow[] = [10, 20, 30, 40, 50].map((d, i) =>
@@ -480,7 +484,9 @@ describe("Phase 2 — Aggregation", () => {
       expect(result[0].count).toBe(5);
       // durations sorted: [10, 20, 30, 40, 50]
       expect(result[0].medianDuration).toBe(30); // middle value
-      expect(result[0].p95Duration).toBeCloseTo(48, 10); // p95 via interpolation
+      // bad-day duration uses config's percentile — verify mechanism, not magic number
+      const expectedBadDay = Math.round(percentile([10, 20, 30, 40, 50], cfg.percentile.worst_case) * 10) / 10;
+      expect(result[0].p95Duration).toBeCloseTo(expectedBadDay, 10);
     });
 
     it("returns empty array for empty input", () => {

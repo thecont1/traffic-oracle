@@ -929,9 +929,9 @@ function computeAllRouteCards(
   const cityMin = liveSpeeds.length > 0 ? Math.min(...liveSpeeds) : 0;
   const cityMax = liveSpeeds.length > 0 ? Math.max(...liveSpeeds) : 80;
   
-  // Ensure reasonable range
-  const effectiveMin = Math.min(cityMin, cityMax * 0.3);
-  const effectiveMax = Math.max(cityMax, effectiveMin + 20);
+  // Ensure 1 km/h padding on each side so the dot never touches the edge
+  const effectiveMin = cityMin - 1;
+  const effectiveMax = cityMax + 1;
   
   // Final pass: compute status and build final cards
   const cards: RouteCardData[] = preliminaryCards.map(card => {

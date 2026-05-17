@@ -170,12 +170,13 @@ function TrafficNowBar({
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
   
   return (
-    <div style={{ width: '100%' }}>
+    <div style={{ width: '100%', height: 32, position: 'relative' }}>
       {/* Bar area — fixed height */}
       <div style={{ 
-        position: 'relative',
+        position: 'absolute',
+        left: 0, right: 0,
+        top: 12,
         height: 14,
-        marginBottom: 2,
       }}>
         {/* City-wide range track */}
         <div style={{
@@ -231,10 +232,13 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Speed below bar — only on hover */}
+      {/* Speed below bar — only on hover, positioned absolutely */}
       {hovered && (
         <div style={{
-          textAlign: 'center', fontSize: 10, lineHeight: 1, marginTop: 2,
+          position: 'absolute',
+          left: 0, right: 0,
+          bottom: 0,
+          textAlign: 'center', fontSize: 10, lineHeight: 1,
         }}>
           <span style={{ color: statusColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
             {fmt(liveSpeed)} km/h

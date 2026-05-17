@@ -1387,7 +1387,7 @@ function DashboardInner() {
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, height:44, padding:"0 14px",
                   color: copied ? thm.speedGood : thm.textMuted,
-                  background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#262321" : "transparent",
+                  background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#141A24" : "transparent",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
                   <Share2 size={13} />
@@ -1401,7 +1401,7 @@ function DashboardInner() {
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                 borderRadius:9999, height:44, padding:"0 14px",
                 color: thm.textMuted,
-                background: thm.key==="colour" ? "#262321" : "transparent",
+                background: thm.key==="colour" ? "#141A24" : "transparent",
                 cursor: loading ? "default" : "pointer",
                 transition:"color 0.2s, background 0.2s",
                 opacity: loading ? 0.4 : 1,
@@ -1419,7 +1419,7 @@ function DashboardInner() {
                   height:44, borderRadius:9999, padding:"0 12px",
                   minWidth: 160,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  background: thm.key==="colour" ? "#262321" : thm.key==="gray" ? "#f5f5f5" : "#DBEAFE",
+                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#DBEAFE",
                   cursor:"pointer",
                   transition:"background 0.2s",
                 }}

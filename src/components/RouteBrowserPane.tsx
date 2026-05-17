@@ -46,7 +46,7 @@ function InfoTip({ thm }: { thm: AppTheme }) {
       <div ref={tipRef} style={{
         position: "fixed", pointerEvents: "none",
         opacity: 0, transition: "opacity 0.15s ease",
-        background: thm.key === "gray" ? "#f0f0f0" : "#262321",
+        background: thm.key === "gray" ? "#f0f0f0" : "#141A24",
         border: thm.key === "gray" ? "1px solid #d0d0d0" : "none",
         borderRadius: 10, padding: "9px 12px",
         boxShadow: "0 6px 28px rgba(0,0,0,0.45)",
@@ -502,7 +502,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         {/* Header */}
         <div style={{
           padding: "10px 12px 7px",
-          borderBottom: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+          borderBottom: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -575,17 +575,17 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           width: RAIL_WIDTH,
           display: "flex", flexDirection: "column", alignItems: "center",
           paddingTop: 14, cursor: "pointer",
-          background: thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
-          borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+          background: thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
+          borderLeft: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
           transition: "background 0.2s", zIndex: 2,
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#2A2725" : thm.key === "pastel" ? "#EDE5D5" : "#eeeeee";
+            thm.key === "colour" ? "#1A2030" : thm.key === "pastel" ? "#EDE5D5" : "#eeeeee";
         }}
         onMouseLeave={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
+            thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
         }}
       >
         <span className="live-dot" aria-hidden="true" style={{
@@ -623,7 +623,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         position: "fixed", bottom: 0, left: 0, right: 0,
         height: isOpen ? 300 : 0, zIndex: 999,
         background: thm.sectionBg,
-        borderTop: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+        borderTop: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
         borderTopLeftRadius: 16, borderTopRightRadius: 16,
         boxShadow: "0 -4px 20px rgba(0,0,0,0.10)",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -674,8 +674,8 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           position: "fixed", bottom: 16, right: 16, zIndex: 997,
           display: "flex", alignItems: "center", gap: 6,
           padding: "8px 14px", borderRadius: 9999,
-          border: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
-          background: thm.key === "colour" ? "#262321" : "#FFF9F0",
+          border: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
+          background: thm.key === "colour" ? "#141A24" : "transparent",
           color: thm.textPrimary, fontFamily: "var(--app-font-display)",
           fontWeight: 700, fontSize: 12, cursor: "pointer",
           boxShadow: "0 3px 12px rgba(0,0,0,0.12)",

@@ -80,6 +80,7 @@
 
 :root {
   color-scheme: light;
+  zoom: 1.15;
   --app-font-display: 'Poppins', sans-serif;
   --app-font-sans: 'Inter', 'Poppins', sans-serif;
   --app-font-serif: Georgia, serif;

@@ -50,9 +50,9 @@
     "period": "3m"
   },
   "route_pane": {
-    "open": true,
+    "open": false,
     "min_width": 200,
-    "width": 450,
+    "width": 400,
     "max_width": 600,
     "polling_interval_min": 10
   }

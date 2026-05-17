@@ -1442,19 +1442,21 @@ function DashboardInner() {
           <div style={{
             flex: 1,
             minWidth: 0,
-            maxWidth: isMobile ? "100%" : 1320,
-            margin: "0 auto",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
           }}>
           <main id="main-content" tabIndex={-1} style={{
             flex: 1,
+            overflowY: "auto",
+          }}>
+          <div style={{
+            maxWidth: isMobile ? "100%" : 1320,
+            margin: "0 auto",
             padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
             display: "flex",
             flexDirection: "column",
             gap: "1.5rem",
-            overflowY: "auto",
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}
@@ -1851,16 +1853,15 @@ function DashboardInner() {
             </>
           )}
 
-        </main>
+          </div>{/* close centered content */}
 
-        {/* ── Footer pinned at bottom of Question pane ─────────── */}
+        {/* ── Footer — full width, scrolls with content ─────────── */}
         <footer style={{
           borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
           padding:"0.75rem 1.5rem",
           display:"flex", alignItems:"baseline", justifyContent:"center",
           flexWrap:"wrap", gap:"0 4px",
           fontSize:12, color: thm.textMuted,
-          flexShrink: 0,
         }}>
           <b style={{ lineHeight:1 }}>Data Source</b>{" "}
           {(() => {
@@ -1883,7 +1884,10 @@ function DashboardInner() {
           {rowCount > 0 && <span>{rowCount.toLocaleString()} rows</span>}
           {" · "}
           Hit Refresh for latest data.
+          <span style={{ marginLeft:"auto" }}>© 2026 <a href="https://thecontrarian.in/" target="_blank" rel="noopener noreferrer" style={{ color: thm.chart.line4 }}>Mahesh Shantaram</a></span>
         </footer>
+
+        </main>
 
         </div>{/* close Question pane wrapper */}
 

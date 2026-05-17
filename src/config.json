@@ -1,11 +1,21 @@
 {
-  "city": {
-    "name": "Bangalore",
-    "data_source": {
-      "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv",
-      "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv"
-    }
-  },
+  "cities": [
+    {
+      "name": "Bangalore",
+      "ready": true,
+      "data_source": {
+        "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv",
+        "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv"
+      }
+    },
+    { "name": "Chennai",  "ready": false },
+    { "name": "Delhi",    "ready": false },
+    { "name": "Kolkata",  "ready": false },
+    { "name": "Mumbai",   "ready": false },
+    { "name": "Kochi",    "ready": false },
+    { "name": "Hyderabad","ready": false },
+    { "name": "Jaipur",   "ready": false }
+  ],
   "percentile": {
     "worst_case": 90,
     "verdict_threshold_kmh": 0.5
@@ -15,6 +25,7 @@
     "default_end": "2026-03-02"
   },
   "defaults": {
+    "route": "Hosur Road",
     "period": "1m",
     "time_of_day": "weekday_morning",
     "question_mode": "worsened"

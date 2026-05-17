@@ -2,14 +2,17 @@
 // Shared AppConfig type — matches config.json shape
 // ---------------------------------------------------------------------------
 
-export interface AppConfig {
-  city: {
-    name: string;
-    data_source: {
-      routes_csv: string;
-      traffic_csv: string;
-    };
+export interface CityConfig {
+  name: string;
+  ready: boolean;
+  data_source?: {
+    routes_csv: string;
+    traffic_csv: string;
   };
+}
+
+export interface AppConfig {
+  cities: CityConfig[];
   percentile: {
     worst_case: number;
     verdict_threshold_kmh: number;
@@ -19,6 +22,7 @@ export interface AppConfig {
     default_end: string;
   };
   defaults: {
+    route: string;
     period: string;
     time_of_day: string;
     question_mode: "worsened" | "improved";

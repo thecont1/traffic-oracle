@@ -130,6 +130,7 @@ function TrafficNowBar({
   status: LiveStatus;
   thm: AppTheme;
 }) {
+  const [hovered, setHovered] = useState(false);
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
   
   // Determine status direction for colors
@@ -155,7 +156,6 @@ function TrafficNowBar({
   };
   
   const statusColor = getStatusColor();
-  const rangeColor = thm.key === 'gray' ? '#CCCCCC' : thm.key === 'pastel' ? 'rgba(80,70,60,0.35)' : 'rgba(60,55,50,0.4)';
   const typicalColor = thm.key === 'gray' ? '#888888' : thm.key === 'pastel' ? 'rgba(80,70,60,0.5)' : 'rgba(60,55,50,0.55)';
   
   // Calculate positions on the city-wide scale using percentiles
@@ -165,17 +165,25 @@ function TrafficNowBar({
   const typicalMinPos = hasData ? ((typical!.p15 - cityMin) / cityRange) * 100 : 30;
   const typicalMaxPos = hasData ? ((typical!.p85 - cityMin) / cityRange) * 100 : 70;
   const typicalMedianPos = hasData ? ((typical!.p50 - cityMin) / cityRange) * 100 : 50;
+  // Full range positions for hover labels
+  const fullMinPos = hasData ? ((typical!.p10 - cityMin) / cityRange) * 100 : 20;
+  const fullMaxPos = hasData ? ((typical!.p90 - cityMin) / cityRange) * 100 : 80;
   
   // Format speed
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
   
   return (
-    <div style={{ width: '100%' }}>
+    <div 
+      style={{ width: '100%', cursor: 'default' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {/* Box-and-whisker style bar */}
       <div style={{ 
         position: 'relative',
-        height: 14,
+        height: hovered ? 28 : 14,
         marginBottom: 2,
+        transition: 'height 0.15s ease',
       }}>
         {/* City-wide range track */}
         <div style={{
@@ -231,6 +239,33 @@ function TrafficNowBar({
             zIndex: 3,
             border: `2px solid ${thm.sectionBg}`,
           }} />
+        )}
+
+        {/* Hover labels: min (p10), avg (p50), max (p85) */}
+        {hovered && hasData && (
+          <>
+            <div style={{
+              position: 'absolute', left: `${fullMinPos}%`, top: -1,
+              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 600,
+              color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
+            }}>
+              {fmt(typical!.p10)}
+            </div>
+            <div style={{
+              position: 'absolute', left: `${typicalMedianPos}%`, top: -1,
+              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 600,
+              color: thm.textPrimary, whiteSpace: 'nowrap', lineHeight: 1,
+            }}>
+              {fmt(typical!.p50)}
+            </div>
+            <div style={{
+              position: 'absolute', left: `${fullMaxPos}%`, top: -1,
+              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 600,
+              color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
+            }}>
+              {fmt(typical!.p85)}
+            </div>
+          </>
         )}
       </div>
       

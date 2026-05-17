@@ -14,6 +14,10 @@ import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
+import appConfig from "../config.json";
+import type { AppConfig } from "../lib/config";
+
+const cfg = appConfig as AppConfig;
 
 /* ── Filter options ───────────────────────────────────────────── */
 const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
@@ -137,20 +141,12 @@ function Chip({ children, icon, variant, onClick, animate, inert }: {
 }
 
 /* ── Location Dropdown ─────────────────────────────────────────── */
-const CITIES = [
-  { name: "Bangalore", ready: true },
-  { name: "Chennai", ready: false },
-  { name: "Delhi", ready: false },
-  { name: "Kolkata", ready: false },
-  { name: "Mumbai", ready: false },
-  { name: "Kochi", ready: false },
-  { name: "Hyderabad", ready: false },
-  { name: "Jaipur", ready: false },
-];
+const CITIES = cfg.cities;
 
 function LocationDropdown({ thm }: { thm: AppTheme }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedCity, setSelectedCity] = useState("Bangalore");
+  const defaultCityName = CITIES.find(c => c.ready)?.name ?? CITIES[0].name;
+  const [selectedCity, setSelectedCity] = useState(defaultCityName);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Close when clicking outside
@@ -1033,6 +1029,9 @@ function DashboardInner() {
     if (URL_PARAMS.route) {
       const idx = routeOptions.indexOf(URL_PARAMS.route as string);
       if (idx >= 0) setRouteIdx(idx);
+    } else if (cfg.defaults.route) {
+      const idx = routeOptions.indexOf(cfg.defaults.route);
+      if (idx >= 0) setRouteIdx(idx);
     }
     urlParamsRef.current.routeApplied = true;
   }, [routeOptions]);
@@ -1515,20 +1514,20 @@ function DashboardInner() {
                         <div style={{
                           position:"absolute", top:0, left:0,
                           width:`${leftTrackPct}%`, height:"100%",
-                          background: thm.slider.dim, pointerEvents:"none",
+                          background: thm.slider.stripe, pointerEvents:"none",
                         }} />
                         <div style={{
                           position:"absolute", top:0,
                           left:`${leftTrackPct}%`,
                           width:`${Math.max(0, rightTrackPct - leftTrackPct)}%`,
                           height:"100%",
-                          background: thm.slider.stripe,
+                          background: thm.slider.track,
                           pointerEvents:"none",
                         }} />
                         <div style={{
                           position:"absolute", top:0, left:`${rightTrackPct}%`,
                           width:`${100 - rightTrackPct}%`, height:"100%",
-                          background: thm.slider.dim, pointerEvents:"none",
+                          background: thm.slider.stripe, pointerEvents:"none",
                         }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
@@ -1753,9 +1752,7 @@ function DashboardInner() {
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                         color: thm.textPrimary }}>🐌 Trip Duration Over Time</p>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
-                      Weekly median + bad-day (p{
-                          cfg.percentile.worst_case
-                      }) — lower is better
+                      Weekly median and bad-day trips — lower is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
@@ -1857,9 +1854,3 @@ export default function Dashboard() {
     </ThemeProvider>
   );
 }
-
-/* need this import for the config reference in JSX */
-import appConfig from "../config.json";
-import type { AppConfig } from "../lib/config";
-
-const cfg = appConfig as AppConfig;

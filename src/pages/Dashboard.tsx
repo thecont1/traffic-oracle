@@ -52,11 +52,12 @@ function readUrlParams() {
   if (typeof window === "undefined") return {} as Record<string, string | number>;
   const p = new URLSearchParams(window.location.search);
   const out: Record<string, string | number> = {};
-  if (p.has("city"))  out.city  = p.get("city")!;
+  if (p.has("city"))   out.city   = p.get("city")!;
   if (p.has("route"))  out.route  = p.get("route")!;
   if (p.has("tod"))    out.tod    = p.get("tod")!;
   if (p.has("period")) out.period = p.get("period")!;
   if (p.has("mode"))   out.mode   = p.get("mode")!;
+  if (p.has("theme"))  out.theme  = p.get("theme")!;
   if (p.has("bl"))     out.bl     = Number(p.get("bl"));
   if (p.has("br"))     out.br     = Number(p.get("br"));
   if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));

@@ -1350,7 +1350,7 @@ function DashboardInner() {
   return (
     <div className={thm.isDark ? "dark" : ""}>
       <div aria-live="polite" aria-atomic="true" ref={liveRef} className="sr-only" />
-      <div className="min-h-screen transition-colors" style={{ background: thm.bodyBg, display: "flex", flexDirection: "column" }}>
+      <div className="transition-colors" style={{ background: thm.bodyBg, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
 
         {/* ── Skip link ─────────────────────────────────────── */}
         <a href="#main-content" className="sr-only focusable">
@@ -1436,14 +1436,20 @@ function DashboardInner() {
         </header>
 
         {/* ── Below-header area: main content + route pane ─────────── */}
-        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
-          {/* ── Main content ──────────────────────────────────────── */}
-          <main id="main-content" tabIndex={-1} style={{
+          {/* ── Question pane (independent scroll + footer) ─────── */}
+          <div style={{
             flex: 1,
             minWidth: 0,
             maxWidth: isMobile ? "100%" : 1320,
             margin: "0 auto",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}>
+          <main id="main-content" tabIndex={-1} style={{
+            flex: 1,
             padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
             display: "flex",
             flexDirection: "column",
@@ -1847,38 +1853,16 @@ function DashboardInner() {
 
         </main>
 
-          {/* ── Route browser pane (desktop) ──────────────────────── */}
-          {!isMobile && (
-            <RouteBrowserPane
-              cards={allRouteCards}
-              selectedRoute={selectedRoute}
-              onRouteSelect={handleRouteSelectFromPane}
-              dataTimestamp={dataTimestamp}
-              mobile={false}
-            />
-          )}
-
-        </div>
-
-        {/* ── Mobile route browser (bottom sheet) ──────────────────── */}
-      {isMobile && (
-        <RouteBrowserPane
-          cards={allRouteCards}
-          selectedRoute={selectedRoute}
-          onRouteSelect={handleRouteSelectFromPane}
-          dataTimestamp={dataTimestamp}
-          mobile={true}
-        />
-      )}
-
+        {/* ── Footer pinned at bottom of Question pane ─────────── */}
         <footer style={{
           borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-          marginTop:"2rem", padding:"1rem 1.5rem",
+          padding:"0.75rem 1.5rem",
           display:"flex", alignItems:"baseline", justifyContent:"center",
           flexWrap:"wrap", gap:"0 4px",
           fontSize:12, color: thm.textMuted,
+          flexShrink: 0,
         }}>
-          <b style={{ lineHeight:1 }}>Data Source</b>
+          <b style={{ lineHeight:1 }}>Data Source</b>{" "}
           {(() => {
             const trafficUrl = selectedCityConfig.data_source?.traffic_csv ?? "";
             const ghMatch = trafficUrl.match(/raw\.githubusercontent\.com\/([^/]+\/[^/]+)/);
@@ -1895,11 +1879,37 @@ function DashboardInner() {
               </a>
             );
           })()}
-          <span style={{ lineHeight:1 }}>·</span>
-          {rowCount > 0 && <span style={{ lineHeight:1 }}>{rowCount.toLocaleString()} rows</span>}
-          <span style={{ lineHeight:1 }}>·</span>
-          <span style={{ lineHeight:1 }}>Hit Refresh for latest data.</span>
+          {" · "}
+          {rowCount > 0 && <span>{rowCount.toLocaleString()} rows</span>}
+          {" · "}
+          Hit Refresh for latest data.
         </footer>
+
+        </div>{/* close Question pane wrapper */}
+
+          {/* ── Route browser pane (desktop) ──────────────────────── */}
+          {!isMobile && (
+            <RouteBrowserPane
+              cards={allRouteCards}
+              selectedRoute={selectedRoute}
+              onRouteSelect={handleRouteSelectFromPane}
+              dataTimestamp={dataTimestamp}
+              mobile={false}
+            />
+          )}
+
+        </div>{/* close flex row */}
+
+        {/* ── Mobile route browser (overlay) ──────────────────── */}
+      {isMobile && (
+        <RouteBrowserPane
+          cards={allRouteCards}
+          selectedRoute={selectedRoute}
+          onRouteSelect={handleRouteSelectFromPane}
+          dataTimestamp={dataTimestamp}
+          mobile={true}
+        />
+      )}
 
       </div>
     </div>

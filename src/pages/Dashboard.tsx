@@ -1446,7 +1446,7 @@ function DashboardInner() {
             flexDirection: "column",
             overflow: "hidden",
           }}>
-          <main id="main-content" tabIndex={-1} style={{
+          <main id="main-content" tabIndex={-1} className="scrollbar-hide" style={{
             flex: 1,
             overflowY: "auto",
           }}>

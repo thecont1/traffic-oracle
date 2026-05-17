@@ -33,6 +33,8 @@ export interface AppTheme {
   cardBg: string;
   cardBorder: string;
   cardShadow: string;
+  paneBg: string;
+  paneBorder: string;
 
   titleStyle: CSSProperties;
 
@@ -156,6 +158,8 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "#2A2725",
     cardBorder: "1px solid #47413C",
     cardShadow: "none",
+    paneBg: "#2C2926",
+    paneBorder: "#7A746F",
     titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#7DB7E8,#9AA3AD)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
     chips: COLOUR_CHIPS,
     napkin: { baseline:"#9AA3AD", recent:"#7DB7E8", gap:"#47413C" },
@@ -201,6 +205,8 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "#ffffff",
     cardBorder: "1px solid #e0e0e0",
     cardShadow: "none",
+    paneBg: "#F0F0F0",
+    paneBorder: "#888888",
     titleStyle: { display:"inline-block", color:"#111111", WebkitTextFillColor:"#111111", background:"none" },
     chips: GRAY_CHIPS,
     napkin: { baseline:"#555555", recent:"#111111", gap:"#cccccc" },
@@ -241,6 +247,8 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "#FFFFFF",
     cardBorder: "1px solid #DCCFB8",
     cardShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    paneBg: "#FFFFFF",
+    paneBorder: "#8A7E68",
     titleStyle: { display:"inline-block", background:"linear-gradient(90deg,#3A86C8,#8F98A3)", backgroundClip:"text", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", color:"transparent" },
     chips: PASTEL_CHIPS,
     napkin: { baseline:"#8F98A3", recent:"#3A86C8", gap:"#DCCFB8" },

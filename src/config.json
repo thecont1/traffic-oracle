@@ -56,7 +56,7 @@
   "route_pane": {
     "open": true,
     "min_width": 200,
-    "width": 400,
-    "max_width": 500
+    "width": 450,
+    "max_width": 600
   }
 }

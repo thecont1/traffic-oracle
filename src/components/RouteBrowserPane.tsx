@@ -445,10 +445,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       flexShrink: 0,
       width: isOpen ? paneWidth + RAIL_WIDTH : RAIL_WIDTH,
       transition: dragging ? "none" : "width 0.3s cubic-bezier(0.4,0,0.2,1)",
-      overflow: "visible",
+      overflow: "hidden",
       display: "flex",
-      background: thm.sectionBg,
-      borderLeft: `1px solid ${thm.key === "colour" ? "#47413C" : "#DCCFB8"}`,
+      background: thm.paneBg,
+      border: `1px solid ${thm.paneBorder}`,
+      borderRadius: 16,
+      margin: "8px 0 8px 8px",
       position: "relative",
     }}>
       {/* Draggable resize handle — left edge */}
@@ -512,9 +514,9 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
-          <div style={{
+          <div className="scrollbar-hide" style={{
             height: "100%", overflowY: "auto", padding: "8px 8px 8px 0",
-            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
+            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "none",
           }}>
             {!cards ? (
               <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>
@@ -620,9 +622,9 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
           <BlurEdge position="top" />
           <BlurEdge position="bottom" />
-          <div style={{
+          <div className="scrollbar-hide" style={{
             height: "100%", overflowY: "auto", padding: "6px 8px 12px 0",
-            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "thin",
+            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "none",
           }}>
             {!cards ? (
               <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>

@@ -99,6 +99,19 @@ interface PaneProps {
   onToggle: () => void;
   paneWidth: number;
   dataTimestamp: Date | null;
+  lastUpdated: Date | null;
+}
+
+/* ── Relative time label ─────────────────────────────────────── */
+function relativeTime(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins === 1) return "1 min ago";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs === 1) return "1 hr ago";
+  return `${hrs} hr ago`;
 }
 
 /* ── Progressive blur edge ─────────────────────────────────────── */
@@ -411,13 +424,20 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated }: PaneProps) {
   const RAIL_WIDTH = 36;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+
+  /* Tick every 60 s so the "Live · updated X min ago" label stays fresh */
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -504,8 +524,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             </button>
           </div>
           {dataTimestamp && (
-            <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0", opacity: 0.8 }}>
-              {dataTimestamp.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} {dataTimestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0",
+              display: "flex", alignItems: "center", gap: 5, opacity: 0.8 }}>
+              <span className="live-dot" aria-hidden="true" />
+              <span>
+                Live · updated {relativeTime(dataTimestamp)}
+              </span>
             </p>
           )}
         </div>
@@ -564,6 +588,9 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             thm.key === "colour" ? "#1F1C19" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
         }}
       >
+        <span className="live-dot" aria-hidden="true" style={{
+          width: 5, height: 5, marginBottom: 6,
+        }} />
         <span style={{
           fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
           textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",
@@ -582,7 +609,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 }
 
 /* ── Mobile bottom sheet ───────────────────────────────────────── */
-function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp }: PaneProps) {
+function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated }: PaneProps) {
   return (
     <>
       {isOpen && (
@@ -614,8 +641,10 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             }}>Traffic NOW!</span>
           </div>
           {dataTimestamp && (
-            <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0" }}>
-              {dataTimestamp.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} {dataTimestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0",
+              display: "flex", alignItems: "center", gap: 4 }}>
+              <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />
+              <span>Live · {relativeTime(dataTimestamp)}</span>
             </p>
           )}
         </div>
@@ -665,6 +694,7 @@ interface Props {
   selectedRoute: string;
   onRouteSelect: (label: string) => void;
   dataTimestamp: Date | null;
+  lastUpdated: Date | null;
   mobile?: boolean;
 }
 
@@ -690,7 +720,7 @@ export default function RouteBrowserPane(props: Props) {
   const paneProps: PaneProps = {
     cards: props.cards, selectedRoute: props.selectedRoute,
     onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle, paneWidth,
-    dataTimestamp: props.dataTimestamp,
+    dataTimestamp: props.dataTimestamp, lastUpdated: props.lastUpdated,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

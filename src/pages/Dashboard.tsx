@@ -1898,6 +1898,7 @@ function DashboardInner() {
               selectedRoute={selectedRoute}
               onRouteSelect={handleRouteSelectFromPane}
               dataTimestamp={dataTimestamp}
+              lastUpdated={lastUpdated}
               mobile={false}
             />
           )}
@@ -1911,6 +1912,7 @@ function DashboardInner() {
           selectedRoute={selectedRoute}
           onRouteSelect={handleRouteSelectFromPane}
           dataTimestamp={dataTimestamp}
+          lastUpdated={lastUpdated}
           mobile={true}
         />
       )}

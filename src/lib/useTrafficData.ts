@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import * as Papa from "papaparse";
 import appConfig from "../config.json";
 import type { AppConfig } from "./config";
@@ -20,6 +20,9 @@ const TRAFFIC_URL =
 export function bust(url: string): string {
   return `${url}?t=${Date.now()}`;
 }
+
+/* ── ETag cache for conditional polling ─────────────────────────── */
+const etagStore = new Map<string, string>();
 
 export interface Route {
   route_code: string;
@@ -264,6 +267,156 @@ export function fetchTrafficData(
   );
 }
 
+/* ── Conditional refresh — polls traffic CSV only, with ETag ────── */
+export function toProxy(url: string): string {
+  if (!import.meta.env.DEV) return url;
+  try {
+    const u = new URL(url);
+    const file = u.pathname.split('/').pop();
+    return file ? `/api/traffic-csv/${file}` : url;
+  } catch { return url; }
+}
+
+export interface RefreshResult {
+  changed: boolean;
+  allRows: TrafficRow[];
+  rowCount: number;
+  dataTimestamp: Date | null;
+}
+
+/** Re-fetch just the traffic CSV. Uses ETag for conditional requests —
+ *  returns `changed: false` when the server says nothing has moved.
+ *  `routeByCode` is the existing route lookup from the initial load. */
+export async function refreshTrafficData(
+  routeByCode: Map<string, Route>,
+  currentRows: TrafficRow[],
+  signal?: AbortSignal,
+  source?: CitySource,
+): Promise<RefreshResult> {
+  const trafficUrl = source?.traffic_csv
+    ? toProxy(source.traffic_csv)
+    : TRAFFIC_URL;
+  const headers: Record<string, string> = {
+    Accept: "text/plain,*/*",
+    Pragma: "no-cache",
+  };
+  const prevEtag = etagStore.get(trafficUrl);
+  if (prevEtag) headers["If-None-Match"] = prevEtag;
+
+  const resp = await fetch(trafficUrl, {
+    cache: "no-store",
+    signal,
+    headers,
+  });
+
+  // 304 Not Modified — file unchanged on GitHub
+  if (resp.status === 304) {
+    let maxTs = 0;
+    for (const r of currentRows) {
+      const t = r.timestamp.getTime();
+      if (t > maxTs) maxTs = t;
+    }
+    return {
+      changed: false,
+      allRows: currentRows,
+      rowCount: currentRows.length,
+      dataTimestamp: maxTs > 0 ? new Date(maxTs) : null,
+    };
+  }
+
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching traffic CSV`);
+
+  const newEtag = resp.headers.get("etag");
+  if (newEtag) etagStore.set(trafficUrl, newEtag);
+
+  const text = await resp.text();
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const trafficRaw: Record<string, string>[] = await new Promise(
+    (resolve, reject) => {
+      Papa.parse(normalized, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (r) => resolve(r.data as Record<string, string>[]),
+        error: (e: Error) => reject(e),
+      });
+    },
+  );
+
+  // Parse into TrafficRow[]
+  const newRows: TrafficRow[] = [];
+  for (const r of trafficRaw) {
+    const dateRaw = getCol(r, "date").trim();
+    const timeRaw = getCol(r, "time").trim();
+    if (!dateRaw) continue;
+
+    const tsString = timeRaw
+      ? `${dateRaw}T${timeRaw}:00`
+      : `${dateRaw}T12:00:00`;
+    const ts = new Date(tsString);
+    if (isNaN(ts.getTime())) continue;
+
+    const rcRaw = getCol(r, "route_code").trim();
+    const route = routeByCode.get(rcRaw);
+    if (!route) continue;
+
+    const duration_min = parseNum(getCol(r, "duration"));
+    const distance_km = parseNum(getCol(r, "distance")) || 10;
+    if (duration_min <= 0 || duration_min > 300) continue;
+
+    const speed_kmh =
+      Math.round((distance_km / (duration_min / 60)) * 10) / 10;
+    if (speed_kmh <= 0 || speed_kmh > 150) continue;
+
+    newRows.push({
+      timestamp: ts,
+      route_code: route.route_code,
+      label_short: route.label_short,
+      duration_min: Math.round(duration_min * 10) / 10,
+      distance_km,
+      speed_kmh,
+      hour: ts.getHours(),
+      dayOfWeek: ts.getDay(),
+      weekKey: toWeekKey(ts),
+    });
+  }
+
+  // Merge: keep existing rows, replace any that share the same
+  // timestamp+route_code (dedup), add genuinely new rows
+  const existingKeys = new Set(
+    currentRows.map((r) => `${r.timestamp.getTime()}:${r.route_code}`),
+  );
+  const merged = [...currentRows];
+  let added = 0;
+  for (const nr of newRows) {
+    const key = `${nr.timestamp.getTime()}:${nr.route_code}`;
+    if (!existingKeys.has(key)) {
+      merged.push(nr);
+      added++;
+    }
+  }
+
+  // Sort by timestamp for consistency
+  merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+  // Trim to 90 days to prevent unbounded memory growth
+  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const trimmed = merged.filter((r) => r.timestamp.getTime() >= cutoff);
+
+  // Compute latest data timestamp
+  let maxTs = 0;
+  for (const r of trimmed) {
+    const t = r.timestamp.getTime();
+    if (t > maxTs) maxTs = t;
+  }
+
+  return {
+    changed: added > 0,
+    allRows: trimmed,
+    rowCount: trimmed.length,
+    dataTimestamp: maxTs > 0 ? new Date(maxTs) : null,
+  };
+}
+
 export function useTrafficData(citySource?: CitySource) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [allRows, setAllRows] = useState<TrafficRow[]>([]);
@@ -272,6 +425,15 @@ export function useTrafficData(citySource?: CitySource) {
   const [rowCount, setRowCount] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [dataTimestamp, setDataTimestamp] = useState<Date | null>(null);
+
+  /* Refs for polling — values persist across renders without triggering re-renders */
+  const routeByCodeRef = useRef<Map<string, Route>>(new Map());
+  const rowsRef = useRef<TrafficRow[]>([]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingActiveRef = useRef(false);
+
+  /* Keep refs in sync with state */
+  rowsRef.current = allRows;
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
@@ -285,8 +447,15 @@ export function useTrafficData(citySource?: CitySource) {
           setAllRows(ar);
           setRowCount(rc);
           setLastUpdated(new Date());
-          // Compute the actual latest data timestamp so users know
-          // how fresh the data is (not just when it was fetched)
+
+          // Build routeByCode lookup for future conditional refreshes
+          const byCode = new Map<string, Route>();
+          for (const rt of rl) {
+            if (rt.route_code) byCode.set(rt.route_code, rt);
+          }
+          routeByCodeRef.current = byCode;
+
+          // Compute the actual latest data timestamp
           let maxTs = 0;
           for (const row of ar) {
             const t = row.timestamp.getTime();
@@ -300,13 +469,84 @@ export function useTrafficData(citySource?: CitySource) {
           setError(String(e?.message ?? e));
           setLoading(false);
         });
-
-      return () => {
-        /* cancellation is handled via AbortSignal */
-      };
     },
     [citySource],
   );
+
+  /* ── Silent background poll ─────────────────────────────────────── */
+  const doPoll = useCallback(() => {
+    // Don't poll if initial load hasn't finished, or route data isn't ready
+    if (routeByCodeRef.current.size === 0) return;
+    // Don't poll if the tab is hidden (Page Visibility API)
+    if (typeof document !== "undefined" && document.hidden) return;
+
+    const ctrl = new AbortController();
+    refreshTrafficData(
+      routeByCodeRef.current,
+      rowsRef.current,
+      ctrl.signal,
+      citySource,
+    )
+      .then((result) => {
+        if (result.changed) {
+          setAllRows(result.allRows);
+          setRowCount(result.rowCount);
+          setDataTimestamp(result.dataTimestamp);
+          setLastUpdated(new Date());
+        }
+        // Whether changed or not, mark lastChecked for internal tracking
+        pollingActiveRef.current = true;
+      })
+      .catch(() => {
+        // Silently swallow errors from background polls —
+        // keep showing the last known data. Network hiccup or
+        // GitHub rate limit is not user-facing.
+      });
+  }, [citySource]);
+
+  /* Start / restart the polling interval */
+  useEffect(() => {
+    // Clear any existing interval when citySource changes
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // Wait for initial load to complete before starting to poll
+    if (loading) return;
+
+    const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
+    intervalRef.current = setInterval(doPoll, intervalMs);
+
+    return () => {
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [loading, doPoll]);
+
+  /* Page Visibility: skip ticks when tab is hidden */
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab hidden — clear interval to avoid wasted requests
+        if (intervalRef.current !== null) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } else {
+        // Tab visible again — do an immediate poll, then restart interval
+        doPoll();
+        const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
+        intervalRef.current = setInterval(doPoll, intervalMs);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [doPoll]);
 
   /* Initial load on mount */
   useEffect(() => {

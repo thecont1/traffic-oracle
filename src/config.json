@@ -10,35 +10,31 @@
     },
     {
       "name": "Chennai",
-      "ready": true,
-      "data_source": {
-        "routes_csv": "https://raw.githubusercontent.com/thecont1/maa-traffic-monitor/main/csv-routes.csv",
-        "traffic_csv": "https://raw.githubusercontent.com/thecont1/maa-traffic-monitor/main/csv-chennai_traffic.csv"
-      }
+      "ready": true
     },
     {
       "name": "Delhi",
-      "ready": false
+      "ready": true
     },
     {
       "name": "Kolkata",
-      "ready": false
+      "ready": true
     },
     {
       "name": "Mumbai",
-      "ready": false
+      "ready": true
     },
     {
       "name": "Kochi",
-      "ready": false
+      "ready": true
     },
     {
       "name": "Hyderabad",
-      "ready": false
+      "ready": true
     },
     {
       "name": "Jaipur",
-      "ready": false
+      "ready": true
     }
   ],
   "percentile": {
@@ -57,6 +53,7 @@
     "open": true,
     "min_width": 200,
     "width": 450,
-    "max_width": 600
+    "max_width": 600,
+    "polling_interval_min": 10
   }
 }

@@ -30,5 +30,6 @@ export interface AppConfig {
     width: number;
     min_width: number;
     max_width: number;
+    polling_interval_min: number;
   };
 }

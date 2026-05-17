@@ -66,11 +66,13 @@ function InfoTip({ thm }: { thm: AppTheme }) {
 type LiveStatus = 'faster' | 'as-expected' | 'slower' | 'no-data';
 
 interface RouteTODStats {
+  p05: number;
   p10: number;
   p15: number;
   p50: number;
   p85: number;
   p90: number;
+  p95: number;
   count: number;
 }
 
@@ -161,8 +163,8 @@ function TrafficNowBar({
   // Calculate positions on the city-wide scale
   const cityRange = cityMax - cityMin || 1;
   const livePos = hasData ? ((liveSpeed! - cityMin) / cityRange) * 100 : 50;
-  const typicalMinPos = hasData ? ((typical!.p15 - cityMin) / cityRange) * 100 : 30;
-  const typicalMaxPos = hasData ? ((typical!.p85 - cityMin) / cityRange) * 100 : 70;
+  const typicalMinPos = hasData ? ((typical!.p05 - cityMin) / cityRange) * 100 : 30;
+  const typicalMaxPos = hasData ? ((typical!.p95 - cityMin) / cityRange) * 100 : 70;
   
   // Format speed
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
@@ -181,7 +183,7 @@ function TrafficNowBar({
           height: 1, background: '#000000',
         }} />
         
-        {/* Typical range bar (p15–p85) — bold and clear */}
+        {/* Typical range bar (p05–p95) — bold and clear */}
         {hasData && (
           <div style={{
             position: 'absolute',
@@ -208,7 +210,7 @@ function TrafficNowBar({
           }} />
         )}
 
-        {/* Hover labels: p15 above left, p85 above right */}
+        {/* Hover labels: p05 above left, p95 above right */}
         {hovered && hasData && (
           <>
             <div style={{
@@ -216,14 +218,14 @@ function TrafficNowBar({
               transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
               color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
             }}>
-              {fmt(typical!.p15)}
+              {fmt(typical!.p05)}
             </div>
             <div style={{
               position: 'absolute', left: `${typicalMaxPos}%`, top: -2,
               transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
               color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
             }}>
-              {fmt(typical!.p85)}
+              {fmt(typical!.p95)}
             </div>
           </>
         )}

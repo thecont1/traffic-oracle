@@ -286,10 +286,9 @@ export function useTrafficData(citySource?: CitySource) {
           setLoading(false);
         })
         .catch((e) => {
-          if (e?.message !== "cancelled") {
-            setError(String(e?.message ?? e));
-            setLoading(false);
-          }
+          if (e?.name === "AbortError" || e?.message === "cancelled") return;
+          setError(String(e?.message ?? e));
+          setLoading(false);
         });
 
       return () => {

@@ -787,11 +787,13 @@ type LiveStatus = 'faster' | 'as-expected' | 'slower' | 'no-data';
 // Statistics for a route's typical behavior at a given time-of-day
 // Uses percentiles (industry standard) instead of std dev because traffic data is skewed
 interface RouteTODStats {
-  p10: number;    // 10th percentile - fast end of typical
-  p15: number;    // 15th percentile
-  p50: number;    // Median - typical center
-  p85: number;    // 85th percentile
-  p90: number;    // 90th percentile - slow end of typical
+  p05: number;
+  p10: number;
+  p15: number;
+  p50: number;
+  p85: number;
+  p90: number;
+  p95: number;
   count: number;
 }
 
@@ -820,8 +822,8 @@ function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | nu
     return { status: 'no-data', statusText: 'no data' };
   }
   
-  if (liveSpeed > typical.p85) return { status: 'faster', statusText: 'fast' };
-  if (liveSpeed < typical.p15) return { status: 'slower', statusText: 'slow' };
+  if (liveSpeed > typical.p85) return { status: 'faster', statusText: 'unusually fast' };
+  if (liveSpeed < typical.p15) return { status: 'slower', statusText: 'unusually slow' };
   return { status: 'as-expected', statusText: 'typical' };
 }
 
@@ -866,11 +868,13 @@ function computeTODStats(
   };
   
   return {
+    p05: percentile(5),
     p10: percentile(10),
     p15: percentile(15),
     p50: percentile(50),  // Median
     p85: percentile(85),
     p90: percentile(90),
+    p95: percentile(95),
     count: n,
   };
 }
@@ -1831,15 +1835,23 @@ function DashboardInner() {
           marginTop:"2rem", padding:"1rem 1.5rem",
           textAlign:"center", fontSize:12, color: thm.textMuted,
         }}>
-          <b>Data Source</b> {"  "}
-          <a href="https://github.com/thecont1/blr-traffic-monitor"
-            target="_blank" rel="noopener noreferrer"
-            style={{ color: thm.chart.line4, display:"inline-flex", alignItems:"center", gap:4, verticalAlign:"middle" }}>
-            <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}>
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
-            thecont1/blr-traffic-monitor
-          </a>
+          <b>Data Source</b>{"  "}
+          {(() => {
+            const trafficUrl = selectedCityConfig.data_source?.traffic_csv ?? "";
+            const ghMatch = trafficUrl.match(/github\.com\/([^/]+\/[^/]+)/);
+            const shortUrl = ghMatch ? ghMatch[1] : trafficUrl;
+            const href = ghMatch ? `https://github.com/${ghMatch[1]}` : trafficUrl;
+            return (
+              <a href={href}
+                target="_blank" rel="noopener noreferrer"
+                style={{ color: thm.chart.line4, display:"inline-flex", alignItems:"center", gap:4, verticalAlign:"middle" }}>
+                <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}>
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                {shortUrl}
+              </a>
+            );
+          })()}
           {" · "}
           {rowCount > 0 && <span>{rowCount.toLocaleString()} rows</span>}
           {" · "}

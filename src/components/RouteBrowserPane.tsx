@@ -214,14 +214,14 @@ function TrafficNowBar({
         {hovered && hasData && (
           <>
             <div style={{
-              position: 'absolute', left: `${typicalMinPos}%`, top: -2,
+              position: 'absolute', left: `${typicalMinPos}%`, top: -12,
               transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
               color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
             }}>
               {fmt(typical!.p05)}
             </div>
             <div style={{
-              position: 'absolute', left: `${typicalMaxPos}%`, top: -2,
+              position: 'absolute', left: `${typicalMaxPos}%`, top: -12,
               transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
               color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
             }}>
@@ -341,18 +341,16 @@ function RouteCard({
         }}>
           {card.label}
         </p>
-        {(hovered || isSelected) && (
-          <span style={{ 
-            fontSize: 9, 
-            fontWeight: 500,
-            color: getStatusColor(),
-            whiteSpace: "nowrap", 
-            flexShrink: 0,
-            fontStyle: 'italic',
-          }}>
-            {card.statusText}
-          </span>
-        )}
+        <span style={{ 
+          fontSize: 9, 
+          fontWeight: 500,
+          color: getStatusColor(),
+          whiteSpace: "nowrap", 
+          flexShrink: 0,
+          fontStyle: 'italic',
+        }}>
+          {card.statusText}
+        </span>
       </div>
       
       {/* Row 2: origin → destination */}

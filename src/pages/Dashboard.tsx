@@ -1087,8 +1087,8 @@ function DashboardInner() {
       urlParamsRef.current = { ...p, bl: undefined, br: undefined };
       return;
     }
-    const cfgStart = cfg.baseline.default_start;
-    const cfgEnd   = cfg.baseline.default_end;
+    const cfgStart = cfg.defaults.baseline_start;
+    const cfgEnd   = cfg.defaults.baseline_end;
     let leftIdx  = 0;
     let rightIdx = Math.max(0, Math.floor(maxI * 0.5));
     if (cfgStart) {

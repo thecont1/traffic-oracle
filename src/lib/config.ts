@@ -17,15 +17,13 @@ export interface AppConfig {
     worst_case: number;
     verdict_threshold_kmh: number;
   };
-  baseline: {
-    default_start: string;
-    default_end: string;
-  };
   defaults: {
     route: string;
     period: string;
     time_of_day: string;
     question_mode: "worsened" | "improved";
+    baseline_start: string;
+    baseline_end: string;
   };
   route_pane: {
     open: boolean;

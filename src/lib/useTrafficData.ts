@@ -169,8 +169,17 @@ export function fetchTrafficData(
   signal: AbortSignal | undefined,
   source?: CitySource,
 ): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
-  const routesUrl = source?.routes_csv ?? ROUTES_URL;
-  const trafficUrl = source?.traffic_csv ?? TRAFFIC_URL;
+  // In dev mode, route GitHub URLs through the Vite proxy to avoid CORS issues
+  const toProxy = (url: string) => {
+    if (!import.meta.env.DEV) return url;
+    try {
+      const u = new URL(url);
+      const file = u.pathname.split('/').pop();
+      return file ? `/api/traffic-csv/${file}` : url;
+    } catch { return url; }
+  };
+  const routesUrl = source?.routes_csv ? toProxy(source.routes_csv) : ROUTES_URL;
+  const trafficUrl = source?.traffic_csv ? toProxy(source.traffic_csv) : TRAFFIC_URL;
   const fetchCsv = async (url: string): Promise<Record<string, string>[]> => {
     const resp = await fetch(bust(url), {
       cache: "no-store",
@@ -197,6 +206,7 @@ export function fetchTrafficData(
   };
 
   let cancelled = false;
+  console.log('[fetchTrafficData] routesUrl:', routesUrl, 'trafficUrl:', trafficUrl, 'source:', source ? 'provided' : 'undefined');
   return Promise.all([fetchCsv(routesUrl), fetchCsv(trafficUrl)]).then(
     ([routesRaw, trafficRaw]) => {
       if (cancelled) throw new Error("cancelled");

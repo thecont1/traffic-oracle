@@ -162,12 +162,16 @@ function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; 
   }, [isOpen]);
   
   const tok = thm.chips.city;
-  const styleOverride: React.CSSProperties | undefined = thm.key !== "colour" ? {
+  const styleOverride: React.CSSProperties = thm.key !== "colour" ? {
     background: tok.bg,
     color: tok.color,
     border: `1.5px solid ${tok.border}`,
     boxShadow: tok.shadow,
-  } : undefined;
+  } : {
+    background: "rgba(255,255,255,0.15)",
+    color: thm.textPrimary,
+    border: "1.5px solid rgba(255,255,255,0.3)",
+  };
   
   return (
     <div ref={dropdownRef} style={{ position: "relative" }}>
@@ -964,6 +968,7 @@ function DashboardInner() {
     [selectedCity],
   );
   const citySource = selectedCityConfig.data_source;
+  console.log('[Dashboard] citySource:', JSON.stringify(citySource));
 
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {
@@ -1839,7 +1844,7 @@ function DashboardInner() {
           <b>Data Source</b>{"  "}
           {(() => {
             const trafficUrl = selectedCityConfig.data_source?.traffic_csv ?? "";
-            const ghMatch = trafficUrl.match(/github\.com\/([^/]+\/[^/]+)/);
+            const ghMatch = trafficUrl.match(/raw\.githubusercontent\.com\/([^/]+\/[^/]+)/);
             const shortUrl = ghMatch ? ghMatch[1] : trafficUrl;
             const href = ghMatch ? `https://github.com/${ghMatch[1]}` : trafficUrl;
             return (

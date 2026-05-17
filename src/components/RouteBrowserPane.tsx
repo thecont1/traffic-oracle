@@ -231,14 +231,16 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Speed + status below bar */}
-      <div style={{
-        textAlign: 'center', fontSize: 10, lineHeight: 1,
-      }}>
-        <span style={{ color: statusColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
-          {fmt(liveSpeed)} km/h
-        </span>
-      </div>
+      {/* Speed below bar — only on hover */}
+      {hovered && (
+        <div style={{
+          textAlign: 'center', fontSize: 10, lineHeight: 1, marginTop: 2,
+        }}>
+          <span style={{ color: statusColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
+            {fmt(liveSpeed)} km/h
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -339,16 +341,18 @@ function RouteCard({
         }}>
           {card.label}
         </p>
-        <span style={{ 
-          fontSize: 9, 
-          fontWeight: 500,
-          color: getStatusColor(),
-          whiteSpace: "nowrap", 
-          flexShrink: 0,
-          fontStyle: 'italic',
-        }}>
-          {card.statusText}
-        </span>
+        {(hovered || isSelected) && (
+          <span style={{ 
+            fontSize: 9, 
+            fontWeight: 500,
+            color: getStatusColor(),
+            whiteSpace: "nowrap", 
+            flexShrink: 0,
+            fontStyle: 'italic',
+          }}>
+            {card.statusText}
+          </span>
+        )}
       </div>
       
       {/* Row 2: origin → destination */}
@@ -361,6 +365,7 @@ function RouteCard({
       </p>
       
       {/* Row 3: Traffic NOW! bar - city-wide range with route position */}
+      <div style={{ marginTop: 4 }} />
       <TrafficNowBar 
         liveSpeed={card.liveSpeed}
         typical={card.typical}

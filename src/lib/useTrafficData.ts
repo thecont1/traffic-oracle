@@ -277,6 +277,7 @@ export function useTrafficData(citySource?: CitySource) {
     (signal?: AbortSignal) => {
       setLoading(true);
       setError(null);
+      setRowCount(0);
 
       fetchTrafficData(signal, citySource)
         .then(({ routes: rl, allRows: ar, rowCount: rc }) => {

@@ -10,7 +10,11 @@
     },
     {
       "name": "Chennai",
-      "ready": false
+      "ready": true,
+      "data_source": {
+        "routes_csv": "https://raw.githubusercontent.com/thecont1/maa-traffic-monitor/main/csv-routes.csv",
+        "traffic_csv": "https://raw.githubusercontent.com/thecont1/maa-traffic-monitor/main/csv-chennai_traffic.csv"
+      }
     },
     {
       "name": "Delhi",
@@ -54,7 +58,7 @@
   "route_pane": {
     "open": true,
     "min_width": 200,
-    "width": 300,
+    "width": 350,
     "max_width": 500
   }
 }

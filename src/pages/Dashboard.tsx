@@ -1383,21 +1383,23 @@ function DashboardInner() {
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
               {!loading && rowCount > 0 && (
                 <button onClick={handleShare} style={{
-                  display:"flex", alignItems:"center", gap:5, fontSize:12,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:5,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  borderRadius:9999, height:44, padding:"0 12px",
+                  borderRadius:9999, height:44, padding:"0 14px",
                   color: copied ? thm.speedGood : thm.textMuted,
                   background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#262321" : "transparent",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
                   <Share2 size={13} />
-                  {copied ? "Copied!" : "Share"}
+                  <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1 }}>
+                    {copied ? "Copied!" : "Share"}
+                  </span>
                 </button>
               )}
               <button onClick={refresh} disabled={loading} style={{
-                display:"flex", alignItems:"center", gap:5, fontSize:12,
+                display:"flex", alignItems:"center", justifyContent:"center", gap:5,
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                borderRadius:9999, height:44, padding:"0 12px",
+                borderRadius:9999, height:44, padding:"0 14px",
                 color: thm.textMuted,
                 background: thm.key==="colour" ? "#262321" : "transparent",
                 cursor: loading ? "default" : "pointer",
@@ -1405,7 +1407,9 @@ function DashboardInner() {
                 opacity: loading ? 0.4 : 1,
               }} title="Refresh data from GitHub">
                 <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-                <span style={{ fontSize:12, fontWeight:600 }}>{loading ? "Fetching…" : "Refresh"}</span>
+                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1 }}>
+                  {loading ? "Fetching…" : "Refresh"}
+                </span>
               </button>
               <button
                 onClick={cycleTheme}
@@ -1421,9 +1425,9 @@ function DashboardInner() {
                 }}
                 aria-label="Cycle theme"
               >
-                <span style={{ fontSize:15 }}>{curMeta.icon}</span>
-                <span style={{ fontSize:10, fontWeight:600, color: thm.textSecondary,
-                  whiteSpace:"nowrap", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis" }}>
+                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
+                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
                   {curMeta.label}
                 </span>
               </button>

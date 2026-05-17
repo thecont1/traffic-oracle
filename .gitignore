@@ -48,3 +48,9 @@ yarn.lock
 # Lighthouse reports
 *.report.html
 *.report.json
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example

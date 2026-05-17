@@ -1,7 +1,5 @@
 # TraffiCOracle
 
-[![Typecheck](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml/badge.svg)](https://github.com/maheshshantaram/TraffiCOracle/actions/workflows/typecheck.yml)
-
 <p align="center">
   <img src="artifacts/blr-traffic/public/trafficoracle-dark.png" alt="TraffiCOracle" height="64">
 </p>
@@ -22,7 +20,6 @@
 - [Key Features](#key-features)
 - [Running the System](#running-the-system)
 - [Testing](#testing)
-- [Environment Variables](#environment-variables)
 - [Build & Deployment](#build--deployment)
 - [Supply Chain Security](#supply-chain-security)
 - [Troubleshooting](#troubleshooting)
@@ -41,7 +38,6 @@ Get a working local setup in under 2 minutes.
 |------|----------------|---------|
 | **Bun** (JavaScript runtime) | 1.0+ | `curl -fsSL https://bun.sh/install \| bash` |
 | **Node.js** | 24+ | Comes with Bun, or install from [nodejs.org](https://nodejs.org) |
-| **PostgreSQL** | 16+ | `brew install postgresql` (macOS) or use your package manager |
 
 ### Run
 
@@ -52,7 +48,7 @@ bun install
 
 # Start the dashboard
 cd artifacts/blr-traffic
-PORT=5173 BASE_PATH=/ bun run dev
+bun run dev
 ```
 
 Open **http://localhost:5173** — no database, no API server, no `.env` file needed. The dashboard fetches live data from GitHub automatically.
@@ -83,15 +79,6 @@ Open **http://localhost:5173** — no database, no API server, no `.env` file ne
 │         fetch() → GitHub raw CSV URLs                    │
 │         (cache-busted with ?t=<timestamp>)               │
 │                                                          │
-└─────────────────────────────────────────────────────────┘
-         │
-         ▼ (optional)
-┌─────────────────────────────────────────────────────────┐
-│              Full Stack Mode                              │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ Express  │──│ Drizzle ORM  │──│  PostgreSQL       │   │
-│  │ API      │  │ (lib/db)     │  │  (lib/api-server) │   │
-│  └──────────┘  └──────────────┘  └──────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -150,45 +137,37 @@ Two chart panels plus a calendar heatmap:
 
 ```
 TraffiCOracle/
-├── lib/                        # Shared workspace packages
-│   ├── api-client-react/       # React hooks (TanStack Query)
-│   ├── api-zod/                # Zod validation schemas
-│   ├── api-spec/               # OpenAPI spec + codegen config
-│   └── db/                     # Drizzle ORM + PostgreSQL migrations
-├── artifacts/                  # runnable applications
-│   ├── api-server/             # Express 5 REST API (Node.js)
-│   ├── blr-traffic/            # Traffic dashboard (React + Vite) ← main app
-│   │   ├── public/
-│   │   │   ├── favicon.svg
-│   │   │   ├── trafficoracle-dark.png   # Logo (light themes)
-│   │   │   └── trafficoracle-light.png  # Logo (dark themes)
-│   │   └── src/
-│   │       ├── App.tsx                    # Root component + router + providers
-│   │       ├── main.tsx                   # Entry point — renders <App />
-│   │       ├── pages/
-│   │       │   ├── Dashboard.tsx          # Main dashboard (map, charts, calendar)
-│   │       │   └── not-found.tsx          # 404 fallback
-│   │       ├── components/
-│   │       │   ├── TrafficMap.tsx         # Leaflet map with Bézier route arcs
-│   │       │   ├── ui/                    # shadcn/ui primitives
-│   │       │   └── ...
-│   │       ├── lib/
-│   │       │   ├── useTrafficData.ts     # Core: fetch, parse, aggregate
-│   │       │   ├── config.ts             # AppConfig type definition
-│   │       │   ├── theme.tsx             # Theme context & definitions
-│   │       │   └── ...
-│   │       └── index.css
-│   │       ├── vite.config.ts            # Vite + plugins config
-│   │       ├── vitest.config.ts          # Unit test config
-│   │       └── package.json
-│   └── mockup-sandbox/          # UI component playground
-├── scripts/                     # Utility scripts
-├── bunfig.toml                  # Bun workspaces & security config
-├── package.json                 # Workspace root (pnpm/yarn-style monorepo)
-├── tsconfig.json                # TypeScript project references
+├── artifacts/                  # Runnable applications
+│   └── blr-traffic/            # Traffic dashboard (React + Vite) ← main app
+│       ├── public/
+│       │   ├── favicon.svg
+│       │   ├── trafficoracle-dark.png   # Logo (light themes)
+│       │   └── trafficoracle-light.png  # Logo (dark themes)
+│       ├── src/
+│       │   ├── App.tsx                    # Root component + router + providers
+│       │   ├── main.tsx                   # Entry point — renders <App />
+│       │   ├── pages/
+│       │   │   ├── Dashboard.tsx          # Main dashboard (map, charts, calendar)
+│       │   │   └── not-found.tsx          # 404 fallback
+│       │   ├── components/
+│       │   │   ├── TrafficMap.tsx         # Leaflet map with Bézier route arcs
+│       │   │   ├── RouteBrowserPane.tsx   # Route sidebar with sparklines
+│       │   │   └── ui/                    # shadcn/ui primitives
+│       │   ├── lib/
+│       │   │   ├── useTrafficData.ts     # Core: fetch, parse, aggregate
+│       │   │   ├── config.ts             # AppConfig type definition
+│       │   │   ├── theme.ts              # Theme context & definitions
+│       │   │   └── ...
+│       │   └── index.css
+│       ├── tests/
+│       │   └── unit/                     # Bun-native unit tests
+│       ├── vite.config.ts
+│       ├── vitest.config.ts
+│       └── package.json
 ├── tsconfig.base.json           # Shared tsconfig settings
+├── bunfig.toml                  # Bun security config
+├── package.json                 # Workspace root
 ├── bun.lock                     # Dependency lockfile (committed)
-├── .env.example                 # Database connection template
 └── README.md                    # This file
 ```
 
@@ -265,7 +244,6 @@ Weekly aggregates are merged side-by-side for chart rendering.
 Traffic data is **right-skewed** — congestion creates a long tail of slow speeds while fast speeds have an upper bound. Standard deviation assumes normal distribution, which is statistically invalid for traffic.
 
 **Industry standard: Percentiles**
-
 Used by INRIX, TomTom, Google Maps for skewed traffic data:
 
 | Statistic | Meaning | Usage |
@@ -337,57 +315,24 @@ function dateKey(d: Date): string  // → "2026-04-08"
 
 ---
 
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | Yes (dev) | Port for the dev server (dashboard uses `5173`, API uses `9000`) |
-| `BASE_PATH` | Yes (dev) | URL path prefix (use `/` for local development) |
-| `DATABASE_URL` | Only with DB | PostgreSQL connection string |
-| `NODE_ENV` | No | `production` or `development` |
-| `REPL_ID` | No | Replit environment ID (only needed on Replit) |
-
-Create a `.env` file in the repository root. **The dashboard does not need a `.env` file** — it reads all settings from `config.json` and fetches data from GitHub.
-
----
-
 ## Build & Deployment
 
 ### Development
 
 ```bash
-# Dashboard only (zero-backend)
-cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run dev
-
-# Full stack (dashboard + API + database)
-# Terminal 1: Database
-cp .env.example .env  # Edit with your PostgreSQL connection string
-cd lib/db && bun run push
-
-# Terminal 2: API server
-cd artifacts/api-server && bun run dev
-
-# Terminal 3: Dashboard
-cd artifacts/blr-traffic && PORT=5173 BASE_PATH=/ bun run dev
+cd artifacts/blr-traffic && bun run dev
 ```
 
 ### Production
 
 ```bash
-# Build everything
-bun run build
-
-# Or individually:
-cd artifacts/api-server && bun run build    # → dist/index.mjs
 cd artifacts/blr-traffic && bun run build   # → dist/public/
-cd artifacts/mockup-sandbox && bun run build # → dist/
 ```
 
 ### Typechecking
 
 ```bash
-bun run typecheck              # Entire project
-bun run typecheck:libs         # Shared libraries only
+bun run typecheck
 ```
 
 ---
@@ -398,7 +343,6 @@ Configured via `bunfig.toml`:
 
 - **Minimum package age**: 24 hours — blocks packages published less than a day ago
 - **Lockfile enforcement**: `bun.lock` must be present and up to date
-- **Platform restriction**: Only Linux x86_64 packages are installed
 - **No auto-peer deps**: Peer dependencies must be explicitly declared
 
 ---
@@ -408,11 +352,8 @@ Configured via `bunfig.toml`:
 | Problem | Solution |
 |---------|----------|
 | `bun: command not found` | Install Bun: `curl -fsSL https://bun.sh/install \| bash` |
-| `PORT environment variable is required` | Set `PORT=5173` before running the dashboard |
-| `BASE_PATH environment variable is required` | Set `BASE_PATH=/` before running |
 | `Cannot find module '@workspace/...'` | Run `bun install` at the repository root |
 | Typecheck fails after pulling changes | Run `bun install` then `bun run typecheck` |
-| Database connection refused | Ensure PostgreSQL is running and `DATABASE_URL` is correct |
 | Stale build artifacts | Delete `dist/` directories and run `bun run build` again |
 | Dashboard shows no data | Check internet connection — data is fetched from GitHub |
 | Vitest tests hang or show empty exports | Use `bun test` instead — see [Testing](#testing) |
@@ -423,10 +364,9 @@ Configured via `bunfig.toml`:
 
 1. Run `bun install` after pulling changes
 2. Run `bun run typecheck` before committing
-3. Add new packages to both `workspaces` in `package.json` and `references` in `tsconfig.json`
-4. Use `@/*` path aliases for imports within a package
-5. Keep `tsconfig.base.json` in sync across packages
-6. New features should include unit tests in `tests/unit/`
+3. Use `@/*` path aliases for imports within a package
+4. Keep `tsconfig.base.json` in sync
+5. New features should include unit tests in `tests/unit/`
 
 ---
 

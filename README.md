@@ -1,12 +1,12 @@
 # TraffiCOracle
 
 <p align="center">
-  <img src="public/trafficoracle-dark.png" alt="TraffiCOracle" height="64">
+  <img src="public/trafficoracle-light.png" alt="TraffiCOracle" height="64">
 </p>
 
 **TraffiCOracle** is a zero-backend web platform that visualises road traffic data for **Bengaluru (Bangalore)** — built with React, Vite, and Bun. There is no server to configure, no database to provision, and no API keys to manage.
 
-> **Zero-backend architecture:** The entire data pipeline runs client-side. PapaParse downloads and parses CSV files from a public GitHub repository updated every hour. All computation — filtering, aggregation, baseline comparison, chart rendering — happens in React. Your data never touches a server unless you choose to send it somewhere.
+> **Zero-backend architecture:** The entire data pipeline runs client-side. PapaParse downloads and parses CSV files from a public GitHub repository updated every 30 minutes. All computation — filtering, aggregation, baseline comparison, chart rendering — happens in React. Your data never touches a server unless you choose to send it somewhere.
 
 ---
 
@@ -14,14 +14,15 @@
 
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
-- [Three Ways to Explore Traffic](#three-ways-to-explore-traffic)
+- [Dashboard Layout](#dashboard-layout)
+- [TrafficNOW! — Live Pane](#trafficnow---live-pane)
 - [Project Structure](#project-structure)
+- [Config-Driven Architecture](#config-driven-architecture)
 - [Data Pipeline](#data-pipeline)
+- [Background Polling](#background-polling)
 - [Key Features](#key-features)
-- [Running the System](#running-the-system)
 - [Testing](#testing)
 - [Build & Deployment](#build--deployment)
-- [Supply Chain Security](#supply-chain-security)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
@@ -57,28 +58,37 @@ Open **http://localhost:5173** — no database, no API server, no `.env` file ne
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    React (Vite)                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │  Map     │  │ Route    │  │ Trend    │              │
-│  │  View    │  │ Cards    │  │ Analysis │              │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘              │
-│       │              │              │                    │
-│       └──────────────┼──────────────┘                    │
-│                      ▼                                   │
-│         useTrafficData.ts (core data layer)              │
-│         ┌────────────────────────────────────┐           │
-│         │ PapaParse (CSV → JSON)              │           │
-│         │ Validation (speed/duration filters) │           │
-│         │ Aggregation (weekly, daily, stats)  │           │
-│         │ Baseline comparison logic           │           │
-│         └────────────────────────────────────┘           │
-│                      │                                   │
-│                      ▼                                   │
-│         fetch() → GitHub raw CSV URLs                    │
-│         (cache-busted with ?t=<timestamp>)               │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    React (Vite + Bun)                         │
+│                                                              │
+│  ┌─────────────────────┐  ┌──────────────────────┐          │
+│  │   Question Pane      │  │  TrafficNOW! Pane    │          │
+│  │   (scrolls)          │  │  (frozen, internal   │          │
+│  │                      │  │   scroll only)        │          │
+│  │  ┌────────────────┐  │  │                      │          │
+│  │  │  Trend Charts   │  │  │  Live speed dots     │          │
+│  │  │  KPI Cards      │  │  │  Status labels       │          │
+│  │  │  Calendar Heat  │  │  │  Confidence bars     │          │
+│  │  │  Baseline Slider│  │  │  Route cards         │          │
+│  │  └───────┬────────┘  │  │  (hover/select)      │          │
+│  │          │            │  └──────────┬───────────┘          │
+│  └──────────┼────────────┘             │                      │
+│             └──────────┬───────────────┘                      │
+│                        ▼                                      │
+│           useTrafficData.ts (core data layer)                  │
+│           ┌──────────────────────────────────────┐            │
+│           │ Initial fetch: full CSV download       │            │
+│           │ Polling: ETag conditional requests     │            │
+│           │ PapaParse → TrafficRow[]               │            │
+│           │ Validation (speed/duration filters)    │            │
+│           │ Aggregation (weekly, daily, stats)     │            │
+│           └──────────────────────────────────────┘            │
+│                        │                                      │
+│                        ▼                                      │
+│           fetch() → GitHub raw CSV URLs                       │
+│           (cache-busted on initial load)                      │
+│           (ETag conditional on polls)                         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **Key design decisions:**
@@ -86,49 +96,67 @@ Open **http://localhost:5173** — no database, no API server, no `.env` file ne
 - **No server required** — the dashboard works entirely client-side by fetching CSV files from a public GitHub repository.
 - **CSV over API** — avoids backend complexity; GitHub serves as the data source and CDN.
 - **Client-side aggregation** — all statistics (mean, median, p95, weekly averages) are computed in the browser.
-- **Cache busting** — every fetch appends `?t=<timestamp>` to prevent stale CDN responses.
+- **Two-pane layout** — Question pane (scrolls with footer) and TrafficNOW! pane (frozen height, independent scroll).
 - **Strict validation** — rows with duration > 300 min, speed > 150 km/h, or invalid dates are silently dropped.
 
 ---
 
-## Three Ways to Explore Traffic
+## Dashboard Layout
 
-### 1. Map View — _Where is traffic moving?_
+The dashboard uses a **two-pane layout** with fully independent scrolling:
 
-An interactive Leaflet map of Bengaluru with route polylines color-coded by traffic speed:
+### Left Pane — Question & Analysis
+- **Interactive question** with tappable pills for route, time-of-day, period, and mode
+- **Baseline comparison slider** with striped/solid track
+- **Verdict card** with emoji, chart, and statistical summary
+- **KPI cards** — Avg Speed, Median Trip, Bad Day Trip, Readings
+- **Speed Over Time** chart with baseline/recent bands
+- **Trip Duration Over Time** chart with p95 overlay
+- **Calendar heatmap** — GitHub-style daily speed visualization
+- **Footer** — thin data source attribution strip
 
-- 🟢 **Green** = fast traffic
-- 🟡 **Yellow** = moderate traffic
-- 🔴 **Red** = slow/heavy traffic
+### Right Pane — TrafficNOW!
+- Frozen height (fills viewport), independent scroll
+- Rounded border with theme-aware colors (WCAG-compliant contrast)
+- **Pulsing green dot** + "Live · updated X min ago" freshness indicator
+- Route cards with hover/select states
+- Speed markers with confidence bars (p05–p95)
+- 5-state status labels: unusually fast, faster, typical, slower, unusually slow
+- Speed values shown on hover (centered under dot, clipped at card edges)
 
-Click any route to select it and drill into detailed analysis. The Airport Expressway is always highlighted with a dashed green line as the speed benchmark.
+---
 
-Routes are rendered as quadratic Bézier arcs with curve direction determined by a hash of the route name, preventing overlap on parallel corridors.
+## TrafficNOW! — Live Pane
 
-### 2. Traffic NOW! — _Is traffic normal right now?_
+### Auto-Refresh Polling
 
-A live traffic indicator comparing current speed against typical speeds for this hour. Uses 90 days of historical data (±90 minutes around current time) to establish a statistical baseline.
+The TrafficNOW! pane auto-refreshes every 10 minutes using **ETag conditional requests**:
 
-**How it works:**
-- **Colored dot** = current live speed for the route
-- **Gray bar** = "typical" range (15th–85th percentile, covering 70% of normal traffic)
-- **Black line** = full city-wide speed range (0–80 km/h baseline)
-- **Status indicator** = verdict based on percentiles:
-  - >90th percentile: "much faster than typical"
-  - 85th–90th: "faster than typical"
-  - 15th–85th: "as expected for this hour"
-  - 10th–15th: "slower than typical"
-  - <10th percentile: "much slower than typical"
+1. First fetch downloads the full CSV and stores the ETag
+2. Subsequent polls send `If-None-Match: <etag>` to GitHub
+3. **304 Not Modified** = zero download (file unchanged)
+4. **200 OK** = parse new rows, merge into existing data, update UI
 
-Tap any route card to select it on the main map and charts.
+Polling pauses when the browser tab is hidden (Page Visibility API) and resumes on focus. Background poll errors are silently swallowed — the last known data stays on screen.
 
-### 3. Trend Analysis — _How does traffic change over time?_
+**Configuration** in `src/config.json`:
+```json
+"route_pane": {
+  "polling_interval_min": 10
+}
+```
 
-Two chart panels plus a calendar heatmap:
+### Status Labels
 
-- **Speed Over Time** — Area chart showing weekly average speed with baseline and recent bands
-- **Trip Duration Over Time** — Line chart comparing average trip duration vs. bad-day (95th percentile) duration
-- **Data Calendar** — A GitHub-style heatmap of daily traffic speeds. Click any day to see the full speed breakdown. Scroll through months to spot seasonal patterns.
+| Speed Range | Label | Color (Colour) | Color (Gray) |
+|-------------|-------|----------------|--------------|
+| ≥ p95 | unusually fast | `#34D399` | `#2D8A4E` |
+| p85–p95 | faster than typical | `#34D399` | `#2D8A4E` |
+| p15–p85 | typical | `#60A5FA` | `#555555` |
+| p05–p15 | slower than typical | `#F87171` | `#C0392B` |
+| < p05 | unusually slow | `#F87171` | `#C0392B` |
+
+All status colors pass WCAG AA (≥3:1 contrast) against their respective backgrounds.
 
 ---
 
@@ -139,35 +167,89 @@ TraffiCOracle/
 ├── src/
 │   ├── App.tsx                    # Root component + router + providers
 │   ├── main.tsx                   # Entry point — renders <App />
-│   ├── config.json                # City, percentile, baseline, UI defaults
+│   ├── config.json                # City, percentile, baseline, polling, zoom
 │   ├── pages/
-│   │   ├── Dashboard.tsx          # Main dashboard (map, charts, calendar)
-│   │   └── not-found.tsx          # 404 fallback
+│   │   └── Dashboard.tsx          # Main dashboard (two-pane layout)
 │   ├── components/
 │   │   ├── TrafficMap.tsx         # Leaflet map with Bézier route arcs
-│   │   ├── RouteBrowserPane.tsx   # Route sidebar with sparklines
-│   │   └── ui/                    # shadcn/ui primitives
+│   │   └── RouteBrowserPane.tsx   # TrafficNOW! pane with live indicators
 │   ├── lib/
-│   │   ├── useTrafficData.ts     # Core: fetch, parse, aggregate
-│   │   ├── config.ts             # AppConfig type definition
-│   │   ├── theme.ts              # Theme context & definitions
-│   │   └── ...
-│   └── index.css
+│   │   ├── useTrafficData.ts      # Core: fetch, parse, aggregate, poll
+│   │   ├── config.ts              # AppConfig type definition
+│   │   ├── theme.ts               # Three themes: colour, gray, pastel
+│   │   └── ThemeContext.tsx        # ThemeProvider with URL/localStorage
+│   └── index.css                  # Tailwind + animations + utilities
 ├── public/
-│   ├── favicon.svg
-│   ├── trafficoracle-dark.png   # Logo (light themes)
-│   └── trafficoracle-light.png  # Logo (dark themes)
+│   ├── trafficoracle-light.png    # Logo (dark themes)
+│   └── trafficoracle-dark.png     # Logo (light themes)
 ├── tests/
-│   └── unit/                     # Bun-native unit tests
-├── config.json                   # City, percentile, baseline, UI defaults
+│   └── unit/
+│       └── useTrafficData.test.ts # 72 tests across 4 phases
 ├── vite.config.ts
-├── vitest.config.ts
 ├── tsconfig.json
 ├── package.json
 ├── bun.lock
 ├── bunfig.toml
 └── README.md
 ```
+
+---
+
+## Config-Driven Architecture
+
+All defaults live in `src/config.json` — no hardcoded values in components:
+
+```json
+{
+  "cities": [
+    {
+      "name": "Bangalore",
+      "ready": true,
+      "data_source": {
+        "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv",
+        "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv"
+      }
+    }
+  ],
+  "percentile": {
+    "worst_case": 97.5,
+    "verdict_threshold_kmh": 0.99
+  },
+  "defaults": {
+    "baseline_start": "2026-01-05",
+    "baseline_end": "2026-03-04",
+    "question_mode": "improved",
+    "route": "Hosur Road",
+    "time_of_day": "weekday_morning",
+    "period": "3m"
+  },
+  "route_pane": {
+    "open": true,
+    "min_width": 200,
+    "width": 400,
+    "max_width": 600,
+    "polling_interval_min": 10
+  },
+  "zoom": {
+    "default": 0.92,
+    "steps": [0.80, 0.92, 1.00, 1.15]
+  }
+}
+```
+
+**URL parameters override config defaults.** The Share button encodes all state into the URL:
+
+| Param | Description | Example |
+|-------|-------------|---------|
+| `city` | City name | `Bangalore` |
+| `route` | Route name | `Hosur Road` |
+| `tod` | Time-of-day | `weekday_morning` |
+| `period` | Time period | `3m` |
+| `mode` | Question mode | `improved` |
+| `theme` | Colour scheme | `colour` / `gray` / `pastel` |
+| `bl` | Baseline start index | `15` |
+| `br` | Baseline end index | `23` |
+| `zoom` | UI scale factor | `0.92` |
 
 ---
 
@@ -179,13 +261,13 @@ TraffiCOracle/
 - `csv-routes.csv` — route metadata (code, full name, short name)
 - `csv-bangalore_traffic.csv` — timestamped speed/duration readings
 
-Both URLs are fetched with `cache: 'no-store'` and cache-busting (`?t=<timestamp>`).
+Both URLs are fetched with `cache: 'no-store'` and cache-busting (`?t=<timestamp>`) on initial load.
 
-**Data source:** [`thecont1/blr-traffic-monitor`](https://github.com/thecont1/blr-traffic-monitor) — updated hourly.
+**Data source:** [`thecont1/blr-traffic-monitor`](https://github.com/thecont1/blr-traffic-monitor) — updated every 30 minutes via GitHub Actions.
 
 ### Step 2: Parse
 
-CSV text is parsed client-side using [PapaParse](https://www.papaparse.com/) with header mode and empty line skipping.
+CSV text is parsed client-side using [PapaParse](https://www.papaparse.com/) with header mode and empty line skipping. Windows line endings (`\r\n`) are normalized to `\n` before parsing.
 
 ### Step 3: Validate & Transform
 
@@ -206,20 +288,54 @@ Data is aggregated at multiple granularities:
 
 - **Weekly** (`aggregateRows`): Groups by Monday-based week key, computes avg speed, avg/median/p95 duration
 - **Daily** (`useDailyStats`): Groups by date string, filtered by route + time-of-day
-- **Traffic NOW! Stats** (`computeTODStats`): Uses percentile-based statistics (p10, p15, p50, p85, p90) computed from 90-day historical window ±90 min around current time
+- **TrafficNOW! Stats** (`computeTODStats`): Percentile-based statistics (p05, p10, p15, p50, p85, p90, p95) from 90-day window ±90 min around current time
 - **Overall** (`computeStats`): Mean, median, p95, avg speed, count for any row set
 
-### Step 5: Compare (Baseline)
+---
 
-`useFilteredData` splits data into two windows:
-- **Selected route** — filtered by time-of-day and period (1m/3m/6m/1y)
-- **Baseline route** (default: Airport Expressway) — same period, different route
+## Background Polling
 
-Weekly aggregates are merged side-by-side for chart rendering.
+After the initial full fetch, the dashboard polls for updates every 10 minutes:
+
+```
+Initial load:  Full CSV download (63k+ rows, ~2.5 MB)
+               ↓
+Poll cycle:    Send If-None-Match header
+               ↓
+         ┌─────┴─────┐
+         │  304       │  200
+         │  No change │  New data
+         │  Skip      │  Parse + merge
+         └─────┬─────┘
+               ↓
+         Update UI if changed
+```
+
+- **ETag tracking** — module-level `etagStore` maps URLs to their last-seen ETag
+- **Merge logic** — new rows are deduped by `timestamp:route_code` key, then sorted
+- **Memory management** — rows older than 90 days are trimmed on each refresh
+- **Tab visibility** — polling pauses when the tab is hidden, resumes with an immediate check on focus
+- **Error resilience** — background poll failures are silently swallowed; manual Refresh remains available
 
 ---
 
 ## Key Features
+
+### Themes
+
+Three built-in themes, cycled via the header pill:
+
+| Theme | Background | Style |
+|-------|-----------|-------|
+| **Colour me surprised!** | Deep navy-charcoal | Vibrant cyan/pink accents |
+| **Scale me gray!** | Clean white | Professional grayscale |
+| **Clear as day!** | Warm cream | Soft, sunny palette |
+
+Theme persists in localStorage and can be overridden via URL param `?theme=gray`.
+
+### Zoom Control
+
+Header `[-] 92% [+]` pill scales the entire UI. Four steps: 80%, 92%, 100%, 115%. The zoom compensates for CSS `zoom` scaling so the viewport fills perfectly at any level. Default and steps are configurable in `config.json`.
 
 ### Time-of-Day Filtering
 
@@ -233,39 +349,21 @@ Weekly aggregates are merged side-by-side for chart rendering.
 | `weekends` | All day | Sat–Sun |
 | `all` | All day | All days |
 
-### Week Key System
-
-`toWeekKey(date)` generates a Monday-based ISO week identifier (`YYYY-MM-DD`). All days in the same week resolve to the same key, enabling correct weekly grouping across month/year boundaries.
-
 ### Percentile-Based Statistics (Traffic NOW!)
 
 Traffic data is **right-skewed** — congestion creates a long tail of slow speeds while fast speeds have an upper bound. Standard deviation assumes normal distribution, which is statistically invalid for traffic.
 
-**Industry standard: Percentiles**
-Used by INRIX, TomTom, Google Maps for skewed traffic data:
+**Industry standard: Percentiles** (used by INRIX, TomTom, Google Maps):
 
 | Statistic | Meaning | Usage |
 |-----------|---------|-------|
-| **p10** | Fast end of "normal" | Threshold: "much slower" if below |
-| **p15** | Lower typical bound | Threshold: "slower" if below |
-| **p50** | Median — typical center | Visual marker in the confidence bar |
-| **p85** | Upper typical bound | Threshold: "faster" if above |
-| **p90** | Slow end of "normal" | Threshold: "much faster" if above |
+| **p05** | Extreme fast end | Confidence bar left edge |
+| **p15** | Lower typical bound | "slower" threshold |
+| **p50** | Median — typical center | Visual marker |
+| **p85** | Upper typical bound | "faster" threshold |
+| **p95** | Extreme slow end | Confidence bar right edge |
 
-`percentile(sorted, p)` uses linear interpolation for non-integer indices. The 15th–85th percentile range (70% of observations) defines "typical" traffic for a given time-of-day.
-
-### URL Parameters
-
-The dashboard state is encoded in URL query parameters for sharing:
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `route` | string | Selected route name |
-| `tod` | string | Time-of-day filter |
-| `period` | string | Time period (1m/3m/6m/1y) |
-| `mode` | string | Question mode |
-| `bl` | number | Baseline window start (timestamp) |
-| `br` | number | Baseline window end (timestamp) |
+`percentile(sorted, p)` uses linear interpolation for non-integer indices.
 
 ---
 
@@ -274,7 +372,6 @@ The dashboard state is encoded in URL query parameters for sharing:
 ### Running Tests
 
 ```bash
-# Run tests
 bun test
 ```
 
@@ -282,7 +379,7 @@ bun test
 
 The project uses **Bun's native test runner** (`bun:test`).
 
-**Test file:** `tests/unit/useTrafficData.test.ts` — 40+ tests organized into 4 phases:
+**Test file:** `tests/unit/useTrafficData.test.ts` — 72 tests organized into 4 phases:
 
 | Phase | Focus | Tests |
 |-------|-------|-------|
@@ -294,18 +391,9 @@ The project uses **Bun's native test runner** (`bun:test`).
 ### Key Testing Decisions
 
 - **Bun native runner** over Vitest — Vitest 2.x has ESM interop issues with Bun 1.x where local `.ts` module exports resolve to empty objects.
+- **No DOM in tests** — replicate pure logic instead of using `renderHook` or `@testing-library/react`.
 - **No `beforeEach`/`afterEach`** — each test is self-contained; fetch mocks are set per-test.
 - **Source code is the spec** — test behavior mirrors source logic exactly so failures point at bugs, not test drift.
-
-### Test Helpers
-
-```typescript
-// Create a valid TrafficRow for testing
-function makeRow(overrides?: Partial<TrafficRow>): TrafficRow
-
-// Replicate date-key logic used by daily-stats maps
-function dateKey(d: Date): string  // → "2026-04-08"
-```
 
 ---
 
@@ -331,26 +419,16 @@ bun run typecheck
 
 ---
 
-## Supply Chain Security
-
-Configured via `bunfig.toml`:
-
-- **Minimum package age**: 24 hours — blocks packages published less than a day ago
-- **Lockfile enforcement**: `bun.lock` must be present and up to date
-- **No auto-peer deps**: Peer dependencies must be explicitly declared
-
----
-
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | `bun: command not found` | Install Bun: `curl -fsSL https://bun.sh/install \| bash` |
-| `Cannot find module '@workspace/...'` | Run `bun install` at the repository root |
 | Typecheck fails after pulling changes | Run `bun install` then `bun run typecheck` |
-| Stale build artifacts | Delete `dist/` directories and run `bun run build` again |
 | Dashboard shows no data | Check internet connection — data is fetched from GitHub |
-| Vitest tests hang or show empty exports | Use `bun test` instead — see [Testing](#testing) |
+| TrafficNOW! shows stale data | Click Refresh; auto-poll runs every 10 min |
+| Theme not applied from shared URL | Ensure `theme=colour` or `theme=gray` or `theme=pastel` in URL |
+| Zoom creates blank space at bottom | This is a browser zoom artifact; use the +/- control instead |
 
 ---
 
@@ -358,8 +436,9 @@ Configured via `bunfig.toml`:
 
 1. Run `bun install` after pulling changes
 2. Run `bun run typecheck` before committing
-4. Use `@/*` path aliases for imports within the project
-5. New features should include unit tests in `tests/unit/`
+3. Use `@/*` path aliases for imports within the project
+4. New features should include unit tests in `tests/unit/`
+5. Theme colors must pass WCAG AA (≥3:1 contrast) — verify with computed ratios
 
 ---
 

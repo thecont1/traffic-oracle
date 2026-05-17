@@ -158,22 +158,22 @@ function TrafficNowBar({
   // Get status color
   const getStatusColor = () => {
     if (thm.key === 'gray') {
-      if (isFaster) return '#E2E2E2';
-      if (isSlower) return '#4A4A4A';
-      return '#888888';
+      if (isFaster) return '#2D8A4E';
+      if (isSlower) return '#C0392B';
+      return '#555555';
     }
     if (thm.key === 'pastel') {
-      if (isFaster) return '#8CCB7A';
-      if (isSlower) return '#F2A65A';
-      return '#6FA8DC';
+      if (isFaster) return '#2E7D32';
+      if (isSlower) return '#D84315';
+      return '#546E7A';
     }
-    if (isFaster) return '#4CD964';
-    if (isSlower) return '#FF3B30';
-    return '#4DA3FF';
+    if (isFaster) return '#34D399';
+    if (isSlower) return '#F87171';
+    return '#60A5FA';
   };
   
   const statusColor = getStatusColor();
-  const typicalColor = thm.key === 'gray' ? '#999' : thm.key === 'pastel' ? 'rgba(80,70,60,0.6)' : 'rgba(70,65,60,0.7)';
+  const typicalColor = thm.key === 'gray' ? '#777777' : thm.key === 'pastel' ? 'rgba(80,70,60,0.6)' : 'rgba(70,65,60,0.7)';
   
   // Calculate positions on the city-wide scale
   const cityRange = cityMax - cityMin || 1;

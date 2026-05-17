@@ -125,6 +125,7 @@ function TrafficNowBar({
   status,
   thm,
   hovered,
+  isSelected,
 }: { 
   liveSpeed: number | null;
   typical: RouteTODStats | null;
@@ -133,6 +134,7 @@ function TrafficNowBar({
   status: LiveStatus;
   thm: AppTheme;
   hovered: boolean;
+  isSelected: boolean;
 }) {
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
   
@@ -216,7 +218,7 @@ function TrafficNowBar({
         )}
 
         {/* Hover labels: p05 above left, p95 above right */}
-        {hovered && hasData && (
+        {(hovered || isSelected) && hasData && (
           <>
             <div style={{
               position: 'absolute', left: `${typicalMinPos}%`, top: -12,
@@ -242,7 +244,7 @@ function TrafficNowBar({
         height: 14,
         overflow: 'hidden',
       }}>
-        {hovered && hasData && (
+        {(hovered || isSelected) && hasData && (
           <div style={{
             position: 'absolute',
             left: `${livePos}%`,
@@ -285,7 +287,7 @@ function RouteCard({
     // Delay closing by 500ms for better UX
     hoverTimeoutRef.current = setTimeout(() => {
       setHovered(false);
-    }, 500);
+    }, 2500);
   }, []);
   
   // Cleanup timeout on unmount
@@ -393,6 +395,7 @@ function RouteCard({
         status={card.status}
         thm={thm}
         hovered={hovered}
+        isSelected={isSelected}
       />
       
       

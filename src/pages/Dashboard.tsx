@@ -1436,7 +1436,7 @@ function DashboardInner() {
         </header>
 
         {/* ── Below-header area: main content + route pane ─────────── */}
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
           {/* ── Main content ──────────────────────────────────────── */}
           <main id="main-content" tabIndex={-1} style={{

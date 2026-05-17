@@ -322,6 +322,10 @@ function RouteCard({
       onClick={() => onSelect(card.label)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      tabIndex={0}
+      role="button"
+      className="route-card-focus"
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(card.label); } }}
       style={{
         background: cardBg,
         borderRadius: 6,
@@ -473,9 +477,10 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               {/* Info tooltip — click to toggle animated callout */}
               <InfoTip thm={thm} />
             </div>
-            <button onClick={onToggle} title="Close"
+            <button onClick={onToggle} title="Close" aria-label="Close route browser"
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,
-                color: thm.textMuted, padding: 2, borderRadius: 4, lineHeight: 1 }}>
+                color: thm.textMuted, padding: 10, borderRadius: 4, lineHeight: 1,
+                minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
               ✕
             </button>
           </div>
@@ -516,6 +521,11 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       {/* Rail — right edge */}
       <div
         onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        aria-label={isOpen ? "Close route browser" : "Open route browser"}
+        aria-expanded={isOpen}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         title={isOpen ? "Close route browser" : "Browse all routes"}
         style={{
           position: "absolute", right: 0, top: 0, bottom: 0,

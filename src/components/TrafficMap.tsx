@@ -334,13 +334,13 @@ function LegendRow({
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       {dashed ? (
-        <svg width={26} height={8} viewBox="0 0 26 8" style={{ flexShrink: 0, opacity }}>
+        <svg width={26} height={8} viewBox="0 0 26 8" style={{ flexShrink: 0, opacity }} aria-hidden="true">
           <line x1="0" y1="4" x2="26" y2="4"
             stroke={color} strokeWidth={weight}
             strokeDasharray="6 4" strokeLinecap="round" />
         </svg>
       ) : (
-        <svg width={26} height={8} viewBox="0 0 26 8" style={{ flexShrink: 0, opacity }}>
+        <svg width={26} height={8} viewBox="0 0 26 8" style={{ flexShrink: 0, opacity }} aria-hidden="true">
           <line x1="0" y1="4" x2="26" y2="4"
             stroke={color} strokeWidth={weight} strokeLinecap="round" />
         </svg>

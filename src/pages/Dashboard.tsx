@@ -177,8 +177,9 @@ function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; 
     <div ref={dropdownRef} style={{ position: "relative" }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         style={{
-          height: 34,
+          height: 44,
           display: "flex",
           alignItems: "center",
           gap: 4,
@@ -227,17 +228,17 @@ function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; 
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
+                gap: 6,
                 width: "100%",
                 padding: "8px 12px",
+                minHeight: 44,
                 border: "none",
                 background: "transparent",
                 cursor: city.ready ? "pointer" : "not-allowed",
-                opacity: city.ready ? 1 : 0.4,
                 fontSize: 12,
-                fontFamily: "var(--app-font-display)",
-                color: city.name === selectedCity ? thm.chart.line1 : thm.textSecondary,
-                fontWeight: city.name === selectedCity ? 600 : 400,
+                fontWeight: city.name === selectedCity ? 700 : 400,
+                color: city.ready ? thm.textPrimary : thm.textMuted,
+                opacity: city.ready ? 1 : 0.4,
                 textAlign: "left",
               }}
             >
@@ -354,10 +355,13 @@ function NapkinChart({
 
   return (
     <svg ref={svgRef}
+      role="img"
       viewBox={`0 0 ${W} ${totalH}`}
-      style={{ width:"100%", height:totalH, display:"block", overflow:"visible" }}
+      style={{ width:"100%", height:totalH, display:"block", overflow: "visible" }}
       overflow="visible"
       preserveAspectRatio="xMidYMid meet">
+      <title>Traffic speed trend chart</title>
+      <desc>Line chart comparing baseline period speeds with recent speeds for the selected route.</desc>
       {hasGap && (
         <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
           x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}
@@ -959,6 +963,12 @@ function computeAllRouteCards(
 function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
   const isMobile = useIsMobile();
+  const liveRef = useRef<HTMLDivElement>(null);
+
+  // Announce dynamic changes to screen readers
+  const announce = useCallback((msg: string) => {
+    if (liveRef.current) liveRef.current.textContent = msg;
+  }, []);
 
   /* City selection */
   const defaultCityName = CITIES.find(c => c.ready)?.name ?? CITIES[0].name;
@@ -1028,6 +1038,13 @@ function DashboardInner() {
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
     useTrafficData(citySource);
+
+  // Announce data state changes to screen readers
+  useEffect(() => {
+    if (loading) announce("Loading traffic data…");
+    else if (error) announce("Error loading traffic data: " + error);
+    else if (rowCount > 0) announce("Traffic data loaded for " + selectedCity + ". " + rowCount.toLocaleString() + " rows.");
+  }, [loading, error, rowCount, selectedCity, announce]);
 
   const routeOptions = useMemo(() => {
     const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
@@ -1326,7 +1343,13 @@ function DashboardInner() {
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className={thm.isDark ? "dark" : ""}>
+      <div aria-live="polite" aria-atomic="true" ref={liveRef} className="sr-only" />
       <div className="min-h-screen transition-colors" style={{ background: thm.bodyBg, display: "flex", flexDirection: "column" }}>
+
+        {/* ── Skip link ─────────────────────────────────────── */}
+        <a href="#main-content" className="sr-only focusable">
+          Skip to main content
+        </a>
 
         {/* ── Header ──────────────────────────────────────────── */}
         <header style={{
@@ -1343,6 +1366,8 @@ function DashboardInner() {
               <img
                 src="/trafficoracle-light.png"
                 alt="TraffiCOracle"
+                width={120}
+                height={32}
                 style={{ height:32, width:"auto", flexShrink:0 }}
               />
               <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} />
@@ -1354,9 +1379,9 @@ function DashboardInner() {
                 <button onClick={handleShare} style={{
                   display:"flex", alignItems:"center", gap:5, fontSize:12,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  borderRadius:9999, height:34, padding:"0 12px",
+                  borderRadius:9999, height:44, padding:"0 12px",
                   color: copied ? thm.speedGood : thm.textMuted,
-                  background: copied ? "rgba(111,174,99,0.1)" : "transparent",
+                  background: copied ? "rgba(111,174,99,0.1)" : "#262321",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
                   <Share2 size={13} />
@@ -1366,9 +1391,9 @@ function DashboardInner() {
               <button onClick={refresh} disabled={loading} style={{
                 display:"flex", alignItems:"center", gap:5, fontSize:12,
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                borderRadius:9999, height:34, padding:"0 12px",
+                borderRadius:9999, height:44, padding:"0 12px",
                 color: thm.textMuted,
-                background: "transparent",
+                background: "#262321",
                 cursor: loading ? "default" : "pointer",
                 transition:"color 0.2s, background 0.2s",
                 opacity: loading ? 0.4 : 1,
@@ -1381,7 +1406,7 @@ function DashboardInner() {
                 title={`Switch to ${nextMeta.label}`}
                 style={{
                   display:"flex", alignItems:"center", gap:6,
-                  height:34, borderRadius:9999, padding:"0 12px",
+                  height:44, borderRadius:9999, padding:"0 12px",
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   background: thm.key==="colour" ? "#262321" : thm.key==="gray" ? "#f5f5f5" : "#DBEAFE",
                   cursor:"pointer",
@@ -1403,7 +1428,7 @@ function DashboardInner() {
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
           {/* ── Main content ──────────────────────────────────────── */}
-          <main style={{
+          <main id="main-content" tabIndex={-1} style={{
             flex: 1,
             minWidth: 0,
             maxWidth: isMobile ? "100%" : 1320,
@@ -1849,7 +1874,7 @@ function DashboardInner() {
             return (
               <a href={href}
                 target="_blank" rel="noopener noreferrer"
-                style={{ color: thm.chart.line4, display:"inline-flex", alignItems:"center", gap:4, verticalAlign:"middle" }}>
+                style={{ color: thm.chart.line4, display:"inline-flex", alignItems:"center", gap:4, verticalAlign:"middle", padding:"4px 0", minHeight:44 }}>
                 <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}>
                   <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                 </svg>

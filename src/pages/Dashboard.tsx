@@ -5,7 +5,7 @@ import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Share2, RefreshCw } from "lucide-react";
+import { Share2, RefreshCw, Plus, Minus } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
 } from "@/lib/useTrafficData";
@@ -52,12 +52,14 @@ function readUrlParams() {
   if (typeof window === "undefined") return {} as Record<string, string | number>;
   const p = new URLSearchParams(window.location.search);
   const out: Record<string, string | number> = {};
+  if (p.has("city"))  out.city  = p.get("city")!;
   if (p.has("route"))  out.route  = p.get("route")!;
   if (p.has("tod"))    out.tod    = p.get("tod")!;
   if (p.has("period")) out.period = p.get("period")!;
   if (p.has("mode"))   out.mode   = p.get("mode")!;
   if (p.has("bl"))     out.bl     = Number(p.get("bl"));
   if (p.has("br"))     out.br     = Number(p.get("br"));
+  if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));
   return out;
 }
 const URL_PARAMS = readUrlParams();
@@ -978,7 +980,10 @@ function DashboardInner() {
 
   /* City selection */
   const defaultCityName = CITIES.find(c => c.ready)?.name ?? CITIES[0].name;
-  const [selectedCity, setSelectedCity] = useState(defaultCityName);
+  const initialCity = URL_PARAMS.city
+    ? (CITIES.find(c => c.name === URL_PARAMS.city)?.name ?? defaultCityName)
+    : defaultCityName;
+  const [selectedCity, setSelectedCity] = useState(initialCity);
   const selectedCityConfig = useMemo(() =>
     CITIES.find(c => c.name === selectedCity) ?? CITIES[0],
     [selectedCity],
@@ -1041,6 +1046,32 @@ function DashboardInner() {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  /* Zoom control */
+  const ZOOM_STEPS = cfg.zoom.steps;
+  const defaultZoom = cfg.zoom.default;
+  const [zoomIdx, setZoomIdx] = useState(() => {
+    const z = URL_PARAMS.zoom as number | undefined;
+    if (z) {
+      const closest = ZOOM_STEPS.reduce((best, v, i) =>
+        Math.abs(v - z) < Math.abs(ZOOM_STEPS[best] - z) ? i : best, 0);
+      return closest;
+    }
+    return ZOOM_STEPS.indexOf(defaultZoom) >= 0 ? ZOOM_STEPS.indexOf(defaultZoom) : 1;
+  });
+  useEffect(() => {
+    const zoom = ZOOM_STEPS[zoomIdx];
+    document.documentElement.style.zoom = String(zoom);
+    /* Compensate for zoom: the container uses 100vh CSS but zoom scales
+       the rendered output, leaving a gap. Override height to vh/zoom so
+       the rendered height always equals the viewport. */
+    const container = document.querySelector('.transition-colors') as HTMLElement | null;
+    if (container) {
+      container.style.height = `${window.innerHeight / zoom}px`;
+    }
+  }, [zoomIdx]);
+  const zoomIn = useCallback(() => setZoomIdx(i => Math.min(i + 1, ZOOM_STEPS.length - 1)), []);
+  const zoomOut = useCallback(() => setZoomIdx(i => Math.max(i - 1, 0)), []);
+
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
     useTrafficData(citySource);
@@ -1058,7 +1089,7 @@ function DashboardInner() {
   }, [allRows]);
 
   useEffect(() => {
-    if (routeOptions.length === 0 || urlParamsRef.current.routeApplied) return;
+    if (allRows.length === 0 || urlParamsRef.current.routeApplied) return;
     if (URL_PARAMS.route) {
       const idx = routeOptions.indexOf(URL_PARAMS.route as string);
       if (idx >= 0) setRouteIdx(idx);
@@ -1148,12 +1179,14 @@ function DashboardInner() {
 
   const handleShare = useCallback(() => {
     const p = new URLSearchParams({
+      city:   selectedCity,
       route:  selectedRoute,
       tod,
       period,
       mode:   questionMode,
       bl:     String(safeLeft),
       br:     String(safeRight),
+      zoom:   String(ZOOM_STEPS[zoomIdx]),
     });
     const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
@@ -1161,7 +1194,7 @@ function DashboardInner() {
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedRoute, tod, period, questionMode, safeLeft, safeRight]);
+  }, [selectedCity, selectedRoute, tod, period, questionMode, safeLeft, safeRight, zoomIdx]);
 
   const lastDataMs = useMemo(
     () => allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
@@ -1411,6 +1444,41 @@ function DashboardInner() {
                   {loading ? "Fetching…" : "Refresh"}
                 </span>
               </button>
+              {/* Size +/- */}
+              <div style={{
+                display:"flex", alignItems:"center",
+                border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                borderRadius:9999, height:44, overflow:"hidden",
+                background: thm.key==="colour" ? "#141A24" : "transparent",
+              }}>
+                <button onClick={zoomOut} disabled={zoomIdx === 0}
+                  title="Decrease size"
+                  style={{
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    width:32, height:44, border:"none", background:"transparent",
+                    color: thm.textMuted, cursor: zoomIdx === 0 ? "default" : "pointer",
+                    opacity: zoomIdx === 0 ? 0.3 : 1,
+                  }}>
+                  <Minus size={13} />
+                </button>
+                <span style={{
+                  fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                  color: thm.textSecondary, lineHeight:1, minWidth:32, textAlign:"center",
+                  userSelect:"none",
+                }}>
+                  {Math.round(ZOOM_STEPS[zoomIdx] * 100)}%
+                </span>
+                <button onClick={zoomIn} disabled={zoomIdx === ZOOM_STEPS.length - 1}
+                  title="Increase size"
+                  style={{
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    width:32, height:44, border:"none", background:"transparent",
+                    color: thm.textMuted, cursor: zoomIdx === ZOOM_STEPS.length - 1 ? "default" : "pointer",
+                    opacity: zoomIdx === ZOOM_STEPS.length - 1 ? 0.3 : 1,
+                  }}>
+                  <Plus size={13} />
+                </button>
+              </div>
               <button
                 onClick={cycleTheme}
                 title={`Switch to ${nextMeta.label}`}
@@ -1858,10 +1926,10 @@ function DashboardInner() {
         {/* ── Footer — full width, scrolls with content ─────────── */}
         <footer style={{
           borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-          padding:"0.75rem 1.5rem",
+          padding:"0.3rem 1.5rem",
           display:"flex", alignItems:"baseline", justifyContent:"center",
           flexWrap:"wrap", gap:"0 4px",
-          fontSize:12, color: thm.textMuted,
+          fontSize:11, color: thm.textMuted,
         }}>
           <b style={{ lineHeight:1 }}>Data Source</b>{" "}
           {(() => {

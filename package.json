@@ -10,7 +10,9 @@
     "serve": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:watch": "bun test --watch",
+    "deploy": "bun run build && wrangler deploy",
+    "preview": "bun run build && wrangler dev"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -19,6 +21,7 @@
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
@@ -50,6 +53,7 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.90.21",
+    "@testing-library/react": "^16.1.0",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^25.3.3",
     "@types/papaparse": "^5.5.2",
@@ -80,8 +84,8 @@
     "vaul": "^1.1.2",
     "vite": "^7.3.2",
     "vitest": "^2.1.8",
-    "@testing-library/react": "^16.1.0",
     "wouter": "^3.3.5",
+    "wrangler": "^4.92.0",
     "zod": "^3.25.76"
   }
 }

@@ -5,8 +5,6 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
-.expo
-.expo-shared
 
 # dependencies
 node_modules
@@ -46,10 +44,3 @@ Thumbs.db
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
-
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
-
-# Replit
-.cache/
-.local/

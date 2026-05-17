@@ -968,7 +968,6 @@ function DashboardInner() {
     [selectedCity],
   );
   const citySource = selectedCityConfig.data_source;
-  console.log('[Dashboard] citySource:', JSON.stringify(citySource));
 
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {

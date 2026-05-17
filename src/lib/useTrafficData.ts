@@ -206,7 +206,6 @@ export function fetchTrafficData(
   };
 
   let cancelled = false;
-  console.log('[fetchTrafficData] routesUrl:', routesUrl, 'trafficUrl:', trafficUrl, 'source:', source ? 'provided' : 'undefined');
   return Promise.all([fetchCsv(routesUrl), fetchCsv(trafficUrl)]).then(
     ([routesRaw, trafficRaw]) => {
       if (cancelled) throw new Error("cancelled");

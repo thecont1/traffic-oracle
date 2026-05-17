@@ -4,17 +4,17 @@ import * as Papa from "papaparse";
 import appConfig from "../config.json";
 import type { AppConfig } from "./config";
 
-const WORST_CASE_PCT: number =
-  (appConfig as AppConfig).worst_case_percentile ?? 95;
+const cfg = appConfig as AppConfig;
+const WORST_CASE_PCT: number = cfg.percentile.worst_case;
 
 const ROUTES_URL =
   import.meta.env.DEV
     ? "/api/traffic-csv/csv-routes.csv"
-    : "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv";
+    : cfg.city.data_source.routes_csv;
 const TRAFFIC_URL =
   import.meta.env.DEV
     ? "/api/traffic-csv/csv-bangalore_traffic.csv"
-    : "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv";
+    : cfg.city.data_source.traffic_csv;
 
 /** Append a cache-busting query param so CDNs never serve a stale copy. */
 export function bust(url: string): string {

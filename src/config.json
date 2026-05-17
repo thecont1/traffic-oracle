@@ -1,0 +1,28 @@
+{
+  "city": {
+    "name": "Bangalore",
+    "data_source": {
+      "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv",
+      "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv"
+    }
+  },
+  "percentile": {
+    "worst_case": 95,
+    "verdict_threshold_kmh": 0.5
+  },
+  "baseline": {
+    "default_start": "2025-10-20",
+    "default_end": "2025-12-15"
+  },
+  "defaults": {
+    "period": "6m",
+    "time_of_day": "weekday_afternoon",
+    "question_mode": "worsened"
+  },
+  "route_pane": {
+    "open": true,
+    "width": 200,
+    "min_width": 140,
+    "max_width": 500
+  }
+}

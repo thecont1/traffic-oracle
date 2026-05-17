@@ -1,6 +1,0 @@
-{
-  "worst_case_percentile": 95,
-  "verdict_threshold_kmh": 0.5,
-  "baseline_default_start": "2025-10-20",
-  "baseline_default_end": "2025-12-15"
-}

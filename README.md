@@ -1,7 +1,7 @@
 # TraffiCOracle
 
 <p align="center">
-  <img src="artifacts/blr-traffic/public/trafficoracle-dark.png" alt="TraffiCOracle" height="64">
+  <img src="public/trafficoracle-dark.png" alt="TraffiCOracle" height="64">
 </p>
 
 **TraffiCOracle** is a zero-backend web platform that visualises road traffic data for **Bengaluru (Bangalore)** — built with React, Vite, and Bun. There is no server to configure, no database to provision, and no API keys to manage.
@@ -47,7 +47,6 @@ git clone <repo-url> && cd TraffiCOracle
 bun install
 
 # Start the dashboard
-cd artifacts/blr-traffic
 bun run dev
 ```
 
@@ -137,38 +136,37 @@ Two chart panels plus a calendar heatmap:
 
 ```
 TraffiCOracle/
-├── artifacts/                  # Runnable applications
-│   └── blr-traffic/            # Traffic dashboard (React + Vite) ← main app
-│       ├── public/
-│       │   ├── favicon.svg
-│       │   ├── trafficoracle-dark.png   # Logo (light themes)
-│       │   └── trafficoracle-light.png  # Logo (dark themes)
-│       ├── src/
-│       │   ├── App.tsx                    # Root component + router + providers
-│       │   ├── main.tsx                   # Entry point — renders <App />
-│       │   ├── pages/
-│       │   │   ├── Dashboard.tsx          # Main dashboard (map, charts, calendar)
-│       │   │   └── not-found.tsx          # 404 fallback
-│       │   ├── components/
-│       │   │   ├── TrafficMap.tsx         # Leaflet map with Bézier route arcs
-│       │   │   ├── RouteBrowserPane.tsx   # Route sidebar with sparklines
-│       │   │   └── ui/                    # shadcn/ui primitives
-│       │   ├── lib/
-│       │   │   ├── useTrafficData.ts     # Core: fetch, parse, aggregate
-│       │   │   ├── config.ts             # AppConfig type definition
-│       │   │   ├── theme.ts              # Theme context & definitions
-│       │   │   └── ...
-│       │   └── index.css
-│       ├── tests/
-│       │   └── unit/                     # Bun-native unit tests
-│       ├── vite.config.ts
-│       ├── vitest.config.ts
-│       └── package.json
-├── tsconfig.base.json           # Shared tsconfig settings
-├── bunfig.toml                  # Bun security config
-├── package.json                 # Workspace root
-├── bun.lock                     # Dependency lockfile (committed)
-└── README.md                    # This file
+├── src/
+│   ├── App.tsx                    # Root component + router + providers
+│   ├── main.tsx                   # Entry point — renders <App />
+│   ├── config.json                # City, percentile, baseline, UI defaults
+│   ├── pages/
+│   │   ├── Dashboard.tsx          # Main dashboard (map, charts, calendar)
+│   │   └── not-found.tsx          # 404 fallback
+│   ├── components/
+│   │   ├── TrafficMap.tsx         # Leaflet map with Bézier route arcs
+│   │   ├── RouteBrowserPane.tsx   # Route sidebar with sparklines
+│   │   └── ui/                    # shadcn/ui primitives
+│   ├── lib/
+│   │   ├── useTrafficData.ts     # Core: fetch, parse, aggregate
+│   │   ├── config.ts             # AppConfig type definition
+│   │   ├── theme.ts              # Theme context & definitions
+│   │   └── ...
+│   └── index.css
+├── public/
+│   ├── favicon.svg
+│   ├── trafficoracle-dark.png   # Logo (light themes)
+│   └── trafficoracle-light.png  # Logo (dark themes)
+├── tests/
+│   └── unit/                     # Bun-native unit tests
+├── config.json                   # City, percentile, baseline, UI defaults
+├── vite.config.ts
+├── vitest.config.ts
+├── tsconfig.json
+├── package.json
+├── bun.lock
+├── bunfig.toml
+└── README.md
 ```
 
 ---
@@ -276,12 +274,8 @@ The dashboard state is encoded in URL query parameters for sharing:
 ### Running Tests
 
 ```bash
-# From the blr-traffic directory
-cd artifacts/blr-traffic
+# Run tests
 bun test
-
-# Or run a specific test file
-bun test tests/unit/useTrafficData.test.ts
 ```
 
 ### Test Architecture
@@ -320,13 +314,13 @@ function dateKey(d: Date): string  // → "2026-04-08"
 ### Development
 
 ```bash
-cd artifacts/blr-traffic && bun run dev
+bun run dev
 ```
 
 ### Production
 
 ```bash
-cd artifacts/blr-traffic && bun run build   # → dist/public/
+bun run build
 ```
 
 ### Typechecking
@@ -364,8 +358,7 @@ Configured via `bunfig.toml`:
 
 1. Run `bun install` after pulling changes
 2. Run `bun run typecheck` before committing
-3. Use `@/*` path aliases for imports within a package
-4. Keep `tsconfig.base.json` in sync
+4. Use `@/*` path aliases for imports within the project
 5. New features should include unit tests in `tests/unit/`
 
 ---

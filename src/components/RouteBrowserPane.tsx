@@ -1,6 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
+import appConfig from "../config.json";
+import type { AppConfig } from "../lib/config";
+
+const cfg = appConfig as AppConfig;
 
 /* ── Info tip ────────────────────────────────────────────────── */
 function InfoTip({ thm }: { thm: AppTheme }) {
@@ -386,8 +390,8 @@ function RouteCard({
 /* ── Desktop pane with draggable left edge ─────────────────────── */
 function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp }: PaneProps) {
   const RAIL_WIDTH = 36;
-  const MIN_WIDTH = 140;
-  const MAX_WIDTH = 500;
+  const MIN_WIDTH = cfg.route_pane.min_width;
+  const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
@@ -634,13 +638,13 @@ interface Props {
 
 export default function RouteBrowserPane(props: Props) {
   const { theme: thm } = useTheme();
-  const [isOpen, setIsOpen] = useState(true);
-  const [paneWidth, setPaneWidth] = useState(200);
+  const [isOpen, setIsOpen] = useState(cfg.route_pane.open);
+  const [paneWidth, setPaneWidth] = useState(cfg.route_pane.width);
 
   useEffect(() => {
     const handler = (e: Event) => {
       const w = (e as CustomEvent).detail;
-      if (typeof w === "number" && w >= 140 && w <= 500) setPaneWidth(w);
+      if (typeof w === "number" && w >= cfg.route_pane.min_width && w <= cfg.route_pane.max_width) setPaneWidth(w);
     };
     window.addEventListener("route-pane-resize", handler);
     return () => window.removeEventListener("route-pane-resize", handler);

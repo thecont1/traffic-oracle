@@ -20,6 +20,16 @@
     "lib": ["dom", "es2022"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "customConditions": ["workspace"]
-  }
+    "noEmit": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "downlevelIteration": true
+  },
+  "include": ["src/**/*", "config.json"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"]
 }

@@ -966,15 +966,15 @@ function DashboardInner() {
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {
     const i = PERIOD_LIST.findIndex(p => p.value === URL_PARAMS.period);
-    return i >= 0 ? i : 2;
+    return i >= 0 ? i : PERIOD_LIST.findIndex(p => p.value === cfg.defaults.period);
   });
   const [todIdx,       setTodIdx]       = useState(() => {
     const i = TOD_LIST.findIndex(t => t.value === URL_PARAMS.tod);
-    return i >= 0 ? i : 1;
+    return i >= 0 ? i : TOD_LIST.findIndex(t => t.value === cfg.defaults.time_of_day);
   });
   const [routeIdx,     setRouteIdx]     = useState(0);
   const [questionMode, setQuestionMode] = useState<"worsened"|"improved">(
-    URL_PARAMS.mode === "improved" ? "improved" : "worsened"
+    URL_PARAMS.mode === "improved" ? "improved" : cfg.defaults.question_mode
   );
 
   /* chip animation */
@@ -1078,8 +1078,8 @@ function DashboardInner() {
       urlParamsRef.current = { ...p, bl: undefined, br: undefined };
       return;
     }
-    const cfgStart = appConfig.baseline_default_start;
-    const cfgEnd   = appConfig.baseline_default_end;
+    const cfgStart = cfg.baseline.default_start;
+    const cfgEnd   = cfg.baseline.default_end;
     let leftIdx  = 0;
     let rightIdx = Math.max(0, Math.floor(maxI * 0.5));
     if (cfgStart) {
@@ -1249,7 +1249,7 @@ function DashboardInner() {
 
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
-    (appConfig as AppConfig).verdict_threshold_kmh ?? 0.5;
+    cfg.percentile.verdict_threshold_kmh;
 
   type DataTrend = "improved" | "worsened" | "stable" | "insufficient";
   const dataTrend: DataTrend =
@@ -1750,9 +1750,9 @@ function DashboardInner() {
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                         color: thm.textPrimary }}>🐌 Trip Duration Over Time</p>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
-                        Weekly median + bad-day (p{
-                          (appConfig as AppConfig).worst_case_percentile
-                        }) — lower is better
+                      Weekly median + bad-day (p{
+                          cfg.percentile.worst_case
+                      }) — lower is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
@@ -1858,3 +1858,5 @@ export default function Dashboard() {
 /* need this import for the config reference in JSX */
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
+
+const cfg = appConfig as AppConfig;

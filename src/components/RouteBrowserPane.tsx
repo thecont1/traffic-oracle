@@ -236,13 +236,13 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Speed below bar — hover only, centered under dot, clipped at edges */}
-      {hovered && hasData && (
-        <div style={{
-          position: 'relative',
-          height: 14,
-          overflow: 'hidden',
-        }}>
+      {/* Speed below bar — always present at fixed height, text visible on hover only */}
+      <div style={{
+        position: 'relative',
+        height: 14,
+        overflow: 'hidden',
+      }}>
+        {hovered && hasData && (
           <div style={{
             position: 'absolute',
             left: `${livePos}%`,
@@ -256,8 +256,8 @@ function TrafficNowBar({
               {fmt(liveSpeed)} km/h
             </span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

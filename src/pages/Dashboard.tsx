@@ -1387,7 +1387,7 @@ function DashboardInner() {
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, height:44, padding:"0 12px",
                   color: copied ? thm.speedGood : thm.textMuted,
-                  background: copied ? "rgba(111,174,99,0.1)" : "#262321",
+                  background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#262321" : "transparent",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
                   <Share2 size={13} />
@@ -1399,7 +1399,7 @@ function DashboardInner() {
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                 borderRadius:9999, height:44, padding:"0 12px",
                 color: thm.textMuted,
-                background: "#262321",
+                background: thm.key==="colour" ? "#262321" : "transparent",
                 cursor: loading ? "default" : "pointer",
                 transition:"color 0.2s, background 0.2s",
                 opacity: loading ? 0.4 : 1,

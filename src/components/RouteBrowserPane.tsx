@@ -169,14 +169,20 @@ function TrafficNowBar({
   // Format speed
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
   
+  // Clamp speed label position so it doesn't spill beyond card edges
+  // Label is ~50px wide (e.g. "43.3 km/h"), so clamp left to [0, 50%] and right to [50%, 100%]
+  const speedLabelWidth = 50; // approximate px
+  const clampedSpeedPos = hasData
+    ? Math.max(speedLabelWidth / 2, Math.min(100 - speedLabelWidth / 2 / 3.5, livePos))
+    : 50;
+
   return (
-    <div style={{ width: '100%', height: 32, position: 'relative' }}>
-      {/* Bar area — fixed height */}
+    <div style={{ width: '100%', position: 'relative' }}>
+      {/* Bar area */}
       <div style={{ 
-        position: 'absolute',
-        left: 0, right: 0,
-        top: 12,
+        position: 'relative',
         height: 14,
+        marginBottom: 4,
       }}>
         {/* City-wide range track */}
         <div style={{
@@ -232,19 +238,26 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Speed below bar — only on hover, positioned absolutely */}
-      {hovered && (
+      {/* Speed below bar — always visible, centered under dot, clamped to edges */}
+      <div style={{
+        position: 'relative',
+        height: 14,
+        overflow: 'hidden',
+      }}>
         <div style={{
           position: 'absolute',
-          left: 0, right: 0,
-          bottom: 0,
-          textAlign: 'center', fontSize: 10, lineHeight: 1,
+          left: `${clampedSpeedPos}%`,
+          top: 0,
+          transform: 'translateX(-50%)',
+          whiteSpace: 'nowrap',
+          fontSize: 10,
+          lineHeight: 1,
         }}>
           <span style={{ color: statusColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
             {fmt(liveSpeed)} km/h
           </span>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -468,9 +481,10 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{
-                fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
+                fontFamily: "var(--app-font-display)", fontWeight: 900, fontSize: 18,
+                color: thm.textPrimary, letterSpacing: "-0.02em", lineHeight: 1,
               }}>
                 Traffic NOW!
               </span>

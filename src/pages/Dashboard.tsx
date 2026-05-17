@@ -1184,6 +1184,7 @@ function DashboardInner() {
       tod,
       period,
       mode:   questionMode,
+      theme:  themeKey,
       bl:     String(safeLeft),
       br:     String(safeRight),
       zoom:   String(ZOOM_STEPS[zoomIdx]),
@@ -1194,7 +1195,7 @@ function DashboardInner() {
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedCity, selectedRoute, tod, period, questionMode, safeLeft, safeRight, zoomIdx]);
+  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx]);
 
   const lastDataMs = useMemo(
     () => allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
@@ -1993,7 +1994,7 @@ function DashboardInner() {
 /* ── Public export — wraps inner component with ThemeProvider ─── */
 export default function Dashboard() {
   return (
-    <ThemeProvider>
+    <ThemeProvider initialTheme={URL_PARAMS.theme as any}>
       <DashboardInner />
     </ThemeProvider>
   );

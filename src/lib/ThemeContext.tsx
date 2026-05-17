@@ -14,8 +14,9 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children, initialTheme }: { children: ReactNode; initialTheme?: ThemeKey }) {
   const [themeKey, setThemeKey] = useState<ThemeKey>(() => {
+    if (initialTheme && THEMES[initialTheme]) return initialTheme;
     try {
       const saved = localStorage.getItem(STORAGE_KEY) as ThemeKey | null;
       if (saved && THEMES[saved]) return saved;

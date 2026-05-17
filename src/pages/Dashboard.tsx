@@ -143,10 +143,8 @@ function Chip({ children, icon, variant, onClick, animate, inert }: {
 /* ── Location Dropdown ─────────────────────────────────────────── */
 const CITIES = cfg.cities;
 
-function LocationDropdown({ thm }: { thm: AppTheme }) {
+function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; selectedCity: string; onCityChange: (name: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
-  const defaultCityName = CITIES.find(c => c.ready)?.name ?? CITIES[0].name;
-  const [selectedCity, setSelectedCity] = useState(defaultCityName);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Close when clicking outside
@@ -217,7 +215,7 @@ function LocationDropdown({ thm }: { thm: AppTheme }) {
               key={city.name}
               onClick={() => {
                 if (city.ready) {
-                  setSelectedCity(city.name);
+                  onCityChange(city.name);
                   setIsOpen(false);
                 }
               }}
@@ -784,7 +782,7 @@ function CalendarWidget({
 }
 
 /* ── Traffic NOW! live overview panel ──────────────────────────── */
-type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
+type LiveStatus = 'faster' | 'as-expected' | 'slower' | 'no-data';
 
 // Statistics for a route's typical behavior at a given time-of-day
 // Uses percentiles (industry standard) instead of std dev because traffic data is skewed
@@ -822,15 +820,9 @@ function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | nu
     return { status: 'no-data', statusText: 'no data' };
   }
   
-  // Use percentile-based thresholds (industry standard for skewed traffic data)
-  // p15-p85 covers the "typical" 70% of observations (excludes outliers)
-  // p10-p90 covers the "normal" 80% of observations
-  
-  if (liveSpeed > typical.p90) return { status: 'much-faster', statusText: 'much faster than typical' };
-  if (liveSpeed > typical.p85) return { status: 'faster', statusText: 'faster than typical' };
-  if (liveSpeed < typical.p10) return { status: 'much-slower', statusText: 'much slower than typical' };
-  if (liveSpeed < typical.p15) return { status: 'slower', statusText: 'slower than typical' };
-  return { status: 'as-expected', statusText: 'as expected for this hour' };
+  if (liveSpeed > typical.p85) return { status: 'faster', statusText: 'fast' };
+  if (liveSpeed < typical.p15) return { status: 'slower', statusText: 'slow' };
+  return { status: 'as-expected', statusText: 'typical' };
 }
 
 /** Compute TOD statistics from historical data within ±90 min window over 90 days */
@@ -959,6 +951,15 @@ function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
   const isMobile = useIsMobile();
 
+  /* City selection */
+  const defaultCityName = CITIES.find(c => c.ready)?.name ?? CITIES[0].name;
+  const [selectedCity, setSelectedCity] = useState(defaultCityName);
+  const selectedCityConfig = useMemo(() =>
+    CITIES.find(c => c.name === selectedCity) ?? CITIES[0],
+    [selectedCity],
+  );
+  const citySource = selectedCityConfig.data_source;
+
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {
     const i = PERIOD_LIST.findIndex(p => p.value === URL_PARAMS.period);
@@ -1017,7 +1018,7 @@ function DashboardInner() {
 
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
-    useTrafficData();
+    useTrafficData(citySource);
 
   const routeOptions = useMemo(() => {
     const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
@@ -1335,7 +1336,7 @@ function DashboardInner() {
                 alt="TraffiCOracle"
                 style={{ height:32, width:"auto", flexShrink:0 }}
               />
-              <LocationDropdown thm={thm} />
+              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} />
             </div>
 
             {/* Right: Share + Refresh + Theme */}
@@ -1443,12 +1444,16 @@ function DashboardInner() {
             </div>
           )}
 
-          {/* Error */}
+          {/* Error — 404-style full-page */}
           {!loading && error && (
-            <div style={{ background:"#FFF1F2", border:"1px solid #FCA5A5",
-              borderRadius:16, padding:"1.5rem", color:"#991B1B" }}>
-              <p style={{ fontWeight:700, marginBottom:4 }}>😬 Couldn't load data</p>
-              <p style={{ fontSize:13 }}>{error}</p>
+            <div style={{ textAlign:"center", padding:"6rem 2rem" }}>
+              <div style={{ fontSize:64, marginBottom:16 }}>📡</div>
+              <p style={{ fontWeight:700, fontSize:18, color: thm.textPrimary, marginBottom:8 }}>
+                Data unavailable for {selectedCity}
+              </p>
+              <p style={{ fontSize:14, color: thm.textMuted, maxWidth:400, margin:"0 auto" }}>
+                {error.includes("HTTP") ? "The dataset could not be fetched. Check the data source URL in config.json." : error}
+              </p>
             </div>
           )}
 

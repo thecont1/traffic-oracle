@@ -63,7 +63,7 @@ function InfoTip({ thm }: { thm: AppTheme }) {
 /* ── Types ─────────────────────────────────────────────────────── */
 // RouteCardData is defined in Dashboard.tsx and passed as props
 // cityMin, cityMax, status, statusText, sortKey
-type LiveStatus = 'much-faster' | 'faster' | 'as-expected' | 'slower' | 'much-slower' | 'no-data';
+type LiveStatus = 'faster' | 'as-expected' | 'slower' | 'no-data';
 
 interface RouteTODStats {
   p10: number;
@@ -122,6 +122,7 @@ function TrafficNowBar({
   cityMax,
   status,
   thm,
+  hovered,
 }: { 
   liveSpeed: number | null;
   typical: RouteTODStats | null;
@@ -129,14 +130,13 @@ function TrafficNowBar({
   cityMax: number;
   status: LiveStatus;
   thm: AppTheme;
+  hovered: boolean;
 }) {
-  const [hovered, setHovered] = useState(false);
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
   
   // Determine status direction for colors
-  const isFaster = status === 'much-faster' || status === 'faster';
-  const isSlower = status === 'much-slower' || status === 'slower';
-  const isExpected = status === 'as-expected';
+  const isFaster = status === 'faster';
+  const isSlower = status === 'slower';
   
   // Get status color
   const getStatusColor = () => {
@@ -156,82 +156,49 @@ function TrafficNowBar({
   };
   
   const statusColor = getStatusColor();
-  const typicalColor = thm.key === 'gray' ? '#888888' : thm.key === 'pastel' ? 'rgba(80,70,60,0.5)' : 'rgba(60,55,50,0.55)';
+  const typicalColor = thm.key === 'gray' ? '#999' : thm.key === 'pastel' ? 'rgba(80,70,60,0.6)' : 'rgba(70,65,60,0.7)';
   
-  // Calculate positions on the city-wide scale using percentiles
+  // Calculate positions on the city-wide scale
   const cityRange = cityMax - cityMin || 1;
   const livePos = hasData ? ((liveSpeed! - cityMin) / cityRange) * 100 : 50;
-  // Use p15-p85 as the "typical" range (70% of observations, excludes outliers)
   const typicalMinPos = hasData ? ((typical!.p15 - cityMin) / cityRange) * 100 : 30;
   const typicalMaxPos = hasData ? ((typical!.p85 - cityMin) / cityRange) * 100 : 70;
-  const typicalMedianPos = hasData ? ((typical!.p50 - cityMin) / cityRange) * 100 : 50;
-  // Full range positions for hover labels
-  const fullMinPos = hasData ? ((typical!.p10 - cityMin) / cityRange) * 100 : 20;
-  const fullMaxPos = hasData ? ((typical!.p90 - cityMin) / cityRange) * 100 : 80;
   
   // Format speed
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
   
   return (
-    <div 
-      style={{ width: '100%', cursor: 'default' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* Box-and-whisker style bar */}
+    <div style={{ width: '100%' }}>
+      {/* Bar area — fixed height */}
       <div style={{ 
         position: 'relative',
-        height: hovered ? 28 : 14,
+        height: 14,
         marginBottom: 2,
-        transition: 'height 0.15s ease',
       }}>
         {/* City-wide range track */}
         <div style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 6,
-          height: 1,
-          background: '#000000',
-          borderRadius: 0,
+          position: 'absolute', left: 0, right: 0, top: 6,
+          height: 1, background: '#000000',
         }} />
         
-        
-        {/* Typical range bar (the "box") */}
+        {/* Typical range bar (p15–p85) — bold and clear */}
         {hasData && (
           <div style={{
             position: 'absolute',
             left: `${typicalMinPos}%`,
             right: `${100 - typicalMaxPos}%`,
-            top: 5,
-            height: 4,
+            top: 4, height: 6,
             background: typicalColor,
-            borderRadius: 2,
+            borderRadius: 3,
           }} />
         )}
         
-        {/* Typical median marker (small tick in the box) */}
+        {/* Live speed marker */}
         {hasData && (
           <div style={{
             position: 'absolute',
-            left: `${typicalMedianPos}%`,
-            top: 4,
-            width: 2,
-            height: 6,
-            background: thm.textMuted,
-            transform: 'translateX(-50%)',
-            opacity: 0.5,
-          }} />
-        )}
-        
-        {/* Live speed marker (prominent circle) */}
-        {hasData && (
-          <div style={{
-            position: 'absolute',
-            left: `${livePos}%`,
-            top: 1,
-            width: 12,
-            height: 12,
+            left: `${livePos}%`, top: 1,
+            width: 12, height: 12,
             background: statusColor,
             borderRadius: '50%',
             transform: 'translateX(-50%)',
@@ -241,26 +208,19 @@ function TrafficNowBar({
           }} />
         )}
 
-        {/* Hover labels: min (p10), avg (p50), max (p85) */}
+        {/* Hover labels: p15 above left, p85 above right */}
         {hovered && hasData && (
           <>
             <div style={{
-              position: 'absolute', left: `${fullMinPos}%`, top: -1,
-              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 600,
+              position: 'absolute', left: `${typicalMinPos}%`, top: -2,
+              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
               color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
             }}>
-              {fmt(typical!.p10)}
+              {fmt(typical!.p15)}
             </div>
             <div style={{
-              position: 'absolute', left: `${typicalMedianPos}%`, top: -1,
-              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 600,
-              color: thm.textPrimary, whiteSpace: 'nowrap', lineHeight: 1,
-            }}>
-              {fmt(typical!.p50)}
-            </div>
-            <div style={{
-              position: 'absolute', left: `${fullMaxPos}%`, top: -1,
-              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 600,
+              position: 'absolute', left: `${typicalMaxPos}%`, top: -2,
+              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
               color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
             }}>
               {fmt(typical!.p85)}
@@ -269,15 +229,13 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Live speed display */}
+      {/* Speed + status below bar */}
       <div style={{
-        textAlign: 'center',
-        fontSize: 10,
-        color: statusColor,
-        fontWeight: (isFaster || isSlower) ? 600 : 400,
-        lineHeight: 1,
+        textAlign: 'center', fontSize: 10, lineHeight: 1,
       }}>
-        {fmt(liveSpeed)} km/h
+        <span style={{ color: statusColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
+          {fmt(liveSpeed)} km/h
+        </span>
       </div>
     </div>
   );
@@ -343,9 +301,7 @@ function RouteCard({
     
     // For pastel and colour: use semantic colors sparingly
     switch (card.status) {
-      case 'much-faster':
       case 'faster': return thm.speedGood;
-      case 'much-slower':
       case 'slower': return thm.speedBad;
       default: return thm.textMuted;
     }
@@ -408,6 +364,7 @@ function RouteCard({
         cityMax={card.cityMax}
         status={card.status}
         thm={thm}
+        hovered={hovered}
       />
       
       

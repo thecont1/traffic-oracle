@@ -160,9 +160,17 @@ export function computeStats(rows: TrafficRow[]): StatsResult {
 
 /* ── Core fetch — uses fetch() with cache:'no-store' so browsers,
  * CDNs and proxies can never serve a stale CSV response. ──────────── */
+export interface CitySource {
+  routes_csv: string;
+  traffic_csv: string;
+}
+
 export function fetchTrafficData(
   signal: AbortSignal | undefined,
+  source?: CitySource,
 ): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
+  const routesUrl = source?.routes_csv ?? ROUTES_URL;
+  const trafficUrl = source?.traffic_csv ?? TRAFFIC_URL;
   const fetchCsv = async (url: string): Promise<Record<string, string>[]> => {
     const resp = await fetch(bust(url), {
       cache: "no-store",
@@ -189,7 +197,7 @@ export function fetchTrafficData(
   };
 
   let cancelled = false;
-  return Promise.all([fetchCsv(ROUTES_URL), fetchCsv(TRAFFIC_URL)]).then(
+  return Promise.all([fetchCsv(routesUrl), fetchCsv(trafficUrl)]).then(
     ([routesRaw, trafficRaw]) => {
       if (cancelled) throw new Error("cancelled");
 
@@ -247,7 +255,7 @@ export function fetchTrafficData(
   );
 }
 
-export function useTrafficData() {
+export function useTrafficData(citySource?: CitySource) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [allRows, setAllRows] = useState<TrafficRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -261,7 +269,7 @@ export function useTrafficData() {
       setLoading(true);
       setError(null);
 
-      fetchTrafficData(signal)
+      fetchTrafficData(signal, citySource)
         .then(({ routes: rl, allRows: ar, rowCount: rc }) => {
           setRoutes(rl);
           setAllRows(ar);
@@ -288,7 +296,7 @@ export function useTrafficData() {
         /* cancellation is handled via AbortSignal */
       };
     },
-    [],
+    [citySource],
   );
 
   /* Initial load on mount */

@@ -169,12 +169,10 @@ function TrafficNowBar({
   // Format speed
   const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
   
-  // Clamp speed label position so it doesn't spill beyond card edges
-  // Label is ~50px wide (e.g. "43.3 km/h"), so clamp left to [0, 50%] and right to [50%, 100%]
-  const speedLabelWidth = 50; // approximate px
-  const clampedSpeedPos = hasData
-    ? Math.max(speedLabelWidth / 2, Math.min(100 - speedLabelWidth / 2 / 3.5, livePos))
-    : 50;
+  // Speed label color: light in dark theme, status color in light themes
+  const speedLabelColor = thm.isDark
+    ? 'rgba(255,255,255,0.85)'
+    : statusColor;
 
   return (
     <div style={{ width: '100%', position: 'relative' }}>
@@ -238,26 +236,28 @@ function TrafficNowBar({
         )}
       </div>
       
-      {/* Speed below bar — always visible, centered under dot, clamped to edges */}
-      <div style={{
-        position: 'relative',
-        height: 14,
-        overflow: 'hidden',
-      }}>
+      {/* Speed below bar — hover only, centered under dot, clipped at edges */}
+      {hovered && hasData && (
         <div style={{
-          position: 'absolute',
-          left: `${clampedSpeedPos}%`,
-          top: 0,
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: 10,
-          lineHeight: 1,
+          position: 'relative',
+          height: 14,
+          overflow: 'hidden',
         }}>
-          <span style={{ color: statusColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
-            {fmt(liveSpeed)} km/h
-          </span>
+          <div style={{
+            position: 'absolute',
+            left: `${livePos}%`,
+            top: 0,
+            transform: 'translateX(-50%)',
+            whiteSpace: 'nowrap',
+            fontSize: 10,
+            lineHeight: 1,
+          }}>
+            <span style={{ color: speedLabelColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
+              {fmt(liveSpeed)} km/h
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

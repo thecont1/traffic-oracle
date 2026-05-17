@@ -1413,6 +1413,7 @@ function DashboardInner() {
                 style={{
                   display:"flex", alignItems:"center", gap:6,
                   height:44, borderRadius:9999, padding:"0 12px",
+                  minWidth: 160,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   background: thm.key==="colour" ? "#262321" : thm.key==="gray" ? "#f5f5f5" : "#DBEAFE",
                   cursor:"pointer",

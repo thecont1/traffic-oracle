@@ -151,52 +151,52 @@
   --sidebar-accent-border: #DCCFB8;
 }
 
-/* ── "Colour me surprised!" (dark) warm palette ──────────────── */
+/* ── "Colour me surprised!" (dark) cool navy palette ──────────── */
 .dark {
   color-scheme: dark;
-  --background: 18 6% 11%;           /* #1D1B1A */
-  --foreground: 33 28% 91%;          /* #F3EBDD */
-  --border: 30 8% 26%;              /* #47413C */
-  --input: 25 10% 22%;
-  --ring: 210 68% 70%;              /* #7DB7E8 */
+  --background: 220 20% 7%;           /* #0F1218 */
+  --foreground: 210 40% 96%;          /* #F0F4F8 */
+  --border: 213 30% 22%;              /* #2A3545 */
+  --input: 215 25% 18%;
+  --ring: 187 94% 43%;                /* #22D3EE */
 
-  --card: 20 5% 15%;                /* #262321 */
-  --card-foreground: 33 28% 91%;
-  --card-border: 30 8% 26%;
+  --card: 215 30% 12%;                /* #141A24 */
+  --card-foreground: 210 40% 96%;
+  --card-border: 213 30% 22%;
 
-  --popover: 20 5% 15%;
-  --popover-foreground: 33 28% 91%;
-  --popover-border: 30 8% 26%;
+  --popover: 215 30% 12%;
+  --popover-foreground: 210 40% 96%;
+  --popover-border: 213 30% 22%;
 
-  --primary: 210 68% 70%;           /* #7DB7E8 */
-  --primary-foreground: 18 6% 11%;
+  --primary: 187 94% 43%;             /* #22D3EE */
+  --primary-foreground: 220 20% 7%;
 
-  --secondary: 213 10% 64%;
-  --secondary-foreground: 33 28% 91%;
+  --secondary: 215 20% 58%;
+  --secondary-foreground: 210 40% 96%;
 
-  --muted: 25 8% 18%;
-  --muted-foreground: 35 12% 60%;   /* #C1B7A7 area */
+  --muted: 215 20% 14%;
+  --muted-foreground: 215 20% 58%;    /* #64748B area */
 
-  --accent: 30 10% 22%;
-  --accent-foreground: 33 28% 91%;
+  --accent: 215 25% 18%;
+  --accent-foreground: 210 40% 96%;
 
-  --destructive: 21 84% 65%;        /* #F08A5D */
-  --destructive-foreground: 18 6% 11%;
+  --destructive: 25 95% 53%;          /* #F97316 */
+  --destructive-foreground: 220 20% 7%;
 
-  --sidebar: 18 6% 11%;
-  --sidebar-foreground: 33 28% 88%;
-  --sidebar-border: 30 8% 26%;
-  --sidebar-primary: 210 68% 70%;
-  --sidebar-primary-foreground: 18 6% 11%;
-  --sidebar-accent: 25 8% 18%;
-  --sidebar-accent-foreground: 33 28% 91%;
-  --sidebar-ring: 210 68% 70%;
+  --sidebar: 220 20% 7%;
+  --sidebar-foreground: 210 40% 88%;
+  --sidebar-border: 213 30% 22%;
+  --sidebar-primary: 187 94% 43%;
+  --sidebar-primary-foreground: 220 20% 7%;
+  --sidebar-accent: 215 20% 14%;
+  --sidebar-accent-foreground: 210 40% 96%;
+  --sidebar-ring: 187 94% 43%;
 
-  --chart-1: 210 68% 70%;           /* #7DB7E8 */
-  --chart-2: 213 10% 64%;           /* #9AA3AD */
-  --chart-3: 102 38% 65%;           /* #8BCB7E */
-  --chart-4: 21 84% 65%;            /* #F08A5D */
-  --chart-5: 30 14% 20%;            /* #3A332C */
+  --chart-1: 187 94% 43%;             /* #22D3EE cyan */
+  --chart-2: 330 81% 60%;             /* #F472B6 pink */
+  --chart-3: 258 90% 66%;             /* #A78BFA purple */
+  --chart-4: 25 95% 53%;              /* #F97316 orange */
+  --chart-5: 215 25% 15%;             /* #1A2030 */
 
   --shadow-2xs: 0 1px 1px 0 rgb(0 0 0 / 0);
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0);
@@ -207,13 +207,13 @@
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0), 0 8px 10px -6px rgb(0 0 0 / 0);
   --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0);
 
-  --primary-border: #7DB7E8;
-  --secondary-border: #47413C;
-  --muted-border: #47413C;
-  --accent-border: #47413C;
-  --destructive-border: #F08A5D;
-  --sidebar-primary-border: #7DB7E8;
-  --sidebar-accent-border: #47413C;
+  --primary-border: #22D3EE;
+  --secondary-border: #2A3545;
+  --muted-border: #2A3545;
+  --accent-border: #2A3545;
+  --destructive-border: #F97316;
+  --sidebar-primary-border: #22D3EE;
+  --sidebar-accent-border: #2A3545;
 }
 
 @layer base {
@@ -304,14 +304,14 @@
 
 /* ── Focus ring for keyboard navigation ──────────────────────── */
 :focus-visible {
-  outline: 2px solid #7DB7E8;
+  outline: 2px solid #22D3EE;
   outline-offset: 2px;
 }
 .dark :focus-visible {
-  outline-color: #7DB7E8;
+  outline-color: #22D3EE;
 }
 .route-card-focus:focus-visible {
-  outline: 2px solid #7DB7E8;
+  outline: 2px solid #22D3EE;
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -361,7 +361,7 @@
 }
 /* Colour / "Colour me surprised!" */
 .dark .fun-bg {
-  background: linear-gradient(135deg, #1D1B1A 0%, #262321 40%, #1F1C19 100%);
+  background: linear-gradient(135deg, #0F1218 0%, #141A24 40%, #0D1117 100%);
 }
 
 /* ── Leaflet overrides ────────────────────────────────────────── */
@@ -423,7 +423,7 @@
 /* ── Colour (dark) chip classes ──────────────────────────────── */
 /* These apply when theme.js passes no styleOverride (colour theme) */
 .chip-route    { background: linear-gradient(135deg, #1E3A5F, #2A5A8F); color: #93C5FD; box-shadow: 0 4px 14px rgba(30,58,95,0.4); }
-.chip-period   { background: linear-gradient(135deg, #2A2523, #3D3633); color: #C1B7A7; box-shadow: 0 4px 14px rgba(42,37,35,0.4); }
+.chip-period   { background: linear-gradient(135deg, #1A1A2E, #16213E); color: #94A3B8; box-shadow: 0 4px 14px rgba(26,26,46,0.5); }
 .chip-tod      { background: linear-gradient(135deg, #78350F, #92400E); color: #FCD34D; box-shadow: 0 4px 14px rgba(120,53,15,0.4); }
 .chip-worsened { background: linear-gradient(135deg, #7F1D1D, #991B1B); color: #FCA5A5; box-shadow: 0 4px 14px rgba(127,29,29,0.4); }
 .chip-improved { background: linear-gradient(135deg, #052E16, #064E3B); color: #86EFAC; box-shadow: 0 4px 14px rgba(5,46,22,0.4); }
@@ -468,9 +468,9 @@
 .kpi-card-count    { background: linear-gradient(135deg, #F3F4F6, #D1D5DB); }
 
 .dark .kpi-card-speed  { background: linear-gradient(135deg, #1A2744 60%, #1E40AF); }
-.dark .kpi-card-median { background: linear-gradient(135deg, #2A2523 60%, #3D3633); }
+.dark .kpi-card-median { background: linear-gradient(135deg, #1A1A2E 60%, #16213E); }
 .dark .kpi-card-p95    { background: linear-gradient(135deg, #3D1A08 60%, #78350F); }
-.dark .kpi-card-count  { background: linear-gradient(135deg, #262321 60%, #334155); }
+.dark .kpi-card-count  { background: linear-gradient(135deg, #141A24 60%, #334155); }
 
 /* ── Chart card ───────────────────────────────────────────────── */
 .chart-card {

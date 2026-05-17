@@ -439,11 +439,11 @@ function KpiInfo({ text }: { text: string }) {
       <div ref={tipRef} style={{
         position:"fixed", pointerEvents:"none",
         opacity:0, transition:"opacity 0.15s ease",
-        background:"#262321",
+        background:"rgba(20,26,36,0.95)",
         borderRadius:10, padding:"9px 12px",
         boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
         zIndex:2000, maxWidth:240,
-        fontSize:12, lineHeight:1.5, color:"#C1B7A7",
+        fontSize:12, lineHeight:1.5, color:"#94A3B8",
         fontFamily:"var(--app-font)",
         top:0, left:0,
       }}>
@@ -536,14 +536,14 @@ function CalendarWidget({
       ["📊 Trips",        String(s.count)],
     ] as [string,string][]).map(([lbl, val]) =>
       `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
-      `<span style="color:#8A8176">${lbl}</span>` +
-      `<span style="font-weight:600;color:#F3EBDD">${val}</span></div>`
+      `<span style="color:#94A3B8">${lbl}</span>` +
+      `<span style="font-weight:600;color:#F0F4F8">${val}</span></div>`
     ).join("");
 
     el.innerHTML =
-      `<div style="background:#262321;border-radius:12px;padding:11px 14px;` +
+      `<div style="background:#141A24;border-radius:12px;padding:11px 14px;` +
       `box-shadow:0 8px 32px rgba(0,0,0,0.55);">` +
-      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#F3EBDD">${dayStr}</div>` +
+      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#F0F4F8">${dayStr}</div>` +
       rows + `</div>` +
       `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
 
@@ -570,14 +570,14 @@ function CalendarWidget({
         tail.style.top          = "";
         tail.style.borderLeft   = "9px solid transparent";
         tail.style.borderRight  = "9px solid transparent";
-        tail.style.borderTop    = `${TAIL}px solid #262321`;
+        tail.style.borderTop    = `${TAIL}px solid #141A24`;
         tail.style.borderBottom = "";
       } else {
         tail.style.top          = -TAIL + "px";
         tail.style.bottom       = "";
         tail.style.borderLeft   = "9px solid transparent";
         tail.style.borderRight  = "9px solid transparent";
-        tail.style.borderBottom = `${TAIL}px solid #262321`;
+        tail.style.borderBottom = `${TAIL}px solid #141A24`;
         tail.style.borderTop    = "";
       }
     }

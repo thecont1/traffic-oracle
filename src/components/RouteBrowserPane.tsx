@@ -52,7 +52,7 @@ function InfoTip({ thm }: { thm: AppTheme }) {
         boxShadow: "0 6px 28px rgba(0,0,0,0.45)",
         zIndex: 2000, maxWidth: 240,
         fontSize: 12, lineHeight: 1.5, 
-        color: thm.key === "gray" ? "#333333" : "#F3EBDD",
+        color: thm.key === "gray" ? "#333333" : "#F0F4F8",
       }}>
         {tooltipText}
       </div>
@@ -315,11 +315,11 @@ function RouteCard({
   // Full-width background: selected gets strong tint, hover gets subtle tint
   let cardBg = "transparent";
   if (isSelected) {
-    cardBg = thm.key === "colour" ? "rgba(125,183,232,0.18)"
+    cardBg = thm.key === "colour" ? "rgba(34,211,238,0.15)"
              : thm.key === "pastel" ? "rgba(58,134,200,0.15)"
              : "rgba(0,0,0,0.08)";
-  } else if (hovered) {
-    cardBg = thm.key === "colour" ? "rgba(125,183,232,0.08)"
+ } else if (hovered) {
+    cardBg = thm.key === "colour" ? "rgba(34,211,238,0.08)"
              : thm.key === "pastel" ? "rgba(58,134,200,0.07)"
              : "rgba(0,0,0,0.04)";
   }
@@ -481,7 +481,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             position: "absolute", left: 0, top: 0, bottom: 0,
             width: 1, cursor: "col-resize", zIndex: 3,
             background: dragging
-              ? (thm.key === "colour" ? "rgba(125,183,232,0.25)" : "rgba(58,134,200,0.18)")
+              ? (thm.key === "colour" ? "rgba(34,211,238,0.25)" : "rgba(58,134,200,0.18)")
               : "transparent",
             transition: "background 0.15s",
             borderRadius: "0 2px 2px 0",

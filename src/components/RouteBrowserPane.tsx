@@ -63,7 +63,7 @@ function InfoTip({ thm }: { thm: AppTheme }) {
 /* ── Types ─────────────────────────────────────────────────────── */
 // RouteCardData is defined in Dashboard.tsx and passed as props
 // cityMin, cityMax, status, statusText, sortKey
-type LiveStatus = 'faster' | 'as-expected' | 'slower' | 'no-data';
+type LiveStatus = 'unusually-fast' | 'faster' | 'as-expected' | 'slower' | 'unusually-slower' | 'no-data';
 
 interface RouteTODStats {
   p05: number;
@@ -137,8 +137,8 @@ function TrafficNowBar({
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
   
   // Determine status direction for colors
-  const isFaster = status === 'faster';
-  const isSlower = status === 'slower';
+  const isFaster = status === 'faster' || status === 'unusually-fast';
+  const isSlower = status === 'slower' || status === 'unusually-slower';
   
   // Get status color
   const getStatusColor = () => {
@@ -303,7 +303,9 @@ function RouteCard({
     
     // For pastel and colour: use semantic colors sparingly
     switch (card.status) {
+      case 'unusually-fast':
       case 'faster': return thm.speedGood;
+      case 'unusually-slower':
       case 'slower': return thm.speedBad;
       default: return thm.textMuted;
     }

@@ -782,7 +782,7 @@ function CalendarWidget({
 }
 
 /* ── Traffic NOW! live overview panel ──────────────────────────── */
-type LiveStatus = 'faster' | 'as-expected' | 'slower' | 'no-data';
+type LiveStatus = 'unusually-fast' | 'faster' | 'as-expected' | 'slower' | 'unusually-slower' | 'no-data';
 
 // Statistics for a route's typical behavior at a given time-of-day
 // Uses percentiles (industry standard) instead of std dev because traffic data is skewed
@@ -821,10 +821,11 @@ function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | nu
   if (liveSpeed === null || typical === null) {
     return { status: 'no-data', statusText: 'no data' };
   }
-  
-  if (liveSpeed > typical.p85) return { status: 'faster', statusText: 'unusually fast' };
-  if (liveSpeed < typical.p15) return { status: 'slower', statusText: 'unusually slow' };
-  return { status: 'as-expected', statusText: 'typical' };
+  if (liveSpeed >= typical.p95) return { status: 'unusually-fast', statusText: 'unusually fast' };
+  if (liveSpeed >= typical.p85) return { status: 'faster', statusText: 'faster than typical' };
+  if (liveSpeed > typical.p15)  return { status: 'as-expected', statusText: 'typical' };
+  if (liveSpeed >= typical.p05) return { status: 'slower', statusText: 'slower than typical' };
+  return { status: 'unusually-slower', statusText: 'unusually slow' };
 }
 
 /** Compute TOD statistics from historical data within ±90 min window over 90 days */

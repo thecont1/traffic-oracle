@@ -14,6 +14,8 @@ import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
+import UncertaintyBandChart from "@/components/UncertaintyBandChart";
+import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandChart";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -1314,6 +1316,54 @@ function DashboardInner() {
   const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
   const { merged, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
 
+  /* ── TrafficNOW! per-week percentile bands ───────────────────── */
+  const { trafficNowData, trafficNowCompare } = useMemo(() => {
+    const { percentile: pctFn } = (() => {
+      function pct(sorted: number[], p: number): number {
+        if (!sorted.length) return 0;
+        const idx = (p / 100) * (sorted.length - 1);
+        const lo = Math.floor(idx), hi = Math.ceil(idx);
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+      }
+      return { percentile: pct };
+    })();
+
+    const routeRows = allRows.filter(r => r.label_short === selectedRoute);
+
+    // Helper: build IntervalDatum[] from a slice of WeeklyAggregates
+    function buildBands(weeks: WeeklyAggregate[]): IntervalDatum[] {
+      return weeks.map(w => {
+        const wStart = new Date(w.weekKey);
+        const wEnd   = new Date(wStart.getTime() + 7 * 86400000);
+        const wRows  = routeRows.filter(r => r.timestamp >= wStart && r.timestamp < wEnd);
+        const speeds = wRows.map(r => r.speed_kmh).sort((a, b) => a - b);
+        if (speeds.length < 3) {
+          // Fallback: use avgSpeed as a flat band ±5%
+          const s = w.avgSpeed || 0;
+          return { x: w.weekKey, p05: s * 0.9, p15: s * 0.95, p50: s, p85: s * 1.05, p95: s * 1.1 };
+        }
+        return {
+          x: w.weekKey,
+          p05: Math.round(pctFn(speeds, 5)  * 10) / 10,
+          p15: Math.round(pctFn(speeds, 15) * 10) / 10,
+          p50: Math.round(pctFn(speeds, 50) * 10) / 10,
+          p85: Math.round(pctFn(speeds, 85) * 10) / 10,
+          p95: Math.round(pctFn(speeds, 95) * 10) / 10,
+        };
+      });
+    }
+
+    // Recent window data (the primary "now" view)
+    const recentData = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12));
+    // Baseline data for compare mode
+    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : []);
+
+    return { trafficNowData: recentData, trafficNowCompare: baselineData };
+  }, [allRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
+
+  // Map app theme to UncertaintyBandChart ViewingMode
+  const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
+
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
     cfg.percentile.verdict_threshold_kmh;
@@ -1824,6 +1874,48 @@ function DashboardInner() {
                   <p style={{ fontSize:13, color: thm.textMuted, marginTop:4 }}>
                     Tap any chip to try a different combination.
                   </p>
+                </div>
+              )}
+
+              {/* ── TrafficNOW! uncertainty band chart ───────── */}
+              {trafficNowData.length > 0 && (
+                <div className="chart-card animate-fade-in"
+                  style={thm.key !== "colour"
+                    ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
+                    : { padding: "1.25rem 1.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+                    <div>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 15, color: thm.textPrimary }}>
+                        📡 TrafficNOW! — Speed Forecast Bands
+                      </p>
+                      <p style={{ fontSize: 12, color: thm.textMuted, marginTop: 2 }}>
+                        Weekly speed distribution · {routeEndpoints}
+                        {trafficNowCompare.length > 0 ? ` — with baseline comparison` : ""}
+                      </p>
+                    </div>
+                    {trafficNowCompare.length > 0 && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: "2px 8px",
+                        borderRadius: 999,
+                        background: thm.key === "gray" ? "rgba(0,0,0,0.06)" : "rgba(15,118,110,0.10)",
+                        color: thm.key === "gray" ? "#555" : "var(--tn-series,#0f766e)",
+                        border: `1px solid ${thm.key === "gray" ? "rgba(0,0,0,0.10)" : "rgba(15,118,110,0.20)"}`,
+                      }}>
+                        Compare mode
+                      </span>
+                    )}
+                  </div>
+                  <UncertaintyBandChart
+                    data={trafficNowData}
+                    compareData={trafficNowCompare.length > 0 ? trafficNowCompare : undefined}
+                    mode={trafficNowCompare.length > 0 ? "compare" : tnMode}
+                    title={`TrafficNOW! forecast bands for ${selectedRoute}`}
+                    routeName={selectedRoute}
+                    seriesLabel={`Recent: ${todLabel}`}
+                    compareLabel={`Baseline: ${fmtDate(baselineStartDate)}–${fmtDate(baselineEndDate)}`}
+                    height={280}
+                    themeKey={themeKey}
+                  />
                 </div>
               )}
 

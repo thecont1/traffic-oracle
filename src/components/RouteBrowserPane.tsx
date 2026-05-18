@@ -151,50 +151,40 @@ function NestedScaleChart({
 
   const isFaster = status === 'faster' || status === 'unusually-fast';
   const isSlower = status === 'slower' || status === 'unusually-slower';
+  const isTypical = status === 'as-expected';
 
-  // Status-specific colors matching the demo scheme
-  // Colour me Surprised: faster=#34D399, as-expected=#60A5FA, slower=#F87171
-  // Scale me Gray: faster=#2D8A4E, as-expected=#555555, slower=#C0392B
-  // Clear as Day: faster=#2E7D32, as-expected=#546E7A, slower=#D84315
-  const statusColor = thm.key === 'gray'
-    ? (isFaster ? '#2D8A4E' : isSlower ? '#C0392B' : '#555555')
-    : thm.key === 'pastel'
-      ? (isFaster ? '#2E7D32' : isSlower ? '#D84315' : '#546E7A')
-      : (isFaster ? '#34D399' : isSlower ? '#F87171' : '#60A5FA');
+  // Diamond: dark grey when typical (between p15–p85); status colour when outside
+  const statusColor = isTypical
+    ? (thm.key === 'colour' ? '#9CA3AF' : '#4A4A4A')
+    : thm.key === 'gray'
+      ? (isFaster ? '#2D8A4E' : isSlower ? '#C0392B' : '#555555')
+      : thm.key === 'pastel'
+        ? (isFaster ? '#2E7D32' : isSlower ? '#D84315' : '#546E7A')
+        : (isFaster ? '#34D399' : isSlower ? '#F87171' : '#60A5FA');
 
-  // Inner band (p15–p85) — status-specific, ~12-15% opacity
-  const bandColor = thm.key === 'gray'
-    ? (isFaster ? 'rgba(45,138,78,0.10)' : isSlower ? 'rgba(192,57,43,0.10)' : 'rgba(0,0,0,0.08)')
-    : thm.key === 'pastel'
-      ? (isFaster ? 'rgba(46,125,50,0.12)' : isSlower ? 'rgba(216,67,21,0.12)' : 'rgba(84,110,122,0.12)')
-      : (isFaster ? 'rgba(52,211,153,0.15)' : isSlower ? 'rgba(248,113,113,0.15)' : 'rgba(96,165,250,0.15)');
+  // Inner band (p15–p85) — neutral mid-grey, clearly visible
+  const bandColor = thm.key === 'colour'
+    ? 'rgba(255,255,255,0.20)'
+    : 'rgba(0,0,0,0.18)';
 
-  // Outer band (p05–p15 and p85–p95) — lighter shade of same hue
-  const outerBandColor = thm.key === 'gray'
-    ? (isFaster ? 'rgba(45,138,78,0.04)' : isSlower ? 'rgba(192,57,43,0.04)' : 'rgba(0,0,0,0.03)')
-    : thm.key === 'pastel'
-      ? (isFaster ? 'rgba(46,125,50,0.05)' : isSlower ? 'rgba(216,67,21,0.05)' : 'rgba(84,110,122,0.05)')
-      : (isFaster ? 'rgba(52,211,153,0.06)' : isSlower ? 'rgba(248,113,113,0.06)' : 'rgba(96,165,250,0.06)');
+  // Outer band (p05–p95 tails: p05–p15 and p85–p95) — lighter grey, visibly thinner feel
+  const outerBandColor = thm.key === 'colour'
+    ? 'rgba(255,255,255,0.09)'
+    : 'rgba(0,0,0,0.09)';
 
-  // Midpoint tick — status-specific, ~25-30% opacity
-  const tickColor = thm.key === 'gray'
-    ? (isFaster ? 'rgba(45,138,78,0.25)' : isSlower ? 'rgba(192,57,43,0.25)' : 'rgba(0,0,0,0.20)')
-    : thm.key === 'pastel'
-      ? (isFaster ? 'rgba(46,125,50,0.30)' : isSlower ? 'rgba(216,67,21,0.30)' : 'rgba(84,110,122,0.30)')
-      : (isFaster ? 'rgba(52,211,153,0.30)' : isSlower ? 'rgba(248,113,113,0.30)' : 'rgba(96,165,250,0.30)');
+  // Midpoint tick (p50) — neutral grey tick, clearly distinct
+  const tickColor = thm.key === 'colour'
+    ? 'rgba(255,255,255,0.45)'
+    : 'rgba(0,0,0,0.35)';
 
-  // Outer rail — neutral, very subtle
-  const railColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.08)'
-    : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.10)'
-      : 'rgba(120,140,180,0.12)';
+  // Outer rail — very subtle, marks full city-wide extent
+  const railColor = thm.key === 'colour'
+    ? 'rgba(255,255,255,0.08)'
+    : 'rgba(0,0,0,0.08)';
 
-  const railCapColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.10)'
-    : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.12)'
-      : 'rgba(120,140,180,0.15)';
+  const railCapColor = thm.key === 'colour'
+    ? 'rgba(255,255,255,0.12)'
+    : 'rgba(0,0,0,0.12)';
 
   // Label colors for p15/p85 and cityMin/cityMax
   const labelColor = thm.key === 'gray'

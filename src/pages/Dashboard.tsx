@@ -1637,13 +1637,15 @@ function DashboardInner() {
                       <SliderPrimitive.Track ref={trackRef} style={{
                         position:"relative", flexGrow:1,
                         height:10, borderRadius:9999, overflow:"hidden",
-                        background: thm.slider.track,
+                        background: thm.slider.rail,
                       }}>
+                        {/* Left unselected segment */}
                         <div style={{
                           position:"absolute", top:0, left:0,
                           width:`${leftTrackPct}%`, height:"100%",
-                          background: thm.slider.stripe, pointerEvents:"none",
+                          background: thm.slider.rail, pointerEvents:"none",
                         }} />
+                        {/* Selected baseline window */}
                         <div style={{
                           position:"absolute", top:0,
                           left:`${leftTrackPct}%`,
@@ -1652,10 +1654,11 @@ function DashboardInner() {
                           background: thm.slider.track,
                           pointerEvents:"none",
                         }} />
+                        {/* Right unselected segment */}
                         <div style={{
                           position:"absolute", top:0, left:`${rightTrackPct}%`,
                           width:`${100 - rightTrackPct}%`, height:"100%",
-                          background: thm.slider.stripe, pointerEvents:"none",
+                          background: thm.slider.rail, pointerEvents:"none",
                         }} />
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
@@ -1671,8 +1674,8 @@ function DashboardInner() {
                         <span style={{
                           display:"block", width:7, height:28, borderRadius:9999,
                           background: thm.slider.thumbFg,
-                          border:`2px solid ${thm.slider.thumbLeftBorder}`,
-                          boxShadow: thm.slider.thumbLeftShadow,
+                          border:`2px solid ${thm.slider.thumbBorder}`,
+                          boxShadow: thm.slider.thumbShadow,
                         }} />
                       </SliderPrimitive.Thumb>
 
@@ -1687,8 +1690,8 @@ function DashboardInner() {
                         <span style={{
                           display:"block", width:7, height:28, borderRadius:9999,
                           background: thm.slider.thumbFg,
-                          border:`2px solid ${thm.slider.thumbRightBorder}`,
-                          boxShadow: thm.slider.thumbRightShadow,
+                          border:`2px solid ${thm.slider.thumbBorder}`,
+                          boxShadow: thm.slider.thumbShadow,
                         }} />
                       </SliderPrimitive.Thumb>
                     </SliderPrimitive.Root>
@@ -1767,8 +1770,7 @@ function DashboardInner() {
                         <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
                           letterSpacing:"0.08em", color: thm.recentLabel, marginBottom:4 }}>Recent</p>
                         <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: speedDiff > 0 ? thm.speedGood : speedDiff < 0 ? thm.speedBad
-                            : thm.verdictText(v.tc), lineHeight:1 }}>
+                          color: thm.verdictText(v.tc), lineHeight:1 }}>
                           {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
                         </p>
                       </div>

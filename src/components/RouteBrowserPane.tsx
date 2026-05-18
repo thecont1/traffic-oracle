@@ -152,37 +152,43 @@ function NestedScaleChart({
   const isFaster = status === 'faster' || status === 'unusually-fast';
   const isSlower = status === 'slower' || status === 'unusually-slower';
 
+  // Status-specific colors matching the demo scheme
+  // Colour me Surprised: faster=#34D399, as-expected=#60A5FA, slower=#F87171
+  // Scale me Gray: faster=#2D8A4E, as-expected=#555555, slower=#C0392B
+  // Clear as Day: faster=#2E7D32, as-expected=#546E7A, slower=#D84315
   const statusColor = thm.key === 'gray'
     ? (isFaster ? '#2D8A4E' : isSlower ? '#C0392B' : '#555555')
     : thm.key === 'pastel'
       ? (isFaster ? '#2E7D32' : isSlower ? '#D84315' : '#546E7A')
       : (isFaster ? '#34D399' : isSlower ? '#F87171' : '#60A5FA');
 
-  // Inner band (p15–p85) — main confidence band
+  // Inner band (p15–p85) — status-specific, ~12-15% opacity
   const bandColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.12)'
+    ? (isFaster ? 'rgba(45,138,78,0.10)' : isSlower ? 'rgba(192,57,43,0.10)' : 'rgba(0,0,0,0.08)')
     : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.14)'
-      : 'rgba(120,140,180,0.20)';
+      ? (isFaster ? 'rgba(46,125,50,0.12)' : isSlower ? 'rgba(216,67,21,0.12)' : 'rgba(84,110,122,0.12)')
+      : (isFaster ? 'rgba(52,211,153,0.15)' : isSlower ? 'rgba(248,113,113,0.15)' : 'rgba(96,165,250,0.15)');
 
-  // Outer band (p05–p15 and p85–p95) — lighter shade
+  // Outer band (p05–p15 and p85–p95) — lighter shade of same hue
   const outerBandColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.05)'
+    ? (isFaster ? 'rgba(45,138,78,0.04)' : isSlower ? 'rgba(192,57,43,0.04)' : 'rgba(0,0,0,0.03)')
     : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.06)'
-      : 'rgba(120,140,180,0.08)';
+      ? (isFaster ? 'rgba(46,125,50,0.05)' : isSlower ? 'rgba(216,67,21,0.05)' : 'rgba(84,110,122,0.05)')
+      : (isFaster ? 'rgba(52,211,153,0.06)' : isSlower ? 'rgba(248,113,113,0.06)' : 'rgba(96,165,250,0.06)');
 
+  // Midpoint tick — status-specific, ~25-30% opacity
   const tickColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.25)'
+    ? (isFaster ? 'rgba(45,138,78,0.25)' : isSlower ? 'rgba(192,57,43,0.25)' : 'rgba(0,0,0,0.20)')
     : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.30)'
-      : 'rgba(160,180,210,0.35)';
+      ? (isFaster ? 'rgba(46,125,50,0.30)' : isSlower ? 'rgba(216,67,21,0.30)' : 'rgba(84,110,122,0.30)')
+      : (isFaster ? 'rgba(52,211,153,0.30)' : isSlower ? 'rgba(248,113,113,0.30)' : 'rgba(96,165,250,0.30)');
 
+  // Outer rail — neutral, very subtle
   const railColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.06)'
+    ? 'rgba(0,0,0,0.08)'
     : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.08)'
-      : 'rgba(120,140,180,0.10)';
+      ? 'rgba(120,100,70,0.10)'
+      : 'rgba(120,140,180,0.12)';
 
   const railCapColor = thm.key === 'gray'
     ? 'rgba(0,0,0,0.10)'
@@ -190,10 +196,11 @@ function NestedScaleChart({
       ? 'rgba(120,100,70,0.12)'
       : 'rgba(120,140,180,0.15)';
 
+  // Label colors for p15/p85 and cityMin/cityMax
   const labelColor = thm.key === 'gray'
-    ? '#999'
+    ? '#767676'
     : thm.key === 'pastel'
-      ? '#8A7E68'
+      ? '#6E675B'
       : '#64748B';
 
   const cityRange = cityMax - cityMin || 1;
@@ -459,21 +466,23 @@ function RouteCard({
     ? `${card.origin} → ${card.destination}`
     : card.origin;
   
-  // Status text color - per theme specs
+  // Status text color - matching the demo scheme exactly
   const getStatusColor = () => {
     if (thm.key === 'gray') {
-      // Scale me gray!: use weight/contrast instead of hue
-      return thm.textPrimary;
+      // Scale me gray: use weight/contrast, no hue
+      return card.status === 'as-expected' ? '#555555'
+           : card.status === 'faster' || card.status === 'unusually-fast' ? '#2D8A4E'
+           : '#C0392B';
     }
-    
-    // For pastel and colour: use semantic colors sparingly
-    switch (card.status) {
-      case 'unusually-fast':
-      case 'faster': return thm.speedGood;
-      case 'unusually-slower':
-      case 'slower': return thm.speedBad;
-      default: return thm.textMuted;
+    if (thm.key === 'pastel') {
+      return card.status === 'as-expected' ? '#546E7A'
+           : card.status === 'faster' || card.status === 'unusually-fast' ? '#2E7D32'
+           : '#D84315';
     }
+    // Colour me Surprised
+    return card.status === 'as-expected' ? '#60A5FA'
+         : card.status === 'faster' || card.status === 'unusually-fast' ? '#34D399'
+         : '#F87171';
   };
 
   return (

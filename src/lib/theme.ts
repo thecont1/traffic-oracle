@@ -44,12 +44,10 @@ export interface AppTheme {
 
   slider: {
     track: string;
-    stripe: string;
+    rail: string;
     dim: string;
-    thumbLeftBorder: string;
-    thumbRightBorder: string;
-    thumbLeftShadow: string;
-    thumbRightShadow: string;
+    thumbBorder: string;
+    thumbShadow: string;
     thumbFg: string;
   };
 
@@ -164,14 +162,12 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chips: COLOUR_CHIPS,
     napkin: { baseline:"#F472B6", recent:"#22D3EE", gap:"#334155" },
     slider: {
-      track:            "linear-gradient(90deg,#22D3EE,#F472B6)",
-      stripe:           "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.55) 4px,rgba(255,255,255,0.55) 8px)",
+      track:            "#F472B6",
+      rail:             "#3A2C38",
       dim:              "rgba(0,0,0,0.45)",
-      thumbLeftBorder:  "#22D3EE",
-      thumbRightBorder: "#F472B6",
-      thumbLeftShadow:  "0 2px 8px rgba(34,211,238,0.5),0 1px 3px rgba(0,0,0,0.2)",
-      thumbRightShadow: "0 2px 8px rgba(244,114,182,0.5),0 1px 3px rgba(0,0,0,0.2)",
-      thumbFg: "#F0F4F8",
+      thumbBorder:      "#F472B6",
+      thumbShadow:      "0 2px 8px rgba(244,114,182,0.35), 0 1px 3px rgba(0,0,0,0.2)",
+      thumbFg:          "#F0F4F8",
     },
     kpiCardBgs: [
       "linear-gradient(135deg,#0F2942 60%,#1E40AF)",
@@ -211,14 +207,12 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chips: GRAY_CHIPS,
     napkin: { baseline:"#555555", recent:"#111111", gap:"#cccccc" },
     slider: {
-      track:            "#e0e0e0",
-      stripe:           "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,0.30) 4px,rgba(0,0,0,0.30) 8px)",
+      track:            "#5A5A5A",
+      rail:             "#D6D6D6",
       dim:              "rgba(0,0,0,0.07)",
-      thumbLeftBorder:  "#555555",
-      thumbRightBorder: "#333333",
-      thumbLeftShadow:  "0 2px 6px rgba(0,0,0,0.2)",
-      thumbRightShadow: "0 2px 6px rgba(0,0,0,0.2)",
-      thumbFg: "#ffffff",
+      thumbBorder:      "#444444",
+      thumbShadow:      "0 2px 6px rgba(0,0,0,0.2)",
+      thumbFg:          "#ffffff",
     },
     kpiCardBgs: ["#ffffff", "#ffffff", "#ffffff", "#ffffff"],
     chart: { line1:"#111111", line2:"#888888", line3:"#111111", line4:"#888888" },
@@ -253,14 +247,12 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chips: PASTEL_CHIPS,
     napkin: { baseline:"#8F98A3", recent:"#3A86C8", gap:"#DCCFB8" },
     slider: {
-      track:            "linear-gradient(90deg,#3A86C8,#8F98A3)",
-      stripe:           "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.6) 4px,rgba(255,255,255,0.6) 8px)",
+      track:            "#5B9BD5",
+      rail:             "#DCE7F2",
       dim:              "rgba(0,0,0,0.22)",
-      thumbLeftBorder:  "#3A86C8",
-      thumbRightBorder: "#8F98A3",
-      thumbLeftShadow:  "0 2px 8px rgba(58,134,200,0.5)",
-      thumbRightShadow: "0 2px 8px rgba(143,152,163,0.5)",
-      thumbFg: "#FFFFFF",
+      thumbBorder:      "#3A86C8",
+      thumbShadow:      "0 2px 6px rgba(58,134,200,0.18)",
+      thumbFg:          "#ffffff",
     },
     kpiCardBgs: [
       "linear-gradient(135deg,#EFF6FF,#BFDBFE)",

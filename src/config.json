@@ -44,15 +44,15 @@
   "defaults": {
     "baseline_start": "2026-01-05",
     "baseline_end": "2026-03-04",
-    "question_mode": "improved",
+    "question_mode": "worsened",
     "route": "Hosur Road",
-    "time_of_day": "weekday_morning",
+    "time_of_day": "weekday_evening",
     "period": "3m"
   },
   "route_pane": {
     "open": false,
     "min_width": 200,
-    "width": 400,
+    "width": 430,
     "max_width": 600,
     "polling_interval_min": 10
   },

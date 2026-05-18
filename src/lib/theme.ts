@@ -5,9 +5,9 @@ export type ThemeKey = "colour" | "gray" | "pastel";
 export const THEME_CYCLE: ThemeKey[] = ["colour", "gray", "pastel"];
 
 export const THEME_META: Record<ThemeKey, { icon: string; label: string }> = {
-  colour: { icon: "🎨", label: "Colour me surprised!" },
-  gray:   { icon: "☁️",  label: "Scale me gray!" },
-  pastel: { icon: "🌸", label: "Clear as day!" },
+  colour: { icon: "🎨", label: "Colour me Surprised!" },
+  gray:   { icon: "☁️",  label: "Scale me Gray!" },
+  pastel: { icon: "🌸", label: "Clear as Day!" },
 };
 
 export type ChipVariant = "route" | "period" | "tod" | "worsened" | "improved" | "city";

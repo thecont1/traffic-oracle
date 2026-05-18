@@ -1485,11 +1485,11 @@ function DashboardInner() {
                 onClick={cycleTheme}
                 title={`Switch to ${nextMeta.label}`}
                 style={{
-                  display:"flex", alignItems:"center", gap:6,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
                   height:44, borderRadius:9999, padding:"0 12px",
                   minWidth: 160,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#DBEAFE",
+                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
                   cursor:"pointer",
                   transition:"background 0.2s",
                 }}
@@ -1937,15 +1937,18 @@ function DashboardInner() {
           {(() => {
             const trafficUrl = selectedCityConfig.data_source?.traffic_csv ?? "";
             const ghMatch = trafficUrl.match(/raw\.githubusercontent\.com\/([^/]+\/[^/]+)/);
-            const shortUrl = ghMatch ? ghMatch[1] : trafficUrl;
-            const href = ghMatch ? `https://github.com/${ghMatch[1]}` : trafficUrl;
+            const cdnMatch = trafficUrl.match(/cdn\.jsdelivr\.net\/gh\/([^/]+\/[^/]+)/);
+            const shortGh = ghMatch ? ghMatch[1] : cdnMatch ? cdnMatch[1].replace(/@.*$/, "") : null;
+            const shortUrl = shortGh ?? trafficUrl;
+            const href = shortGh ? `https://github.com/${shortGh}` : trafficUrl;
+            const showLogo = !!shortGh;
             return (
               <a href={href}
                 target="_blank" rel="noopener noreferrer"
                 style={{ color: thm.chart.line4, display:"inline-flex", alignItems:"baseline", gap:4, lineHeight:1, padding:"0 2px", verticalAlign:"baseline" }}>
-                <svg height="12" width="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink:0, verticalAlign:"baseline" }}>
+                {showLogo && <svg height="12" width="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink:0, verticalAlign:"baseline" }}>
                   <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-                </svg>
+                </svg>}
                 {shortUrl}
               </a>
             );

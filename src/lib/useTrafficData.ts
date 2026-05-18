@@ -347,20 +347,16 @@ export async function refreshTrafficData(
   // Sort by timestamp for consistency
   newRows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-  // Trim to 90 days to prevent unbounded memory growth
-  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-  const trimmed = newRows.filter((r) => r.timestamp.getTime() >= cutoff);
-
   // Compute latest data timestamp
   let maxTs = 0;
-  for (const r of trimmed) {
+  for (const r of newRows) {
     const t = r.timestamp.getTime();
     if (t > maxTs) maxTs = t;
   }
 
   return {
-    allRows: trimmed,
-    rowCount: trimmed.length,
+    allRows: newRows,
+    rowCount: newRows.length,
     dataTimestamp: maxTs > 0 ? new Date(maxTs) : null,
   };
 }

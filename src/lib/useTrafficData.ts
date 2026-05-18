@@ -187,10 +187,6 @@ export function fetchTrafficData(
     const resp = await fetch(bust(url), {
       cache: "no-store",
       signal,
-      headers: {
-        Accept: "text/plain,*/*",
-        Pragma: "no-cache",
-      },
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${url}`);
     const text = await resp.text();
@@ -296,10 +292,7 @@ export async function refreshTrafficData(
   const trafficUrl = source?.traffic_csv
     ? toProxy(source.traffic_csv)
     : TRAFFIC_URL;
-  const headers: Record<string, string> = {
-    Accept: "text/plain,*/*",
-    Pragma: "no-cache",
-  };
+  const headers: Record<string, string> = {};
   const prevEtag = etagStore.get(trafficUrl);
   if (prevEtag) headers["If-None-Match"] = prevEtag;
 

@@ -4,8 +4,8 @@
       "name": "Bangalore",
       "ready": true,
       "data_source": {
-        "routes_csv": "https://cdn.jsdelivr.net/gh/thecont1/blr-traffic-monitor/csv-routes.csv",
-        "traffic_csv": "https://cdn.jsdelivr.net/gh/thecont1/blr-traffic-monitor/csv-bangalore_traffic.csv"
+        "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv",
+        "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv"
       }
     },
     {
@@ -42,12 +42,12 @@
     "verdict_threshold_kmh": 0.99
   },
   "defaults": {
-    "baseline_start": "2026-01-05",
-    "baseline_end": "2026-03-04",
+    "baseline_start": "2026-01-26",
+    "baseline_end": "2026-03-23",
     "question_mode": "worsened",
     "route": "Hosur Road",
     "time_of_day": "weekday_evening",
-    "period": "3m"
+    "period": "1m"
   },
   "route_pane": {
     "open": false,

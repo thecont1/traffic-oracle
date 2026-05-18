@@ -129,14 +129,15 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
   );
 }
 
-/* ── Bullet chart ──────────────────────────────────────────────── */
-function BulletChart({
+/* ── Nested-scale bullet chart ──────────────────────────────────── */
+function NestedScaleChart({
   liveSpeed,
   typical,
   cityMin,
   cityMax,
   status,
   thm,
+  expanded,
 }: {
   liveSpeed: number | null;
   typical: RouteTODStats | null;
@@ -144,6 +145,7 @@ function BulletChart({
   cityMax: number;
   status: LiveStatus;
   thm: AppTheme;
+  expanded: boolean;
 }) {
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
 
@@ -156,63 +158,173 @@ function BulletChart({
       ? (isFaster ? '#2E7D32' : isSlower ? '#D84315' : '#546E7A')
       : (isFaster ? '#34D399' : isSlower ? '#F87171' : '#60A5FA');
 
-  // Band color: neutral, low saturation
+  // Inner band (p15–p85) — main confidence band
   const bandColor = thm.key === 'gray'
+    ? 'rgba(0,0,0,0.12)'
+    : thm.key === 'pastel'
+      ? 'rgba(120,100,70,0.14)'
+      : 'rgba(120,140,180,0.20)';
+
+  // Outer band (p05–p15 and p85–p95) — lighter shade
+  const outerBandColor = thm.key === 'gray'
+    ? 'rgba(0,0,0,0.05)'
+    : thm.key === 'pastel'
+      ? 'rgba(120,100,70,0.06)'
+      : 'rgba(120,140,180,0.08)';
+
+  const tickColor = thm.key === 'gray'
+    ? 'rgba(0,0,0,0.25)'
+    : thm.key === 'pastel'
+      ? 'rgba(120,100,70,0.30)'
+      : 'rgba(160,180,210,0.35)';
+
+  const railColor = thm.key === 'gray'
+    ? 'rgba(0,0,0,0.06)'
+    : thm.key === 'pastel'
+      ? 'rgba(120,100,70,0.08)'
+      : 'rgba(120,140,180,0.10)';
+
+  const railCapColor = thm.key === 'gray'
     ? 'rgba(0,0,0,0.10)'
     : thm.key === 'pastel'
       ? 'rgba(120,100,70,0.12)'
-      : 'rgba(120,140,180,0.18)';
+      : 'rgba(120,140,180,0.15)';
 
-  const midTickColor = thm.key === 'gray'
-    ? 'rgba(0,0,0,0.30)'
+  const labelColor = thm.key === 'gray'
+    ? '#999'
     : thm.key === 'pastel'
-      ? 'rgba(120,100,70,0.35)'
-      : 'rgba(160,180,210,0.40)';
+      ? '#8A7E68'
+      : '#64748B';
 
   const cityRange = cityMax - cityMin || 1;
   const pct = (v: number) => ((v - cityMin) / cityRange) * 100;
 
-  const livePos = hasData ? pct(liveSpeed!) : null;
-  const p15Pos  = hasData ? pct(typical!.p15) : null;
-  const p50Pos  = hasData ? pct(typical!.p50) : null;
-  const p85Pos  = hasData ? pct(typical!.p85) : null;
+  const livePos   = hasData ? pct(liveSpeed!) : null;
+  const p05Pos    = hasData ? pct(typical!.p05) : null;
+  const p15Pos    = hasData ? pct(typical!.p15) : null;
+  const p50Pos    = hasData ? pct(typical!.p50) : null;
+  const p85Pos    = hasData ? pct(typical!.p85) : null;
+  const p95Pos    = hasData ? pct(typical!.p95) : null;
 
   const fmt = (n: number | null) =>
     n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
 
-  // Accessible description
   const ariaLabel = !hasData
     ? 'No data available.'
-    : `Current speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h.`;
+    : `Current speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h. City-wide range ${fmt(cityMin)} to ${fmt(cityMax)} km/h.`;
 
-  const BAR_H = 8;
-  const ROW_H = 20;
-  const DIAMOND = 8;
+  // Layout: top labels (14px) + gap (2px) + bar row (28px) + gap (4px) + bottom labels (14px) = 62px
+  const BAR_ROW_H = 28;
+  const LABEL_H = 14;
+  const TOP_GAP = 2;
+  const BOTTOM_GAP = 4;
+  const TOTAL_H = LABEL_H + TOP_GAP + BAR_ROW_H + BOTTOM_GAP + LABEL_H;
+  const BAND_H = 10;
+  const DIAMOND = 10;
 
   return (
-    <div style={{ width: '100%' }}>
-      {/* Chart row */}
+    <div style={{ width: '100%', position: 'relative', height: TOTAL_H }}>
+      {/* ── Top labels row: p15 and p85 positioned above bar endpoints (hover only) ── */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: LABEL_H,
+        opacity: expanded ? 1 : 0,
+        transition: 'opacity 0.15s',
+        pointerEvents: expanded ? 'auto' : 'none',
+      }}>
+        {hasData && (
+          <>
+            <span style={{
+              position: 'absolute',
+              left: `${p15Pos}%`,
+              transform: 'translateX(-50%)',
+              fontSize: 9,
+              color: labelColor,
+              fontWeight: 500,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+            }}>{fmt(typical!.p15)}</span>
+            <span style={{
+              position: 'absolute',
+              left: `${p85Pos}%`,
+              transform: 'translateX(-50%)',
+              fontSize: 9,
+              color: labelColor,
+              fontWeight: 500,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+            }}>{fmt(typical!.p85)}</span>
+          </>
+        )}
+      </div>
+
+      {/* ── Bar row ── */}
       <div
-        style={{ position: 'relative', height: ROW_H, width: '100%' }}
+        style={{
+          position: 'absolute',
+          top: LABEL_H + TOP_GAP,
+          left: 0,
+          right: 0,
+          height: BAR_ROW_H,
+        }}
         role="img"
         aria-label={ariaLabel}
       >
-        {/* Baseline */}
+        {/* Outer rail: cityMin–cityMax */}
         <div style={{
           position: 'absolute', left: 0, right: 0,
-          top: ROW_H / 2, height: 1,
-          background: thm.key === 'gray' ? 'rgba(0,0,0,0.08)' : thm.key === 'pastel' ? 'rgba(120,100,70,0.10)' : 'rgba(120,140,180,0.12)',
+          top: BAR_ROW_H / 2, transform: 'translateY(-50%)',
+          height: 2, borderRadius: 1,
+          background: railColor,
+        }} />
+        {/* Rail caps */}
+        <div style={{
+          position: 'absolute', left: 0, top: BAR_ROW_H / 2,
+          transform: 'translateY(-50%)',
+          width: 2, height: 8, borderRadius: 1,
+          background: railCapColor,
+        }} />
+        <div style={{
+          position: 'absolute', right: 0, top: BAR_ROW_H / 2,
+          transform: 'translateY(-50%)',
+          width: 2, height: 8, borderRadius: 1,
+          background: railCapColor,
         }} />
 
         {hasData && (
           <>
-            {/* Usual range band: p15–p85 */}
+            {/* Outer band: p05–p15 (lighter) */}
+            <div style={{
+              position: 'absolute',
+              left: `${p05Pos}%`,
+              width: `${p15Pos! - p05Pos!}%`,
+              top: (BAR_ROW_H - BAND_H) / 2,
+              height: BAND_H,
+              background: outerBandColor,
+              borderRadius: 2,
+            }} />
+
+            {/* Outer band: p85–p95 (lighter) */}
+            <div style={{
+              position: 'absolute',
+              left: `${p85Pos}%`,
+              width: `${p95Pos! - p85Pos!}%`,
+              top: (BAR_ROW_H - BAND_H) / 2,
+              height: BAND_H,
+              background: outerBandColor,
+              borderRadius: 2,
+            }} />
+
+            {/* Inner band: p15–p85 (main confidence band) */}
             <div style={{
               position: 'absolute',
               left: `${p15Pos}%`,
               width: `${p85Pos! - p15Pos!}%`,
-              top: (ROW_H - BAR_H) / 2,
-              height: BAR_H,
+              top: (BAR_ROW_H - BAND_H) / 2,
+              height: BAND_H,
               background: bandColor,
               borderRadius: 2,
             }} />
@@ -221,46 +333,77 @@ function BulletChart({
             <div style={{
               position: 'absolute',
               left: `${p50Pos}%`,
-              top: (ROW_H - BAR_H) / 2 - 2,
+              top: (BAR_ROW_H - BAND_H) / 2 - 3,
               width: 1,
-              height: BAR_H + 4,
-              background: midTickColor,
+              height: BAND_H + 6,
+              background: tickColor,
               borderRadius: 1,
               transform: 'translateX(-0.5px)',
             }} />
 
-            {/* Current speed marker: diamond */}
+            {/* Diamond: currentSpeed */}
             <div style={{
               position: 'absolute',
               left: `${livePos}%`,
-              top: ROW_H / 2,
+              top: BAR_ROW_H / 2,
               width: DIAMOND,
               height: DIAMOND,
               background: statusColor,
-              borderRadius: 1,
+              borderRadius: 2,
               transform: 'translate(-50%, -50%) rotate(45deg)',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
               zIndex: 2,
             }} />
           </>
         )}
       </div>
 
-      {/* Endpoint labels: p15 and p85 */}
-      {hasData && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginTop: 2,
+      {/* ── Bottom labels row: cityMin, live speed, cityMax ── */}
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: LABEL_H,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+      }}>
+        {/* cityMin — hover only */}
+        <span style={{
+          fontSize: 9,
+          color: labelColor,
+          fontWeight: 500,
+          lineHeight: 1,
+          opacity: expanded ? 1 : 0,
+          transition: 'opacity 0.15s',
+        }}>{hasData ? fmt(cityMin) : ''}</span>
+
+        {/* Live speed — always visible, positioned under diamond */}
+        <span style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: statusColor,
+          position: 'absolute',
+          left: `${livePos}%`,
+          transform: 'translateX(-50%)',
+          whiteSpace: 'nowrap',
+          lineHeight: 1,
+          bottom: 0,
         }}>
-          <span style={{ fontSize: 9, color: thm.textMuted, fontWeight: 500 }}>
-            {fmt(typical!.p15)} km/h
-          </span>
-          <span style={{ fontSize: 9, color: thm.textMuted, fontWeight: 500 }}>
-            {fmt(typical!.p85)} km/h
-          </span>
-        </div>
-      )}
+          {hasData ? fmt(liveSpeed) : ''}
+        </span>
+
+        {/* cityMax — hover only */}
+        <span style={{
+          fontSize: 9,
+          color: labelColor,
+          fontWeight: 500,
+          lineHeight: 1,
+          opacity: expanded ? 1 : 0,
+          transition: 'opacity 0.15s',
+        }}>{hasData ? fmt(cityMax) : ''}</span>
+      </div>
     </div>
   );
 }
@@ -386,15 +529,16 @@ function RouteCard({
         {endpoints}
       </p>
       
-      {/* Row 3: Bullet chart */}
+      {/* Row 3: Nested-scale chart */}
       <div style={{ marginTop: 4 }} />
-      <BulletChart
+      <NestedScaleChart
         liveSpeed={card.liveSpeed}
         typical={card.typical}
         cityMin={card.cityMin}
         cityMax={card.cityMax}
         status={card.status}
         thm={thm}
+        expanded={hovered || isSelected}
       />
       
       

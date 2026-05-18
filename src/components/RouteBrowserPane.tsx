@@ -9,7 +9,7 @@ const cfg = appConfig as AppConfig;
 /* ── Info tip ────────────────────────────────────────────────── */
 function InfoTip({ thm }: { thm: AppTheme }) {
   const tipRef = useRef<HTMLDivElement>(null);
-  const tooltipText = "See if traffic is normal right now. The colored dot shows current speed; the gray bar shows what's typical for this hour (based on 90 days of data). Dot left of the bar = slower than usual, right = faster, centered = as expected. Tap any route to explore it on the main charts.";
+  const tooltipText = "See if traffic is normal right now. The colored diamond shows current speed; the neutral band shows what's typical for this hour (based on 90 days of data). Diamond within the band = typical, left = slower, right = faster. Tap any route to explore it on the main charts.";
   
   const show = (e: React.MouseEvent<HTMLSpanElement>) => {
     const el = tipRef.current;
@@ -129,150 +129,138 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
   );
 }
 
-/* ── Traffic NOW! bar - city-wide range with route position ────── */
-function TrafficNowBar({ 
+/* ── Bullet chart ──────────────────────────────────────────────── */
+function BulletChart({
   liveSpeed,
   typical,
   cityMin,
   cityMax,
   status,
   thm,
-  hovered,
-  isSelected,
-}: { 
+}: {
   liveSpeed: number | null;
   typical: RouteTODStats | null;
   cityMin: number;
   cityMax: number;
   status: LiveStatus;
   thm: AppTheme;
-  hovered: boolean;
-  isSelected: boolean;
 }) {
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
-  
-  // Determine status direction for colors
+
   const isFaster = status === 'faster' || status === 'unusually-fast';
   const isSlower = status === 'slower' || status === 'unusually-slower';
-  
-  // Get status color
-  const getStatusColor = () => {
-    if (thm.key === 'gray') {
-      if (isFaster) return '#2D8A4E';
-      if (isSlower) return '#C0392B';
-      return '#555555';
-    }
-    if (thm.key === 'pastel') {
-      if (isFaster) return '#2E7D32';
-      if (isSlower) return '#D84315';
-      return '#546E7A';
-    }
-    if (isFaster) return '#34D399';
-    if (isSlower) return '#F87171';
-    return '#60A5FA';
-  };
-  
-  const statusColor = getStatusColor();
-  const typicalColor = thm.key === 'gray' ? '#777777' : thm.key === 'pastel' ? 'rgba(80,70,60,0.6)' : 'rgba(70,65,60,0.7)';
-  
-  // Calculate positions on the city-wide scale
+
+  const statusColor = thm.key === 'gray'
+    ? (isFaster ? '#2D8A4E' : isSlower ? '#C0392B' : '#555555')
+    : thm.key === 'pastel'
+      ? (isFaster ? '#2E7D32' : isSlower ? '#D84315' : '#546E7A')
+      : (isFaster ? '#34D399' : isSlower ? '#F87171' : '#60A5FA');
+
+  // Band color: neutral, low saturation
+  const bandColor = thm.key === 'gray'
+    ? 'rgba(0,0,0,0.10)'
+    : thm.key === 'pastel'
+      ? 'rgba(120,100,70,0.12)'
+      : 'rgba(120,140,180,0.18)';
+
+  const midTickColor = thm.key === 'gray'
+    ? 'rgba(0,0,0,0.30)'
+    : thm.key === 'pastel'
+      ? 'rgba(120,100,70,0.35)'
+      : 'rgba(160,180,210,0.40)';
+
   const cityRange = cityMax - cityMin || 1;
-  const livePos = hasData ? ((liveSpeed! - cityMin) / cityRange) * 100 : 50;
-  const typicalMinPos = hasData ? ((typical!.p05 - cityMin) / cityRange) * 100 : 30;
-  const typicalMaxPos = hasData ? ((typical!.p95 - cityMin) / cityRange) * 100 : 70;
-  
-  // Format speed
-  const fmt = (n: number | null) => n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
-  
-  // Speed label color: light in dark theme, status color in light themes
-  const speedLabelColor = thm.isDark
-    ? 'rgba(255,255,255,0.85)'
-    : statusColor;
+  const pct = (v: number) => ((v - cityMin) / cityRange) * 100;
+
+  const livePos = hasData ? pct(liveSpeed!) : null;
+  const p15Pos  = hasData ? pct(typical!.p15) : null;
+  const p50Pos  = hasData ? pct(typical!.p50) : null;
+  const p85Pos  = hasData ? pct(typical!.p85) : null;
+
+  const fmt = (n: number | null) =>
+    n === null ? '--' : (n % 1 === 0 ? n.toString() : n.toFixed(1));
+
+  // Accessible description
+  const ariaLabel = !hasData
+    ? 'No data available.'
+    : `Current speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h.`;
+
+  const BAR_H = 8;
+  const ROW_H = 20;
+  const DIAMOND = 8;
 
   return (
-    <div style={{ width: '100%', position: 'relative' }}>
-      {/* Bar area */}
-      <div style={{ 
-        position: 'relative',
-        height: 14,
-        marginBottom: 4,
-      }}>
-        {/* City-wide range track */}
+    <div style={{ width: '100%' }}>
+      {/* Chart row */}
+      <div
+        style={{ position: 'relative', height: ROW_H, width: '100%' }}
+        role="img"
+        aria-label={ariaLabel}
+      >
+        {/* Baseline */}
         <div style={{
-          position: 'absolute', left: 0, right: 0, top: 6,
-          height: 1, background: '#000000',
+          position: 'absolute', left: 0, right: 0,
+          top: ROW_H / 2, height: 1,
+          background: thm.key === 'gray' ? 'rgba(0,0,0,0.08)' : thm.key === 'pastel' ? 'rgba(120,100,70,0.10)' : 'rgba(120,140,180,0.12)',
         }} />
-        
-        {/* Typical range bar (p05–p95) — bold and clear */}
-        {hasData && (
-          <div style={{
-            position: 'absolute',
-            left: `${typicalMinPos}%`,
-            right: `${100 - typicalMaxPos}%`,
-            top: 4, height: 6,
-            background: typicalColor,
-            borderRadius: 3,
-          }} />
-        )}
-        
-        {/* Live speed marker */}
-        {hasData && (
-          <div style={{
-            position: 'absolute',
-            left: `${livePos}%`, top: 1,
-            width: 12, height: 12,
-            background: statusColor,
-            borderRadius: '50%',
-            transform: 'translateX(-50%)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-            zIndex: 3,
-            border: `2px solid ${thm.sectionBg}`,
-          }} />
-        )}
 
-        {/* Hover labels: p05 above left, p95 above right */}
-        {(hovered || isSelected) && hasData && (
+        {hasData && (
           <>
+            {/* Usual range band: p15–p85 */}
             <div style={{
-              position: 'absolute', left: `${typicalMinPos}%`, top: -12,
-              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
-              color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
-            }}>
-              {fmt(typical!.p05)}
-            </div>
+              position: 'absolute',
+              left: `${p15Pos}%`,
+              width: `${p85Pos! - p15Pos!}%`,
+              top: (ROW_H - BAR_H) / 2,
+              height: BAR_H,
+              background: bandColor,
+              borderRadius: 2,
+            }} />
+
+            {/* Midpoint tick: p50 */}
             <div style={{
-              position: 'absolute', left: `${typicalMaxPos}%`, top: -12,
-              transform: 'translateX(-50%)', fontSize: 9, fontWeight: 700,
-              color: thm.textMuted, whiteSpace: 'nowrap', lineHeight: 1,
-            }}>
-              {fmt(typical!.p95)}
-            </div>
+              position: 'absolute',
+              left: `${p50Pos}%`,
+              top: (ROW_H - BAR_H) / 2 - 2,
+              width: 1,
+              height: BAR_H + 4,
+              background: midTickColor,
+              borderRadius: 1,
+              transform: 'translateX(-0.5px)',
+            }} />
+
+            {/* Current speed marker: diamond */}
+            <div style={{
+              position: 'absolute',
+              left: `${livePos}%`,
+              top: ROW_H / 2,
+              width: DIAMOND,
+              height: DIAMOND,
+              background: statusColor,
+              borderRadius: 1,
+              transform: 'translate(-50%, -50%) rotate(45deg)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              zIndex: 2,
+            }} />
           </>
         )}
       </div>
-      
-      {/* Speed below bar — always present at fixed height, text visible on hover only */}
-      <div style={{
-        position: 'relative',
-        height: 14,
-        overflow: 'hidden',
-      }}>
-        {(hovered || isSelected) && hasData && (
-          <div style={{
-            position: 'absolute',
-            left: `${livePos}%`,
-            top: 0,
-            transform: 'translateX(-50%)',
-            whiteSpace: 'nowrap',
-            fontSize: 10,
-            lineHeight: 1,
-          }}>
-            <span style={{ color: speedLabelColor, fontWeight: (isFaster || isSlower) ? 600 : 400 }}>
-              {fmt(liveSpeed)} km/h
-            </span>
-          </div>
-        )}
-      </div>
+
+      {/* Endpoint labels: p15 and p85 */}
+      {hasData && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: 2,
+        }}>
+          <span style={{ fontSize: 9, color: thm.textMuted, fontWeight: 500 }}>
+            {fmt(typical!.p15)} km/h
+          </span>
+          <span style={{ fontSize: 9, color: thm.textMuted, fontWeight: 500 }}>
+            {fmt(typical!.p85)} km/h
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -398,17 +386,15 @@ function RouteCard({
         {endpoints}
       </p>
       
-      {/* Row 3: Traffic NOW! bar - city-wide range with route position */}
+      {/* Row 3: Bullet chart */}
       <div style={{ marginTop: 4 }} />
-      <TrafficNowBar 
+      <BulletChart
         liveSpeed={card.liveSpeed}
         typical={card.typical}
         cityMin={card.cityMin}
         cityMax={card.cityMax}
         status={card.status}
         thm={thm}
-        hovered={hovered}
-        isSelected={isSelected}
       />
       
       
@@ -592,15 +578,15 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           width: 5, height: 5, marginBottom: 6,
         }} />
         <span style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
+          fontSize: 12, fontWeight: 700, letterSpacing: "0.15em",
           textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",
-          writingMode: "vertical-rl", textOrientation: "mixed", transform: "rotate(180deg)",
+          writingMode: "vertical-rl", textOrientation: "mixed", transform: "rotate(0deg)",
         }}>
-          TRAFFIC NOW!
+          LIVE ROUTE EXPLORER
         </span>
         <div style={{
-          marginTop: 8, fontSize: 11, color: thm.textMuted,
-          transform: isOpen ? "rotate(90deg)" : "rotate(-90deg)",
+          marginTop: 8, fontSize: 15, color: thm.textMuted,
+          transform: isOpen ? "rotate(180deg)" : "rotate(90deg)",
           transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
         }}>▸</div>
       </div>

@@ -568,6 +568,44 @@
   }
 }
 
+/* ── TrafficNOW! design tokens ───────────────────────────────── */
+:root {
+  --tn-surface: #f7f7f5;
+  --tn-grid: #c7c7c2;
+  --tn-text: #1f2328;
+
+  --tn-series: #0f766e;
+  --tn-series-contrast: #0b4f4a;
+
+  --tn-band-outer-fill: color-mix(in oklab, #0f766e 18%, #f7f7f5);
+  --tn-band-outer-stroke: #4e6663;
+
+  --tn-band-inner-fill: color-mix(in oklab, #0f766e 38%, #f7f7f5);
+  --tn-band-inner-stroke: #214d48;
+
+  --tn-line-main: #073b3a;
+  --tn-line-compare: #7a3e00;
+
+  --tn-focus: #005fcc;
+}
+
+.dark {
+  --tn-surface: #0f1817;
+  --tn-grid: #2a3535;
+  --tn-text: #e8f0ef;
+
+  --tn-band-outer-fill: color-mix(in oklab, #0f766e 22%, #0f1817);
+  --tn-band-outer-stroke: #5a7875;
+
+  --tn-band-inner-fill: color-mix(in oklab, #0f766e 48%, #0f1817);
+  --tn-band-inner-stroke: #2e6560;
+
+  --tn-line-main: #5eead4;
+  --tn-line-compare: #f59e0b;
+
+  --tn-focus: #60a5fa;
+}
+
 @media print {
   @page { margin: 0; }
   body { margin: 0.5in; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

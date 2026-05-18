@@ -207,10 +207,10 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chips: GRAY_CHIPS,
     napkin: { baseline:"#555555", recent:"#111111", gap:"#cccccc" },
     slider: {
-      track:            "#5A5A5A",
+      track:            "#555555",
       rail:             "#D6D6D6",
       dim:              "rgba(0,0,0,0.07)",
-      thumbBorder:      "#444444",
+      thumbBorder:      "#555555",
       thumbShadow:      "0 2px 6px rgba(0,0,0,0.2)",
       thumbFg:          "#ffffff",
     },
@@ -247,11 +247,11 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chips: PASTEL_CHIPS,
     napkin: { baseline:"#8F98A3", recent:"#3A86C8", gap:"#DCCFB8" },
     slider: {
-      track:            "#5B9BD5",
+      track:            "#8F98A3",
       rail:             "#DCE7F2",
       dim:              "rgba(0,0,0,0.22)",
-      thumbBorder:      "#3A86C8",
-      thumbShadow:      "0 2px 6px rgba(58,134,200,0.18)",
+      thumbBorder:      "#8F98A3",
+      thumbShadow:      "0 2px 6px rgba(143,152,163,0.28)",
       thumbFg:          "#ffffff",
     },
     kpiCardBgs: [

@@ -4,9 +4,9 @@
   <img src="public/trafficoracle-light.png" alt="TraffiCOracle" height="64">
 </p>
 
-**TraffiCOracle** is a zero-backend web platform that visualises road traffic data for **Bengaluru (Bangalore)** — built with React, Vite, and Bun. There is no server to configure, no database to provision, and no API keys to manage.
+**TraffiCOracle** is a web-based app to that visualises live and historical road traffic data of a city. 
 
-> **Zero-backend architecture:** The entire data pipeline runs client-side. PapaParse downloads and parses CSV files from a public GitHub repository updated every 30 minutes. All computation — filtering, aggregation, baseline comparison, chart rendering — happens in React. Your data never touches a server unless you choose to send it somewhere.
+Built with React, Vite, and Bun, **TraffiCOracle** features a zero-backend architecture. The entire data pipeline runs client-side. PapaParse downloads and parses CSV files from a public GitHub repository updated every 30 minutes. All computation — filtering, aggregation, baseline comparison, chart rendering — happens in React. The data never touches a server. There is no server to configure, no database to provision, no API keys to manage.
 
 ---
 
@@ -59,35 +59,35 @@ Open **http://localhost:5173** — no database, no API server, no `.env` file ne
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    React (Vite + Bun)                         │
+│                    React (Vite + Bun)                        │
 │                                                              │
-│  ┌─────────────────────┐  ┌──────────────────────┐          │
-│  │   Question Pane      │  │  TrafficNOW! Pane    │          │
-│  │   (scrolls)          │  │  (frozen, internal   │          │
-│  │                      │  │   scroll only)        │          │
-│  │  ┌────────────────┐  │  │                      │          │
-│  │  │  Trend Charts   │  │  │  Live speed dots     │          │
-│  │  │  KPI Cards      │  │  │  Status labels       │          │
-│  │  │  Calendar Heat  │  │  │  Confidence bars     │          │
-│  │  │  Baseline Slider│  │  │  Route cards         │          │
-│  │  └───────┬────────┘  │  │  (hover/select)      │          │
-│  │          │            │  └──────────┬───────────┘          │
-│  └──────────┼────────────┘             │                      │
-│             └──────────┬───────────────┘                      │
-│                        ▼                                      │
-│           useTrafficData.ts (core data layer)                  │
-│           ┌──────────────────────────────────────┐            │
-│           │ Initial fetch: full CSV download       │            │
-│           │ Polling: ETag conditional requests     │            │
-│           │ PapaParse → TrafficRow[]               │            │
-│           │ Validation (speed/duration filters)    │            │
-│           │ Aggregation (weekly, daily, stats)     │            │
-│           └──────────────────────────────────────┘            │
-│                        │                                      │
-│                        ▼                                      │
-│           fetch() → GitHub raw CSV URLs                       │
-│           (cache-busted on initial load)                      │
-│           (ETag conditional on polls)                         │
+│  ┌───────────────────────┐  ┌──────────────────────┐         │
+│  │   Question Pane       │  │  TrafficNOW! Pane    │         │
+│  │   (scrolls)           │  │  (frozen, internal   │         │
+│  │                       │  │   scroll only)       │         │
+│  │  ┌─────────────────┐  │  │                      │         │
+│  │  │  Trend Charts   │  │  │  Live speed dots     │         │
+│  │  │  KPI Cards      │  │  │  Status labels       │         │
+│  │  │  Calendar Heat  │  │  │  Confidence bars     │         │
+│  │  │  Baseline Slider│  │  │  Route cards         │         │
+│  │  └───────┬─────────┘  │  │  (hover/select)      │         │
+│  │          │            │  └──────────┬───────────┘         │
+│  └──────────┼────────────┘             │                     │
+│             └──────────┬───────────────┘                     │
+│                        ▼                                     │
+│           useTrafficData.ts (core data layer)                │
+│           ┌────────────────────────────────────────┐         │
+│           │ Initial fetch: full CSV download       │         │
+│           │ Polling: ETag conditional requests     │         │
+│           │ PapaParse → TrafficRow[]               │         │
+│           │ Validation (speed/duration filters)    │         │
+│           │ Aggregation (weekly, daily, stats)     │         │
+│           └────────────────────────────────────────┘         │
+│                        │                                     │
+│                        ▼                                     │
+│           fetch() → GitHub raw CSV URLs                      │
+│           (cache-busted on initial load)                     │
+│           (ETag conditional on polls)                        │
 └──────────────────────────────────────────────────────────────┘
 ```
 

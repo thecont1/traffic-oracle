@@ -21,9 +21,6 @@ export function bust(url: string): string {
   return `${url}?t=${Date.now()}`;
 }
 
-/* ── ETag cache for conditional polling ─────────────────────────── */
-const etagStore = new Map<string, string>();
-
 export interface Route {
   route_code: string;
   label_full: string;
@@ -274,53 +271,27 @@ export function toProxy(url: string): string {
 }
 
 export interface RefreshResult {
-  changed: boolean;
   allRows: TrafficRow[];
   rowCount: number;
   dataTimestamp: Date | null;
 }
 
-/** Re-fetch just the traffic CSV. Uses ETag for conditional requests —
- *  returns `changed: false` when the server says nothing has moved.
+/** Re-fetch just the traffic CSV. Always fetches a fresh copy via cache-busting URL.
  *  `routeByCode` is the existing route lookup from the initial load. */
 export async function refreshTrafficData(
   routeByCode: Map<string, Route>,
-  currentRows: TrafficRow[],
   signal?: AbortSignal,
   source?: CitySource,
 ): Promise<RefreshResult> {
   const trafficUrl = source?.traffic_csv
     ? toProxy(source.traffic_csv)
     : TRAFFIC_URL;
-  const headers: Record<string, string> = {};
-  const prevEtag = etagStore.get(trafficUrl);
-  if (prevEtag) headers["If-None-Match"] = prevEtag;
-
-  const resp = await fetch(trafficUrl, {
+  const resp = await fetch(bust(trafficUrl), {
     cache: "no-store",
     signal,
-    headers,
   });
 
-  // 304 Not Modified — file unchanged on GitHub
-  if (resp.status === 304) {
-    let maxTs = 0;
-    for (const r of currentRows) {
-      const t = r.timestamp.getTime();
-      if (t > maxTs) maxTs = t;
-    }
-    return {
-      changed: false,
-      allRows: currentRows,
-      rowCount: currentRows.length,
-      dataTimestamp: maxTs > 0 ? new Date(maxTs) : null,
-    };
-  }
-
   if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching traffic CSV`);
-
-  const newEtag = resp.headers.get("etag");
-  if (newEtag) etagStore.set(trafficUrl, newEtag);
 
   const text = await resp.text();
   const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -373,27 +344,12 @@ export async function refreshTrafficData(
     });
   }
 
-  // Merge: keep existing rows, replace any that share the same
-  // timestamp+route_code (dedup), add genuinely new rows
-  const existingKeys = new Set(
-    currentRows.map((r) => `${r.timestamp.getTime()}:${r.route_code}`),
-  );
-  const merged = [...currentRows];
-  let added = 0;
-  for (const nr of newRows) {
-    const key = `${nr.timestamp.getTime()}:${nr.route_code}`;
-    if (!existingKeys.has(key)) {
-      merged.push(nr);
-      added++;
-    }
-  }
-
   // Sort by timestamp for consistency
-  merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  newRows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
   // Trim to 90 days to prevent unbounded memory growth
   const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-  const trimmed = merged.filter((r) => r.timestamp.getTime() >= cutoff);
+  const trimmed = newRows.filter((r) => r.timestamp.getTime() >= cutoff);
 
   // Compute latest data timestamp
   let maxTs = 0;
@@ -403,7 +359,6 @@ export async function refreshTrafficData(
   }
 
   return {
-    changed: added > 0,
     allRows: trimmed,
     rowCount: trimmed.length,
     dataTimestamp: maxTs > 0 ? new Date(maxTs) : null,
@@ -421,12 +376,8 @@ export function useTrafficData(citySource?: CitySource) {
 
   /* Refs for polling — values persist across renders without triggering re-renders */
   const routeByCodeRef = useRef<Map<string, Route>>(new Map());
-  const rowsRef = useRef<TrafficRow[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingActiveRef = useRef(false);
-
-  /* Keep refs in sync with state */
-  rowsRef.current = allRows;
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
@@ -476,18 +427,14 @@ export function useTrafficData(citySource?: CitySource) {
     const ctrl = new AbortController();
     refreshTrafficData(
       routeByCodeRef.current,
-      rowsRef.current,
       ctrl.signal,
       citySource,
     )
       .then((result) => {
-        if (result.changed) {
-          setAllRows(result.allRows);
-          setRowCount(result.rowCount);
-          setDataTimestamp(result.dataTimestamp);
-          setLastUpdated(new Date());
-        }
-        // Whether changed or not, mark lastChecked for internal tracking
+        setAllRows(result.allRows);
+        setRowCount(result.rowCount);
+        setDataTimestamp(result.dataTimestamp);
+        setLastUpdated(new Date());
         pollingActiveRef.current = true;
       })
       .catch(() => {

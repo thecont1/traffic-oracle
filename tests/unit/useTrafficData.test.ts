@@ -560,17 +560,32 @@ describe("Phase 2 — Aggregation", () => {
      */
     function computeCutoff(period: TimePeriod, now: Date): Date {
       const cutoff = new Date(now);
-      if (period === "1m") cutoff.setMonth(cutoff.getMonth() - 1);
-      else if (period === "3m") cutoff.setMonth(cutoff.getMonth() - 3);
-      else if (period === "6m") cutoff.setMonth(cutoff.getMonth() - 6);
-      else cutoff.setFullYear(cutoff.getFullYear() - 1);
+      // Must mirror useFilteredData's cutoff logic.
+      if      (period === "1m")   cutoff.setDate(cutoff.getDate() - 30);
+      else if (period === "1.5m") cutoff.setDate(cutoff.getDate() - 45);
+      else if (period === "2m")   cutoff.setDate(cutoff.getDate() - 60);
+      else if (period === "3m")   cutoff.setMonth(cutoff.getMonth() - 3);
+      else if (period === "6m")   cutoff.setMonth(cutoff.getMonth() - 6);
+      else                         cutoff.setFullYear(cutoff.getFullYear() - 1);
       return cutoff;
     }
 
-    it("1m period: cutoff is exactly 1 month before now", () => {
+    it("1m period: cutoff is 30 days before now", () => {
       const now = new Date("2026-05-15T18:00:00");
       const cutoff = computeCutoff("1m", now);
       expect(cutoff.getTime()).toBe(new Date("2026-04-15T18:00:00").getTime());
+    });
+
+    it("1.5m period: cutoff is 45 days before now", () => {
+      const now = new Date("2026-05-15T18:00:00");
+      const cutoff = computeCutoff("1.5m", now);
+      expect(cutoff.getTime()).toBe(new Date("2026-03-31T18:00:00").getTime());
+    });
+
+    it("2m period: cutoff is 60 days before now", () => {
+      const now = new Date("2026-05-15T18:00:00");
+      const cutoff = computeCutoff("2m", now);
+      expect(cutoff.getTime()).toBe(new Date("2026-03-16T18:00:00").getTime());
     });
 
     it("3m period: cutoff is exactly 3 months before now", () => {

@@ -600,12 +600,21 @@ export function useFilteredData(
   baselineRoute: string = "Hosur Road",
 ) {
   return useMemo(() => {
-    const lastDataMs = allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0);
+    const lastDataMs = allRows.reduce(
+      (max, r) => Math.max(max, r.timestamp.getTime()),
+      0,
+    );
+
+    // Cutoff date for the Question's selected time window.
+    // NOTE: PERIOD_LIST includes 1.5m and 2m (45/60 days) so we must
+    // handle those explicitly; otherwise we'd fall back to the 1-year window.
     const cutoff = new Date(lastDataMs || Date.now());
-    if (period === "1m") cutoff.setMonth(cutoff.getMonth() - 1);
-    else if (period === "3m") cutoff.setMonth(cutoff.getMonth() - 3);
-    else if (period === "6m") cutoff.setMonth(cutoff.getMonth() - 6);
-    else cutoff.setFullYear(cutoff.getFullYear() - 1);
+    if      (period === "1m")   cutoff.setDate(cutoff.getDate() - 30);
+    else if (period === "1.5m") cutoff.setDate(cutoff.getDate() - 45);
+    else if (period === "2m")   cutoff.setDate(cutoff.getDate() - 60);
+    else if (period === "3m")   cutoff.setMonth(cutoff.getMonth() - 3);
+    else if (period === "6m")   cutoff.setMonth(cutoff.getMonth() - 6);
+    else                         cutoff.setFullYear(cutoff.getFullYear() - 1);
 
     const filtered = allRows.filter(
       (r) =>

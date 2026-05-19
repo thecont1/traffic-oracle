@@ -1322,6 +1322,35 @@ function DashboardInner() {
   const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
   const { merged, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
 
+  // Keep chart x-axes consistent across the two Recharts charts.
+  // Recharts' default tick auto-skipping can pick different ticks depending on
+  // subtle layout differences (e.g. Y-axis label width), which is most visible
+  // for longer windows like 3m/6m.
+  //
+  // We solve it by explicitly providing the same `ticks` list to both charts.
+  const chartMargin = { top: 4, right: 8, left: 8, bottom: 0 } as const;
+
+  // Keep the plot-area width aligned between charts.
+  // Recharts auto-sizes the YAxis width based on label length; when it differs,
+  // the same X ticks can look horizontally shifted between charts.
+  const yAxisWidth = isMobile ? 46 : 58;
+
+  const xAxisTicks = useMemo(() => {
+    const n = merged.length;
+    if (n === 0) return [] as string[];
+
+    const maxLabels = isMobile ? 5 : 7;
+    const step = Math.max(1, Math.ceil((n - 1) / (maxLabels - 1)));
+
+    const ticks: string[] = [];
+    for (let i = 0; i < n; i += step) ticks.push(merged[i].weekKey);
+
+    const last = merged[n - 1].weekKey;
+    if (ticks[ticks.length - 1] !== last) ticks.push(last);
+
+    return ticks;
+  }, [merged, isMobile]);
+
   /* ── TrafficNOW! per-week percentile bands ───────────────────── */
   const { trafficNowData, trafficNowCompare } = useMemo(() => {
     const { percentile: pctFn } = (() => {
@@ -1872,14 +1901,14 @@ function DashboardInner() {
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
                     {/*<span style={{ fontSize:28 }}>🔥</span>*/}
-                    <div style={kpiLabel}>Bad day trip <KpiInfo text={`On a bad day, your trip could take this long. Specifically, 1 in every ${badDayN} trips (the ${cfg.percentile.worst_case}${cfg.percentile.worst_case === 11 ? "st" : cfg.percentile.worst_case === 12 ? "nd" : cfg.percentile.worst_case === 13 ? "rd" : "th"} percentile) is at least this slow.`} /></div>
+                    <div style={kpiLabel}>Bad Day Trip <KpiInfo text={`On a bad day, your trip could take this long. Specifically, 1 in every ${badDayN} trips (the ${cfg.percentile.worst_case}${cfg.percentile.worst_case === 11 ? "st" : cfg.percentile.worst_case === 12 ? "nd" : cfg.percentile.worst_case === 13 ? "rd" : "th"} percentile) is at least this slow.`} /></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
                     {/*<span style={{ fontSize:28 }}>📊</span>*/}
-                    <div style={kpiLabel}>Readings <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
+                    <div style={kpiLabel}>No. of Trips <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{merged.length} weeks · {periodLabel} window</p>
                   </div>
@@ -1910,7 +1939,7 @@ function DashboardInner() {
                         Weekly avg km/h vs. best &amp; worst envelope — higher is faster
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
-                        <AreaChart data={merged} margin={{top:4,right:8,left:8,bottom:0}}>
+                        <AreaChart data={merged} margin={chartMargin}>
                           <defs>
                             <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
@@ -1926,11 +1955,23 @@ function DashboardInner() {
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
-                          <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
+                          <XAxis
+                            dataKey="weekKey"
+                            tickFormatter={fmtWeek}
+                            ticks={xAxisTicks}
+                            interval={0}
+                            tickMargin={8}
+                            tick={{ fontSize: 11, fill: thm.textMuted }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            width={yAxisWidth}
                             tick={{fontSize:11,fill:thm.textMuted}}
-                            tickLine={false} axisLine={false}/>
-                          <YAxis tick={{fontSize:11,fill:thm.textMuted}}
-                            tickLine={false} axisLine={false} unit=" km/h"/>
+                            tickLine={false}
+                            axisLine={false}
+                            unit=" km/h"
+                          />
                           <RCTooltip content={useChartTooltip(thm)}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Area type="monotone" dataKey="p05Speed" name="Best (p5)"
@@ -1967,13 +2008,25 @@ function DashboardInner() {
                       Weekly median and bad-day trips — lower is better
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
-                        <LineChart data={merged} margin={{top:4,right:8,left:-16,bottom:0}}>
+                        <LineChart data={merged} margin={chartMargin}>
                           <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
-                          <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
+                          <XAxis
+                            dataKey="weekKey"
+                            tickFormatter={fmtWeek}
+                            ticks={xAxisTicks}
+                            interval={0}
+                            tickMargin={8}
+                            tick={{ fontSize: 11, fill: thm.textMuted }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            width={yAxisWidth}
                             tick={{fontSize:11,fill:thm.textMuted}}
-                            tickLine={false} axisLine={false}/>
-                          <YAxis tick={{fontSize:11,fill:thm.textMuted}}
-                            tickLine={false} axisLine={false} unit=" min"/>
+                            tickLine={false}
+                            axisLine={false}
+                            unit=" min"
+                          />
                           <RCTooltip content={useChartTooltip(thm)}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
                           <Line type="monotone" dataKey="avgDuration" name="Avg Duration"

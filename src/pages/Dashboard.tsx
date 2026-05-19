@@ -23,10 +23,11 @@ const cfg = appConfig as AppConfig;
 
 /* ── Filter options ───────────────────────────────────────────── */
 const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
-  { value:"1m", label:"1 month" },
-  { value:"3m", label:"3 months" },
-  { value:"6m", label:"6 months" },
-  { value:"1y", label:"1 year" },
+  { value:"1m",   label:"1 month" },
+  { value:"1.5m", label:"1½ months" },
+  { value:"2m",   label:"2 months" },
+  { value:"3m",   label:"3 months" },
+  { value:"6m",   label:"6 months" },
 ];
 const TOD_LIST: { value: TimeOfDay; label: string }[] = [
   { value:"weekday_morning",   label:"weekday mornings (8–12)" },
@@ -491,7 +492,7 @@ function CalendarWidget({
   const [calYear,  setCalYear]  = useState(initYM.y);
   const [calMonth, setCalMonth] = useState(initYM.m);
   const [fadeKey,  setFadeKey]  = useState(0);
-  const [calOpen,  setCalOpen]  = useState(true);
+  const [calOpen,  setCalOpen]  = useState(false);
 
   useEffect(() => {
     if (!lastStr) return;
@@ -816,6 +817,7 @@ interface RouteCardData {
   destination: string;
   // Live current reading
   liveSpeed: number | null;
+  prevSpeed: number | null; // Second-most-recent reading, for trend animation
   liveTimestamp: Date | null;
   // Typical stats for this time-of-day (±90 min window over 90 days)
   typical: RouteTODStats | null;
@@ -913,12 +915,13 @@ function computeAllRouteCards(
     const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
     const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
     
-    // Get most recent reading (live speed)
+    // Get most recent reading (live speed) and the one before it (for trend)
     const recentRows = routeRows.filter(r => r.timestamp >= ninetyDaysAgo);
-    const mostRecent = recentRows.length > 0
-      ? recentRows.reduce((latest, r) => r.timestamp > latest.timestamp ? r : latest, recentRows[0])
-      : null;
+    const sorted = recentRows.slice().sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    const mostRecent = sorted[0] ?? null;
+    const prevReading = sorted[1] ?? null;
     const liveSpeed = mostRecent ? mostRecent.speed_kmh : null;
+    const prevSpeed = prevReading ? prevReading.speed_kmh : null;
     const liveTimestamp = mostRecent ? mostRecent.timestamp : null;
     
     // Compute typical stats for this TOD (±90 min over 90 days)
@@ -926,7 +929,7 @@ function computeAllRouteCards(
     
     return {
       label, origin, destination,
-      liveSpeed, liveTimestamp, typical,
+      liveSpeed, prevSpeed, liveTimestamp, typical,
       sortKey: label.toLowerCase(),
     };
   });
@@ -957,6 +960,7 @@ function computeAllRouteCards(
       origin: card.origin,
       destination: card.destination,
       liveSpeed: card.liveSpeed,
+      prevSpeed: card.prevSpeed,
       liveTimestamp: card.liveTimestamp,
       typical: card.typical,
       cityMin: effectiveMin,
@@ -1206,10 +1210,12 @@ function DashboardInner() {
   );
   const periodCutoffDate = useMemo(() => {
     const d = new Date(lastDataMs || Date.now());
-    if      (period === "1m") d.setMonth(d.getMonth() - 1);
-    else if (period === "3m") d.setMonth(d.getMonth() - 3);
-    else if (period === "6m") d.setMonth(d.getMonth() - 6);
-    else                       d.setFullYear(d.getFullYear() - 1);
+    if      (period === "1m")   d.setDate(d.getDate() - 30);
+    else if (period === "1.5m") d.setDate(d.getDate() - 45);
+    else if (period === "2m")   d.setDate(d.getDate() - 60);
+    else if (period === "3m")   d.setMonth(d.getMonth() - 3);
+    else if (period === "6m")   d.setMonth(d.getMonth() - 6);
+    else                         d.setFullYear(d.getFullYear() - 1);
     return d;
   }, [lastDataMs, period]);
 
@@ -1363,6 +1369,7 @@ function DashboardInner() {
 
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
+  const [tnOpen, setTnOpen] = useState(false);
 
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
@@ -1402,8 +1409,19 @@ function DashboardInner() {
   const v      = VERDICT[verdictKey];
   const colors = thm.chart;
 
-  const verdictSubtext = verdictKey !== "insufficient" && baselineStartDate
-    ? `Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${lastDataDate ? fmtShortDate(lastDataDate.toISOString()) : fmtShortDate(lastDate)}) · ${routeEndpoints} · ${todLabel}`
+  const routeMapLink = selectedRouteInfo?.map_link;
+  const verdictSubtext: React.ReactNode | undefined = verdictKey !== "insufficient" && baselineStartDate
+    ? <>
+        {`Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${lastDataDate ? fmtShortDate(lastDataDate.toISOString()) : fmtShortDate(lastDate)}) · `}
+        {routeMapLink
+          ? <a href={routeMapLink} target="_blank" rel="noopener noreferrer"
+              style={{ color: "inherit", textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: "2px" }}>
+              {routeEndpoints}
+            </a>
+          : routeEndpoints
+        }
+        {` · ${todLabel}`}
+      </>
     : undefined;
 
   /* ── Shared KPI card/label/value styles ─────────────────────── */
@@ -1877,48 +1895,6 @@ function DashboardInner() {
                 </div>
               )}
 
-              {/* ── TrafficNOW! uncertainty band chart ───────── */}
-              {trafficNowData.length > 0 && (
-                <div className="chart-card animate-fade-in"
-                  style={thm.key !== "colour"
-                    ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
-                    : { padding: "1.25rem 1.5rem" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-                    <div>
-                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 15, color: thm.textPrimary }}>
-                        📡 TrafficNOW! — Speed Forecast Bands
-                      </p>
-                      <p style={{ fontSize: 12, color: thm.textMuted, marginTop: 2 }}>
-                        Weekly speed distribution · {routeEndpoints}
-                        {trafficNowCompare.length > 0 ? ` — with baseline comparison` : ""}
-                      </p>
-                    </div>
-                    {trafficNowCompare.length > 0 && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 600, padding: "2px 8px",
-                        borderRadius: 999,
-                        background: thm.key === "gray" ? "rgba(0,0,0,0.06)" : "rgba(15,118,110,0.10)",
-                        color: thm.key === "gray" ? "#555" : "var(--tn-series,#0f766e)",
-                        border: `1px solid ${thm.key === "gray" ? "rgba(0,0,0,0.10)" : "rgba(15,118,110,0.20)"}`,
-                      }}>
-                        Compare mode
-                      </span>
-                    )}
-                  </div>
-                  <UncertaintyBandChart
-                    data={trafficNowData}
-                    compareData={trafficNowCompare.length > 0 ? trafficNowCompare : undefined}
-                    mode={trafficNowCompare.length > 0 ? "compare" : tnMode}
-                    title={`TrafficNOW! forecast bands for ${selectedRoute}`}
-                    routeName={selectedRoute}
-                    seriesLabel={`Recent: ${todLabel}`}
-                    compareLabel={`Baseline: ${fmtDate(baselineStartDate)}–${fmtDate(baselineEndDate)}`}
-                    height={280}
-                    themeKey={themeKey}
-                  />
-                </div>
-              )}
-
               {/* ── Charts ───────────────────────────────────── */}
               {merged.length > 0 && (
                 <>
@@ -1931,7 +1907,7 @@ function DashboardInner() {
                       <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                         color: thm.textPrimary }}>⚡ Speed Over Time</p>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
-                        Weekly avg km/h — higher is better
+                        Weekly avg km/h vs. best &amp; worst envelope — higher is faster
                       </p>
                       <ResponsiveContainer width="100%" height={220}>
                         <AreaChart data={merged} margin={{top:4,right:8,left:8,bottom:0}}>
@@ -1944,6 +1920,10 @@ function DashboardInner() {
                               <stop offset="5%"  stopColor={colors.line2} stopOpacity={0.15}/>
                               <stop offset="95%" stopColor={colors.line2} stopOpacity={0}/>
                             </linearGradient>
+                            <linearGradient id="envbg" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%"  stopColor={colors.line3} stopOpacity={0.12}/>
+                              <stop offset="100%" stopColor={colors.line3} stopOpacity={0.04}/>
+                            </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
                           <XAxis dataKey="weekKey" tickFormatter={fmtWeek}
@@ -1953,6 +1933,16 @@ function DashboardInner() {
                             tickLine={false} axisLine={false} unit=" km/h"/>
                           <RCTooltip content={useChartTooltip(thm)}/>
                           <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
+                          <Area type="monotone" dataKey="p05Speed" name="Best (p5)"
+                            stroke={colors.line3}
+                            strokeWidth={thm.key==="gray" ? 1 : 1}
+                            strokeDasharray="3 3"
+                            fill="url(#envbg)" dot={false} connectNulls/>
+                          <Area type="monotone" dataKey="p95Speed" name="Worst (p95)"
+                            stroke={colors.line4}
+                            strokeWidth={thm.key==="gray" ? 1 : 1}
+                            strokeDasharray="3 3"
+                            fill="none" dot={false} connectNulls/>
                           <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
                             stroke={colors.line1}
                             strokeWidth={thm.key==="gray" ? 2 : 2.5}
@@ -1999,6 +1989,59 @@ function DashboardInner() {
                       </ResponsiveContainer>
                     </div>
                   </div>
+
+                  {/* ── TrafficNOW! uncertainty band chart ───────── */}
+                  {trafficNowData.length > 0 && (
+                    <div className="chart-card animate-fade-in"
+                      style={thm.key !== "colour"
+                        ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
+                        : { padding: "1.25rem 1.5rem" }}>
+                      {/* Header row: toggle + optional compare badge */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: tnOpen ? 4 : 0 }}>
+                        <button onClick={() => setTnOpen(o => !o)} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          background: "none", border: "none", cursor: "pointer", padding: 0,
+                        }}>
+                          <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                            📡 TrafficNOW! — Speed Forecast Bands
+                          </p>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: tnOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
+                        </button>
+                        {trafficNowCompare.length > 0 && tnOpen && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, padding: "2px 8px",
+                            borderRadius: 999,
+                            background: thm.key === "gray" ? "rgba(0,0,0,0.06)" : "rgba(15,118,110,0.10)",
+                            color: thm.key === "gray" ? "#555" : "var(--tn-series,#0f766e)",
+                            border: `1px solid ${thm.key === "gray" ? "rgba(0,0,0,0.10)" : "rgba(15,118,110,0.20)"}`,
+                          }}>
+                            Compare mode
+                          </span>
+                        )}
+                      </div>
+                      {tnOpen && (
+                        <>
+                          <p style={{ fontSize: 12, color: thm.textMuted, marginTop: 2, marginBottom: 4 }}>
+                            Weekly speed distribution · {routeEndpoints}
+                            {trafficNowCompare.length > 0 ? ` — with baseline comparison` : ""}
+                          </p>
+                          <UncertaintyBandChart
+                            data={trafficNowData}
+                            compareData={trafficNowCompare.length > 0 ? trafficNowCompare : undefined}
+                            mode={trafficNowCompare.length > 0 ? "compare" : tnMode}
+                            title={`TrafficNOW! forecast bands for ${selectedRoute}`}
+                            routeName={selectedRoute}
+                            seriesLabel={`Recent: ${todLabel}`}
+                            compareLabel={`Baseline: ${fmtDate(baselineStartDate)}–${fmtDate(baselineEndDate)}`}
+                            height={280}
+                            themeKey={themeKey}
+                          />
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── Daily calendar ────────────────────────── */}
                   <div className="chart-card animate-fade-in"

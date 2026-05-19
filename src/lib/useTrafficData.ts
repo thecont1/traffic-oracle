@@ -7,14 +7,19 @@ import type { AppConfig } from "./config";
 const cfg = appConfig as AppConfig;
 const WORST_CASE_PCT: number = cfg.percentile.worst_case;
 const defaultCity = cfg.cities.find(c => c.ready && c.data_source) ?? cfg.cities[0];
-const ROUTES_URL =
-  import.meta.env.DEV
-    ? "/api/traffic-csv/csv-routes.csv"
-    : defaultCity.data_source!.routes_csv;
-const TRAFFIC_URL =
-  import.meta.env.DEV
-    ? "/api/traffic-csv/csv-bangalore_traffic.csv"
-    : defaultCity.data_source!.traffic_csv;
+/** Extract the bare filename from a GitHub raw URL and return a same-origin
+ *  proxy path.  Works in both dev (Vite proxy) and prod (Worker). */
+function toProxyPath(url: string): string {
+  try {
+    const file = new URL(url).pathname.split('/').pop();
+    return file ? `/api/traffic-csv/${file}` : url;
+  } catch { return url; }
+}
+
+const defaultRoutes  = defaultCity.data_source?.routes_csv  ?? "";
+const defaultTraffic = defaultCity.data_source?.traffic_csv ?? "";
+const ROUTES_URL  = toProxyPath(defaultRoutes);
+const TRAFFIC_URL = toProxyPath(defaultTraffic);
 
 /** Append a cache-busting query param so CDNs never serve a stale copy. */
 export function bust(url: string): string {
@@ -169,17 +174,8 @@ export function fetchTrafficData(
   signal: AbortSignal | undefined,
   source?: CitySource,
 ): Promise<{ routes: Route[]; allRows: TrafficRow[]; rowCount: number }> {
-  // In dev mode, route GitHub URLs through the Vite proxy to avoid CORS issues
-  const toProxy = (url: string) => {
-    if (!import.meta.env.DEV) return url;
-    try {
-      const u = new URL(url);
-      const file = u.pathname.split('/').pop();
-      return file ? `/api/traffic-csv/${file}` : url;
-    } catch { return url; }
-  };
-  const routesUrl = source?.routes_csv ? toProxy(source.routes_csv) : ROUTES_URL;
-  const trafficUrl = source?.traffic_csv ? toProxy(source.traffic_csv) : TRAFFIC_URL;
+  const routesUrl  = source?.routes_csv  ? toProxyPath(source.routes_csv)  : ROUTES_URL;
+  const trafficUrl = source?.traffic_csv ? toProxyPath(source.traffic_csv) : TRAFFIC_URL;
   const fetchCsv = async (url: string): Promise<Record<string, string>[]> => {
     const resp = await fetch(bust(url), {
       cache: "no-store",
@@ -260,15 +256,8 @@ export function fetchTrafficData(
   );
 }
 
-/* ── Conditional refresh — polls traffic CSV only, with ETag ────── */
-export function toProxy(url: string): string {
-  if (!import.meta.env.DEV) return url;
-  try {
-    const u = new URL(url);
-    const file = u.pathname.split('/').pop();
-    return file ? `/api/traffic-csv/${file}` : url;
-  } catch { return url; }
-}
+/* ── Conditional refresh — polls traffic CSV only ───────────────── */
+export { toProxyPath as toProxy };
 
 export interface RefreshResult {
   allRows: TrafficRow[];
@@ -284,7 +273,7 @@ export async function refreshTrafficData(
   source?: CitySource,
 ): Promise<RefreshResult> {
   const trafficUrl = source?.traffic_csv
-    ? toProxy(source.traffic_csv)
+    ? toProxyPath(source.traffic_csv)
     : TRAFFIC_URL;
   const resp = await fetch(bust(trafficUrl), {
     cache: "no-store",

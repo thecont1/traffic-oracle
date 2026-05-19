@@ -50,7 +50,7 @@
     "period": "1m"
   },
   "route_pane": {
-    "open": false,
+    "open": true,
     "min_width": 200,
     "width": 430,
     "max_width": 600,

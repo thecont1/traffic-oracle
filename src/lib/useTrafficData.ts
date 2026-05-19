@@ -30,6 +30,7 @@ export interface Route {
   route_code: string;
   label_full: string;
   label_short: string;
+  map_link?: string;
 }
 
 export interface TrafficRow {
@@ -52,6 +53,8 @@ export interface WeeklyAggregate {
    *  Used for display so the slider shows the real data boundary, not the ISO week start. */
   lastDate: Date;
   avgSpeed: number;
+  p05Speed: number; // best typical speed (p05 of weekly speeds — fast end of envelope)
+  p95Speed: number; // worst typical speed (p95 of weekly speeds — slow end of envelope)
   avgDuration: number;
   medianDuration: number;
   p95Duration: number;
@@ -68,7 +71,7 @@ export interface StatsResult {
   count: number;
 }
 
-export type TimePeriod = "1m" | "3m" | "6m" | "1y";
+export type TimePeriod = "1m" | "1.5m" | "2m" | "3m" | "6m" | "1y";
 export type TimeOfDay =
   | "weekday_morning"
   | "weekday_afternoon"
@@ -133,7 +136,7 @@ export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekKey, wrows]) => {
       const durations = wrows.map((r) => r.duration_min).sort((a, b) => a - b);
-      const speeds = wrows.map((r) => r.speed_kmh);
+      const speeds = wrows.map((r) => r.speed_kmh).sort((a, b) => a - b);
       const avgSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
       const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
       return {
@@ -141,6 +144,8 @@ export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
         weekStart: new Date(weekKey),
         lastDate: new Date(wrows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0)),
         avgSpeed: Math.round(avgSpeed * 10) / 10,
+        p05Speed: Math.round(percentile(speeds, 5) * 10) / 10,
+        p95Speed: Math.round(percentile(speeds, 95) * 10) / 10,
         avgDuration: Math.round(avgDuration * 10) / 10,
         medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
         p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
@@ -206,6 +211,7 @@ export function fetchTrafficData(
         route_code: getCol(r, "route_code").trim(),
         label_full: getCol(r, "label_full").trim(),
         label_short: getCol(r, "label_short").trim(),
+        map_link: getCol(r, "map_link").trim() || undefined,
       }));
 
       const routeByCode = new Map<string, Route>();

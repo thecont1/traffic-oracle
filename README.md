@@ -109,7 +109,7 @@ The dashboard uses a **two-pane layout** with fully independent scrolling:
 - **Interactive question** with tappable pills for route, time-of-day, period, and mode
 - **Baseline comparison slider** with striped/solid track
 - **Verdict card** with emoji, chart, and statistical summary
-- **KPI cards** — Avg Speed, Median Trip, Bad Day Trip, Readings
+- **KPI cards** — Avg Speed, Median Trip, Bad Day Trip, No. of Trips
 - **Speed Over Time** chart with baseline/recent bands
 - **Trip Duration Over Time** chart with p95 overlay
 - **Calendar heatmap** — GitHub-style daily speed visualization

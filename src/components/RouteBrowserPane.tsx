@@ -524,9 +524,12 @@ function RouteCard({
           fontStyle: 'italic',
         }}>
           {card.statusText}
-          {card.liveSpeed !== null && card.prevSpeed !== null && card.liveSpeed !== card.prevSpeed && (
+          {card.liveSpeed !== null && card.prevSpeed !== null && (
             <span style={{ opacity: 0.75 }}>
-              {card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse'}
+              {card.liveSpeed === card.prevSpeed 
+                ? ', no change' 
+                : card.liveSpeed !== card.prevSpeed && (card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse')
+              }
             </span>
           )}
         </span>

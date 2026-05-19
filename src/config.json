@@ -38,16 +38,16 @@
     }
   ],
   "percentile": {
-    "worst_case": 97.5,
+    "worst_case": 96,
     "verdict_threshold_kmh": 0.99
   },
   "defaults": {
     "baseline_start": "2025-10-20",
     "baseline_end": "2026-03-23",
-    "question_mode": "worsened",
-    "route": "Hosur Road",
+    "question_mode": "improved",
+    "route": "Double Decker Flyover",
     "time_of_day": "weekday_evening",
-    "period": "1m"
+    "period": "1.5m"
   },
   "route_pane": {
     "open": true,

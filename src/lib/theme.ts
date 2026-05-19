@@ -201,7 +201,7 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     cardBg:    "#ffffff",
     cardBorder: "1px solid #e0e0e0",
     cardShadow: "none",
-    paneBg: "#F0F0F0",
+    paneBg: "#ffffff",
     paneBorder: "#888888",
     titleStyle: { display:"inline-block", color:"#111111", WebkitTextFillColor:"#111111", background:"none" },
     chips: GRAY_CHIPS,

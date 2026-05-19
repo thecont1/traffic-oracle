@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 import appConfig from "../config.json";
@@ -81,6 +81,7 @@ interface RouteCardData {
   origin: string;
   destination: string;
   liveSpeed: number | null;
+  prevSpeed: number | null;
   liveTimestamp: Date | null;
   typical: RouteTODStats | null;
   cityMin: number;
@@ -132,6 +133,7 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 /* ── Nested-scale bullet chart ──────────────────────────────────── */
 function NestedScaleChart({
   liveSpeed,
+  prevSpeed,
   typical,
   cityMin,
   cityMax,
@@ -140,6 +142,7 @@ function NestedScaleChart({
   expanded,
 }: {
   liveSpeed: number | null;
+  prevSpeed: number | null;
   typical: RouteTODStats | null;
   cityMin: number;
   cityMax: number;
@@ -167,11 +170,6 @@ function NestedScaleChart({
     ? 'rgba(255,255,255,0.20)'
     : 'rgba(0,0,0,0.18)';
 
-  // Outer band (p05–p95 tails: p05–p15 and p85–p95) — lighter grey, visibly thinner feel
-  const outerBandColor = thm.key === 'colour'
-    ? 'rgba(255,255,255,0.09)'
-    : 'rgba(0,0,0,0.09)';
-
   // Midpoint tick (p50) — neutral grey tick, clearly distinct
   const tickColor = thm.key === 'colour'
     ? 'rgba(255,255,255,0.45)'
@@ -193,10 +191,15 @@ function NestedScaleChart({
       ? '#6E675B'
       : '#64748B';
 
+  // Track animation key: increments whenever liveSpeed changes so CSS
+  // animations retrigger on each new data batch.
+  const animKey = useMemo(() => Math.random(), [liveSpeed]);
+
   const cityRange = cityMax - cityMin || 1;
   const pct = (v: number) => ((v - cityMin) / cityRange) * 100;
 
   const livePos   = hasData ? pct(liveSpeed!) : null;
+  const prevPos   = hasData && prevSpeed !== null ? pct(prevSpeed) : null;
   const p05Pos    = hasData ? pct(typical!.p05) : null;
   const p15Pos    = hasData ? pct(typical!.p15) : null;
   const p50Pos    = hasData ? pct(typical!.p50) : null;
@@ -293,37 +296,22 @@ function NestedScaleChart({
 
         {hasData && (
           <>
-            {/* Outer band: p05–p15 (lighter) */}
+            {/* Single p05–p95 band: gradient darkest at p50, fading to transparent at both ends */}
             <div style={{
               position: 'absolute',
               left: `${p05Pos}%`,
-              width: `${p15Pos! - p05Pos!}%`,
+              width: `${p95Pos! - p05Pos!}%`,
               top: (BAR_ROW_H - BAND_H) / 2,
               height: BAND_H,
-              background: outerBandColor,
-              borderRadius: 2,
-            }} />
-
-            {/* Outer band: p85–p95 (lighter) */}
-            <div style={{
-              position: 'absolute',
-              left: `${p85Pos}%`,
-              width: `${p95Pos! - p85Pos!}%`,
-              top: (BAR_ROW_H - BAND_H) / 2,
-              height: BAND_H,
-              background: outerBandColor,
-              borderRadius: 2,
-            }} />
-
-            {/* Inner band: p15–p85 (main confidence band) */}
-            <div style={{
-              position: 'absolute',
-              left: `${p15Pos}%`,
-              width: `${p85Pos! - p15Pos!}%`,
-              top: (BAR_ROW_H - BAND_H) / 2,
-              height: BAND_H,
-              background: bandColor,
-              borderRadius: 2,
+              borderRadius: BAND_H / 2,
+              background: (() => {
+                // Map p50 to a percentage within the p05–p95 span so the peak
+                // of the gradient tracks the actual median, not the midpoint.
+                const span = p95Pos! - p05Pos! || 1;
+                const medPct = Math.round(((p50Pos! - p05Pos!) / span) * 100);
+                const c = bandColor;
+                return `linear-gradient(to right, transparent 0%, ${c} ${medPct}%, transparent 100%)`;
+              })(),
             }} />
 
             {/* Midpoint tick: p50 */}
@@ -338,7 +326,25 @@ function NestedScaleChart({
               transform: 'translateX(-0.5px)',
             }} />
 
-            {/* Diamond: currentSpeed */}
+            {/* Trail diamond: travels from prevPos → livePos, fading 0→1, loops */}
+            {prevPos !== null && prevPos !== livePos && (
+              <div key={`trail-${animKey}`} style={{
+                position: 'absolute',
+                top: BAR_ROW_H / 2,
+                width: DIAMOND,
+                height: DIAMOND,
+                background: statusColor,
+                borderRadius: 2,
+                transform: 'translate(-50%, -50%) rotate(45deg)',
+                opacity: 0,
+                ['--diamond-from' as string]: `${prevPos}%`,
+                ['--diamond-to' as string]: `${livePos}%`,
+                animation: 'diamond-trail 2.2s ease-in-out infinite',
+                zIndex: 1,
+              }} />
+            )}
+
+            {/* Live diamond: fixed at current speed, no animation */}
             <div style={{
               position: 'absolute',
               left: `${livePos}%`,
@@ -441,14 +447,16 @@ function RouteCard({
   }, []);
   
   // Full-width background: selected gets strong tint, hover gets subtle tint
-  let cardBg = "transparent";
+  // Gray mode: base is white so cards are visible against the #F0F0F0 pane
+  let cardBg = thm.key === "gray" ? "#ffffff" : "transparent";
   if (isSelected) {
     cardBg = thm.key === "colour" ? "rgba(34,211,238,0.15)"
              : thm.key === "pastel" ? "rgba(58,134,200,0.15)"
              : "rgba(0,0,0,0.08)";
- } else if (hovered) {
+  } else if (hovered) {
     cardBg = thm.key === "colour" ? "rgba(34,211,238,0.08)"
              : thm.key === "pastel" ? "rgba(58,134,200,0.07)"
+             : thm.key === "gray" ? "#f5f5f5"
              : "rgba(0,0,0,0.04)";
   }
 
@@ -516,6 +524,11 @@ function RouteCard({
           fontStyle: 'italic',
         }}>
           {card.statusText}
+          {card.liveSpeed !== null && card.prevSpeed !== null && card.liveSpeed !== card.prevSpeed && (
+            <span style={{ opacity: 0.75 }}>
+              {card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse'}
+            </span>
+          )}
         </span>
       </div>
       
@@ -532,6 +545,7 @@ function RouteCard({
       <div style={{ marginTop: 4 }} />
       <NestedScaleChart
         liveSpeed={card.liveSpeed}
+        prevSpeed={card.prevSpeed}
         typical={card.typical}
         cityMin={card.cityMin}
         cityMax={card.cityMax}
@@ -704,17 +718,17 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           width: RAIL_WIDTH,
           display: "flex", flexDirection: "column", alignItems: "center",
           paddingTop: 14, cursor: "pointer",
-          background: thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5",
-          borderLeft: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
+          background: thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f0f0f0",
+          borderLeft: `1px solid ${thm.key === "colour" ? "#2A3545" : thm.key === "pastel" ? "#DCCFB8" : "#e0e0e0"}`,
           transition: "background 0.2s", zIndex: 2,
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#1A2030" : thm.key === "pastel" ? "#EDE5D5" : "#eeeeee";
+            thm.key === "colour" ? "#1A2030" : thm.key === "pastel" ? "#EDE5D5" : "#e8e8e8";
         }}
         onMouseLeave={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f5f5f5";
+            thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f0f0f0";
         }}
       >
         <span className="live-dot" aria-hidden="true" style={{

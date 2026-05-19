@@ -206,7 +206,7 @@ All defaults live in `src/config.json` — no hardcoded values in components:
       "name": "Bangalore",
       "ready": true,
       "data_source": {
-        "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes.csv",
+        "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-routes-bangalore.csv",
         "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/csv-bangalore_traffic.csv"
       }
     }
@@ -258,7 +258,7 @@ All defaults live in `src/config.json` — no hardcoded values in components:
 ### Step 1: Fetch
 
 `fetchTrafficData()` in `useTrafficData.ts` makes two HTTP requests:
-- `csv-routes.csv` — route metadata (code, full name, short name)
+- `csv-routes-bangalore.csv` — route metadata (code, full name, short name)
 - `csv-bangalore_traffic.csv` — timestamped speed/duration readings
 
 Both URLs are fetched with `cache: 'no-store'` and cache-busting (`?t=<timestamp>`) on initial load.

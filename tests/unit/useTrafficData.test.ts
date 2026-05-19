@@ -244,7 +244,7 @@ describe("Phase 1 — Data Integrity", () => {
     beforeAll(() => {
       originalFetch = globalThis.fetch;
       globalThis.fetch = ((url: string) => {
-        if (url.includes("csv-routes.csv")) {
+        if (url.includes("csv-routes-bangalore.csv")) {
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(routesCsv),
@@ -287,7 +287,7 @@ describe("Phase 1 — Data Integrity", () => {
       ].join("\n");
 
       globalThis.fetch = ((url: string) => {
-        if (url.includes("csv-routes.csv")) {
+        if (url.includes("csv-routes-bangalore.csv")) {
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(routesCsv),
@@ -325,7 +325,7 @@ describe("Phase 1 — Data Integrity", () => {
       const urlsSeen: string[] = [];
       globalThis.fetch = ((url: string) => {
         urlsSeen.push(url);
-        if (url.includes("csv-routes.csv")) {
+        if (url.includes("csv-routes-bangalore.csv")) {
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(routesCsv),

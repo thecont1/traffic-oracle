@@ -1,5 +1,5 @@
 /* Hardcoded start/end lat-lng pairs for each Bangalore route.
-   Derived from label_full place names in csv-routes.csv. */
+   Derived from label_full place names in csv-routes-bangalore.csv. */
 export type LatLng = [number, number];
 
 export const ROUTE_COORDS: Record<string, [LatLng, LatLng]> = {

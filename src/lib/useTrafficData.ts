@@ -554,23 +554,55 @@ async function fetchWeatherData(signal?: AbortSignal): Promise<Map<string, Weath
 export function useWeatherData(): Map<string, WeatherRow> {
   const [weatherMap, setWeatherMap] = useState<Map<string, WeatherRow>>(new Map());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inflightRef = useRef<AbortController | null>(null);
 
   const load = useCallback((signal?: AbortSignal) => {
     fetchWeatherData(signal)
       .then(setWeatherMap)
-      .catch(() => {/* silently keep last known data */});
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        console.warn("[useWeatherData] fetch failed:", e?.message ?? e);
+      });
   }, []);
 
-  useEffect(() => {
+  const doPoll = useCallback(() => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    // Abort any in-flight request before starting a new one
+    if (inflightRef.current) inflightRef.current.abort();
     const ctrl = new AbortController();
+    inflightRef.current = ctrl;
     load(ctrl.signal);
-    const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
-    intervalRef.current = setInterval(() => load(), intervalMs);
-    return () => {
-      ctrl.abort();
-      if (intervalRef.current !== null) clearInterval(intervalRef.current);
-    };
   }, [load]);
+
+  useEffect(() => {
+    // Initial load
+    const ctrl = new AbortController();
+    inflightRef.current = ctrl;
+    load(ctrl.signal);
+
+    const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
+    intervalRef.current = setInterval(doPoll, intervalMs);
+
+    // Page Visibility: pause when hidden, immediately poll when visible again
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (intervalRef.current !== null) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } else {
+        doPoll();
+        intervalRef.current = setInterval(doPoll, intervalMs);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      if (inflightRef.current) inflightRef.current.abort();
+      if (intervalRef.current !== null) clearInterval(intervalRef.current);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [load, doPoll]);
 
   return weatherMap;
 }

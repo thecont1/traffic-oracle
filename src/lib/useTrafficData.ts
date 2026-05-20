@@ -502,6 +502,79 @@ export function useTrafficData(citySource?: CitySource) {
   return { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh };
 }
 
+/* ── Weather snapshot ──────────────────────────────────────────── */
+export interface WeatherRow {
+  route_code: string;
+  aqi: number | null;
+  aqi_category: string;
+  condition: string;
+  temp_c: number | null;
+  realfeel_c: number | null;
+  realfeel_word: string;
+  humidity_pct: number | null;
+  wind_gust_kmh: number | null;
+  uv_index: number | null;
+}
+
+const WEATHER_URL = "/api/traffic-csv/csv-weather-snapshot.csv";
+
+async function fetchWeatherData(signal?: AbortSignal): Promise<Map<string, WeatherRow>> {
+  const resp = await fetch(bust(WEATHER_URL), { cache: "no-store", signal });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching weather CSV`);
+  const text = await resp.text();
+  const raw: Record<string, string>[] = await new Promise((resolve, reject) => {
+    Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (r) => resolve(r.data as Record<string, string>[]),
+      error: (e: Error) => reject(e),
+    });
+  });
+  const map = new Map<string, WeatherRow>();
+  for (const r of raw) {
+    const rc = (r["route_code"] ?? "").trim();
+    if (!rc) continue;
+    const num = (k: string) => { const v = parseFloat(r[k]); return isNaN(v) ? null : v; };
+    map.set(rc, {
+      route_code: rc,
+      aqi: num("aqi"),
+      aqi_category: (r["aqi_category"] ?? "").trim(),
+      condition: (r["condition"] ?? "").trim(),
+      temp_c: num("temp_c"),
+      realfeel_c: num("realfeel_c"),
+      realfeel_word: (r["realfeel_word"] ?? "").trim(),
+      humidity_pct: num("humidity_pct"),
+      wind_gust_kmh: num("wind_gust_kmh"),
+      uv_index: num("uv_index"),
+    });
+  }
+  return map;
+}
+
+export function useWeatherData(): Map<string, WeatherRow> {
+  const [weatherMap, setWeatherMap] = useState<Map<string, WeatherRow>>(new Map());
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback((signal?: AbortSignal) => {
+    fetchWeatherData(signal)
+      .then(setWeatherMap)
+      .catch(() => {/* silently keep last known data */});
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    load(ctrl.signal);
+    const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
+    intervalRef.current = setInterval(() => load(), intervalMs);
+    return () => {
+      ctrl.abort();
+      if (intervalRef.current !== null) clearInterval(intervalRef.current);
+    };
+  }, [load]);
+
+  return weatherMap;
+}
+
 export interface DayStats {
   dateKey: string;
   avgSpeed: number;

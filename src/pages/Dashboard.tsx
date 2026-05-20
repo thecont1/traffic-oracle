@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
   AreaChart, Area, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer, ReferenceArea,
 } from "recharts";
+import { computeBaselineStats, computeChartDomain } from "@/lib/chartHelpers";
+import type { BaselineChartStats, ChartDomain } from "@/lib/chartHelpers";
 import { Share2, RefreshCw, Plus, Minus } from "lucide-react";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
@@ -347,6 +349,14 @@ function NapkinChart({
 
   const toY = (s: number) => PY + chartH - ((s - minS) / range) * chartH;
 
+  // Calculate averages for horizontal reference lines
+  const baselineAvg = bLen > 0
+    ? baselineWeeks.reduce((sum, w) => sum + w.avgSpeed, 0) / bLen
+    : 0;
+  const recentAvg = rLen > 0
+    ? recentWeeks.reduce((sum, w) => sum + w.avgSpeed, 0) / rLen
+    : 0;
+
   const pts = (weeks: WeeklyAggregate[]) =>
     weeks.length === 1
       ? `${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)} ${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)}`
@@ -368,11 +378,6 @@ function NapkinChart({
       preserveAspectRatio="xMidYMid meet">
       <title>Traffic speed trend chart</title>
       <desc>Line chart comparing baseline period speeds with recent speeds for the selected route.</desc>
-      {hasGap && (
-        <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)}
-          x2={rXS} y2={toY(recentWeeks[0].avgSpeed)}
-          stroke={GAP} strokeWidth={1.5} strokeDasharray="4 3" />
-      )}
       {bLen > 0 && (
         <polyline points={pts(baselineWeeks)}
           fill="none" stroke={BL} strokeWidth={baselineW}
@@ -409,6 +414,21 @@ function NapkinChart({
         <text x={rXE} y={labelY} fontSize={9} fill={RC} opacity={0.8}
           textAnchor="end">{dateLabels.rEnd}</text>
       </>)}
+
+      {/* Horizontal average reference lines */}
+      {bLen > 0 && baselineAvg > 0 && (
+        <line x1={bXS} y1={toY(baselineAvg)} x2={bXE} y2={toY(baselineAvg)}
+          stroke={BL} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.7} />
+      )}
+      {rLen > 0 && recentAvg > 0 && (
+        <line x1={rXS} y1={toY(recentAvg)} x2={rXE} y2={toY(recentAvg)}
+          stroke={RC} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.7} />
+      )}
+      {/* Connector between average lines */}
+      {hasGap && bLen > 0 && rLen > 0 && baselineAvg > 0 && recentAvg > 0 && (
+        <line x1={bXE} y1={toY(baselineAvg)} x2={rXS} y2={toY(recentAvg)}
+          stroke={GAP} strokeWidth={2} strokeDasharray="6 4" />
+      )}
     </svg>
   );
 }
@@ -1399,6 +1419,23 @@ function DashboardInner() {
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
   const [tnOpen, setTnOpen] = useState(false);
+  const [chartView, setChartView] = useState<'speed' | 'duration'>('speed');
+
+  /* ── Baseline reference stats for chart ─────────────────────── */
+  const baselineChartStats = useMemo(
+    () => computeBaselineStats(baselineWeeks),
+    [baselineWeeks],
+  );
+
+  const speedDomain: ChartDomain = useMemo(
+    () => computeChartDomain(merged, "speed", baselineChartStats),
+    [merged, baselineChartStats],
+  );
+
+  const durationDomain: ChartDomain = useMemo(
+    () => computeChartDomain(merged, "duration", baselineChartStats),
+    [merged, baselineChartStats],
+  );
 
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
@@ -1853,7 +1890,7 @@ function DashboardInner() {
                       <NapkinChart
                         baselineWeeks={baselineWeeks}
                         recentWeeks={recentWeeks}
-                        height={120}
+                        height={132}
                         dateLabels={{
                           bStart: fmtDate(baselineStartDate),
                           bEnd:   fmtDate(baselineEndDate),
@@ -1927,119 +1964,190 @@ function DashboardInner() {
               {/* ── Charts ───────────────────────────────────── */}
               {merged.length > 0 && (
                 <>
-                  <div style={{ display:"grid",
-                    gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))", gap:16 }}>
-
-                    {/* Speed over time */}
+                  <div style={{ display:"grid", gap:16 }}>
+                    {/* Merged Speed / Duration chart with toggle */}
                     <div className="chart-card animate-fade-in"
                       style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: thm.textPrimary }}>⚡ Speed Over Time</p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                          color: thm.textPrimary, margin: 0 }}>
+                          {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
+                          <button
+                            onClick={() => setChartView('speed')}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: chartView === 'speed' ? thm.cardBg : "transparent",
+                              color: chartView === 'speed' ? thm.textPrimary : thm.textMuted,
+                              fontSize: 12,
+                              fontWeight: chartView === 'speed' ? 600 : 400,
+                              cursor: "pointer",
+                              boxShadow: chartView === 'speed' ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                            }}
+                          >
+                            Speed
+                          </button>
+                          <button
+                            onClick={() => setChartView('duration')}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: chartView === 'duration' ? thm.cardBg : "transparent",
+                              color: chartView === 'duration' ? thm.textPrimary : thm.textMuted,
+                              fontSize: 12,
+                              fontWeight: chartView === 'duration' ? 600 : 400,
+                              cursor: "pointer",
+                              boxShadow: chartView === 'duration' ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                            }}
+                          >
+                            Duration
+                          </button>
+                        </div>
+                      </div>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
-                        Weekly avg km/h vs. best &amp; worst envelope — higher is faster
+                        Solid: actual average trend · Shaded band: baseline normal range · Dashed: baseline average
                       </p>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <AreaChart data={merged} margin={chartMargin}>
-                          <defs>
-                            <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
-                              <stop offset="95%" stopColor={colors.line1} stopOpacity={0}/>
-                            </linearGradient>
-                            <linearGradient id="pbg" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor={colors.line2} stopOpacity={0.15}/>
-                              <stop offset="95%" stopColor={colors.line2} stopOpacity={0}/>
-                            </linearGradient>
-                            <linearGradient id="envbg" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%"  stopColor={colors.line3} stopOpacity={0.12}/>
-                              <stop offset="100%" stopColor={colors.line3} stopOpacity={0.04}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
-                          <XAxis
-                            dataKey="weekKey"
-                            tickFormatter={fmtWeek}
-                            ticks={xAxisTicks}
-                            interval={0}
-                            tickMargin={8}
-                            tick={{ fontSize: 11, fill: thm.textMuted }}
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <YAxis
-                            width={yAxisWidth}
-                            tick={{fontSize:11,fill:thm.textMuted}}
-                            tickLine={false}
-                            axisLine={false}
-                            unit=" km/h"
-                          />
-                          <RCTooltip content={useChartTooltip(thm)}/>
-                          <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
-                          <Area type="monotone" dataKey="p05Speed" name="Best (p5)"
-                            stroke={colors.line3}
-                            strokeWidth={thm.key==="gray" ? 1 : 1}
-                            strokeDasharray="3 3"
-                            fill="url(#envbg)" dot={false} connectNulls/>
-                          <Area type="monotone" dataKey="p95Speed" name="Worst (p95)"
-                            stroke={colors.line4}
-                            strokeWidth={thm.key==="gray" ? 1 : 1}
-                            strokeDasharray="3 3"
-                            fill="none" dot={false} connectNulls/>
-                          <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
-                            stroke={colors.line1}
-                            strokeWidth={thm.key==="gray" ? 2 : 2.5}
-                            fill="url(#sg)" dot={false} connectNulls/>
-                          {merged.some(m => m.baselineSpeed != null) && (
-                            <Area type="monotone" dataKey="baselineSpeed" name="Route Baseline"
-                              stroke={colors.line2}
-                              strokeWidth={thm.key==="gray" ? 1 : 1.5}
-                              strokeDasharray="5 3"
-                              fill="url(#pbg)" dot={false} connectNulls/>
-                          )}
-                        </AreaChart>
+                      <ResponsiveContainer width="100%" height={isMobile ? 240 : 280}>
+                        {chartView === 'speed' ? (
+                          <AreaChart
+                            key={`speed-${baselineChartStats?.speedAvg || 'no-baseline'}`}
+                            data={merged} margin={chartMargin}>
+                            <defs>
+                              <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor={colors.line1} stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
+                            <XAxis
+                              dataKey="weekKey"
+                              tickFormatter={fmtWeek}
+                              ticks={xAxisTicks}
+                              interval={0}
+                              tickMargin={8}
+                              tick={{ fontSize: 11, fill: thm.textMuted }}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <YAxis
+                              width={yAxisWidth}
+                              tick={{fontSize:11,fill:thm.textMuted}}
+                              tickLine={false}
+                              axisLine={false}
+                              unit=" km/h"
+                              domain={[speedDomain.min, speedDomain.max]}
+                              allowDecimals={true}
+                            />
+                            <RCTooltip content={useChartTooltip(thm)}/>
+                            <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
+                            {/* Baseline normal range band */}
+                            {baselineChartStats && (
+                              <ReferenceArea
+                                y1={baselineChartStats.speedP05}
+                                y2={baselineChartStats.speedP95}
+                                fill={thm.key === "gray" ? "rgba(0,0,0,0.04)" : thm.key === "pastel" ? "rgba(58,134,200,0.06)" : "rgba(34,211,238,0.06)"}
+                                stroke="none"
+                              />
+                            )}
+                            {/* Actual data trend */}
+                            <Area type="monotone" dataKey="avgSpeed" name="Average"
+                              stroke={colors.line1}
+                              strokeWidth={thm.key==="gray" ? 2 : 2.5}
+                              fill="url(#sg)" dot={false} connectNulls/>
+                            {baselineChartStats && (()=>{const h=(isMobile?240:280)-4,d=speedDomain,g=12,e=d.min-(d.max-d.min)*g/h,y=(v:number)=>4+(1-(v-e)/(d.max-e))*h,x=8+yAxisWidth,c=thm.key==="gray"?"#444":"#22c55e",a=thm.key==="gray"?"#222":"#3b82f6",w=thm.key==="gray"?"#444":"#ef4444";return<g><line x1={x}x2={9999}y1={y(baselineChartStats.speedP95)}y2={y(baselineChartStats.speedP95)}stroke={c}strokeDasharray="6 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.speedAvg)}y2={y(baselineChartStats.speedAvg)}stroke={a}strokeDasharray="8 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.speedP05)}y2={y(baselineChartStats.speedP05)}stroke={w}strokeDasharray="6 3"strokeWidth={1}/></g>})()}
+                          </AreaChart>
+                        ) : (
+                          <AreaChart
+                            key={`duration-${baselineChartStats?.durationAvg || 'no-baseline'}`}
+                            data={merged} margin={chartMargin}>
+                            <defs>
+                              <linearGradient id="durAvg" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor={colors.line1} stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
+                            <XAxis
+                              dataKey="weekKey"
+                              tickFormatter={fmtWeek}
+                              ticks={xAxisTicks}
+                              interval={0}
+                              tickMargin={8}
+                              tick={{ fontSize: 11, fill: thm.textMuted }}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <YAxis
+                              width={yAxisWidth}
+                              tick={{fontSize:11,fill:thm.textMuted}}
+                              tickLine={false}
+                              axisLine={false}
+                              unit=" min"
+                              domain={[durationDomain.min, durationDomain.max]}
+                              allowDecimals={true}
+                            />
+                            <RCTooltip content={useChartTooltip(thm)}/>
+                            <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
+                            {/* Baseline normal range band */}
+                            {baselineChartStats && (
+                              <ReferenceArea
+                                y1={baselineChartStats.durationP05}
+                                y2={baselineChartStats.durationP95}
+                                fill={thm.key === "gray" ? "rgba(0,0,0,0.04)" : thm.key === "pastel" ? "rgba(58,134,200,0.06)" : "rgba(34,211,238,0.06)"}
+                                stroke="none"
+                              />
+                            )}
+                            {/* Actual data trend */}
+                            <Area type="monotone" dataKey="avgDuration" name="Average"
+                              stroke={colors.line1}
+                              strokeWidth={thm.key==="gray" ? 2 : 2.5}
+                              fill="url(#durAvg)" dot={false} connectNulls/>
+                            {baselineChartStats && (()=>{const h=(isMobile?240:280)-4,d=durationDomain,g=12,e=d.min-(d.max-d.min)*g/h,y=(v:number)=>4+(1-(v-e)/(d.max-e))*h,x=8+yAxisWidth,c=thm.key==="gray"?"#444":"#22c55e",a=thm.key==="gray"?"#222":"#3b82f6",w=thm.key==="gray"?"#444":"#ef4444";return<g><line x1={x}x2={9999}y1={y(baselineChartStats.durationP05)}y2={y(baselineChartStats.durationP05)}stroke={c}strokeDasharray="6 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.durationAvg)}y2={y(baselineChartStats.durationAvg)}stroke={a}strokeDasharray="8 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.durationP95)}y2={y(baselineChartStats.durationP95)}stroke={w}strokeDasharray="6 3"strokeWidth={1}/></g>})()}
+                          </AreaChart>
+                        )}
                       </ResponsiveContainer>
-                    </div>
-
-                    {/* Duration over time */}
-                    <div className="chart-card animate-fade-in"
-                      style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                        color: thm.textPrimary }}>🐌 Trip Duration Over Time</p>
-                      <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
-                      Weekly median and bad-day trips — lower is better
-                      </p>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <LineChart data={merged} margin={chartMargin}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
-                          <XAxis
-                            dataKey="weekKey"
-                            tickFormatter={fmtWeek}
-                            ticks={xAxisTicks}
-                            interval={0}
-                            tickMargin={8}
-                            tick={{ fontSize: 11, fill: thm.textMuted }}
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <YAxis
-                            width={yAxisWidth}
-                            tick={{fontSize:11,fill:thm.textMuted}}
-                            tickLine={false}
-                            axisLine={false}
-                            unit=" min"
-                          />
-                          <RCTooltip content={useChartTooltip(thm)}/>
-                          <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
-                          <Line type="monotone" dataKey="avgDuration" name="Avg Duration"
-                            stroke={colors.line3}
-                            strokeWidth={thm.key==="gray" ? 2 : 2.5}
-                            dot={false} connectNulls/>
-                          <Line type="monotone" dataKey="p95Duration" name="Bad Day Trip"
-                            stroke={colors.line4}
-                            strokeWidth={thm.key==="gray" ? 1 : 1.5}
-                            strokeDasharray="5 3"
-                            dot={false} connectNulls/>
-                        </LineChart>
-                      </ResponsiveContainer>
+                      {/* Baseline value legend — always visible fallback */}
+                      {baselineChartStats && (
+                        <div style={{
+                          display: "flex", flexWrap: "wrap", gap: "12px", marginTop: 8,
+                          fontSize: 11, color: thm.textMuted, alignItems: "center",
+                        }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{
+                              width: 12, height: 3, borderRadius: 2,
+                              background: thm.key === "gray" ? "#444" : "#22c55e",
+                              display: "inline-block",
+                            }}/>
+                            Best {chartView === "speed"
+                              ? `${Math.round(baselineChartStats.speedP95 * 10) / 10} km/h`
+                              : `${Math.round(baselineChartStats.durationP05 * 10) / 10} min`}
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{
+                              width: 12, height: 3, borderRadius: 2,
+                              background: thm.key === "gray" ? "#222" : "#3b82f6",
+                              display: "inline-block",
+                            }}/>
+                            Baseline {chartView === "speed"
+                              ? `${Math.round(baselineChartStats.speedAvg * 10) / 10} km/h`
+                              : `${Math.round(baselineChartStats.durationAvg * 10) / 10} min`}
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{
+                              width: 12, height: 3, borderRadius: 2,
+                              background: thm.key === "gray" ? "#444" : "#ef4444",
+                              display: "inline-block",
+                            }}/>
+                            Worst {chartView === "speed"
+                              ? `${Math.round(baselineChartStats.speedP05 * 10) / 10} km/h`
+                              : `${Math.round(baselineChartStats.durationP95 * 10) / 10} min`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

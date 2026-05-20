@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 import type { WeatherRow } from "@/lib/useTrafficData";
@@ -115,6 +115,78 @@ function relativeTime(date: Date): string {
   const hrs = Math.floor(mins / 60);
   if (hrs === 1) return "1 hr ago";
   return `${hrs} hr ago`;
+}
+
+/* ── Animated sorted card list (FLIP) ─────────────────────────── */
+function SortedCardList({
+  cards, thm, selectedRoute, onRouteSelect,
+}: {
+  cards: RouteCardData[];
+  thm: AppTheme;
+  selectedRoute: string;
+  onRouteSelect: (label: string) => void;
+}) {
+  // Sort ascending by liveSpeed; nulls sink to bottom
+  const sorted = useMemo(() => {
+    return [...cards].sort((a, b) => {
+      if (a.liveSpeed === null && b.liveSpeed === null) return a.sortKey.localeCompare(b.sortKey);
+      if (a.liveSpeed === null) return 1;
+      if (b.liveSpeed === null) return -1;
+      return a.liveSpeed - b.liveSpeed;
+    });
+  }, [cards]);
+
+  // FLIP: store DOM refs and previous top offsets per card label
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const prevTops = useRef<Map<string, number>>(new Map());
+
+  // Before paint: record current tops as "previous" for the upcoming render
+  useLayoutEffect(() => {
+    const map = new Map<string, number>();
+    itemRefs.current.forEach((el, label) => {
+      map.set(label, el.getBoundingClientRect().top);
+    });
+    prevTops.current = map;
+  });
+
+  // After paint: apply inverse offset then animate to zero
+  useEffect(() => {
+    itemRefs.current.forEach((el, label) => {
+      const prev = prevTops.current.get(label);
+      if (prev === undefined) return;
+      const next = el.getBoundingClientRect().top;
+      const dy = prev - next;
+      if (Math.abs(dy) < 1) return;
+      // Jump to old position instantly, then transition to natural position
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      // Force reflow
+      el.getBoundingClientRect();
+      el.style.transition = "transform 0.35s cubic-bezier(0.4,0,0.2,1)";
+      el.style.transform = "translateY(0)";
+    });
+  });
+
+  return (
+    <>
+      {sorted.map((card, i) => (
+        <div
+          key={card.label}
+          ref={el => {
+            if (el) itemRefs.current.set(card.label, el);
+            else itemRefs.current.delete(card.label);
+          }}
+        >
+          <RouteCard
+            card={card} thm={thm}
+            isSelected={card.label === selectedRoute}
+            onSelect={onRouteSelect}
+            isLast={i === sorted.length - 1}
+          />
+        </div>
+      ))}
+    </>
+  );
 }
 
 /* ── Progressive blur edge ─────────────────────────────────────── */
@@ -738,11 +810,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 No routes found
               </p>
             ) : (
-              cards.map((card, i) => (
-                <RouteCard key={card.label} card={card} thm={thm}
-                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect}
-                  isLast={i === cards.length - 1} />
-              ))
+              <SortedCardList
+                cards={cards}
+                thm={thm}
+                selectedRoute={selectedRoute}
+                onRouteSelect={onRouteSelect}
+              />
             )}
           </div>
         </div>
@@ -847,11 +920,12 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 Computing route summaries…
               </p>
             ) : (
-              cards.map((card, i) => (
-                <RouteCard key={card.label} card={card} thm={thm}
-                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect}
-                  isLast={i === cards.length - 1} />
-              ))
+              <SortedCardList
+                cards={cards}
+                thm={thm}
+                selectedRoute={selectedRoute}
+                onRouteSelect={onRouteSelect}
+              />
             )}
           </div>
         </div>

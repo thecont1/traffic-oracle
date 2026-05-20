@@ -58,8 +58,9 @@ export function computeChartDomain(
   baselineStats: BaselineChartStats | null,
   padFraction = 0.08,
 ): ChartDomain {
-  const dataKey = view === "speed" ? "avgSpeed" : "avgDuration";
-  const dataValues = data.map(w => w[dataKey]).filter(v => v > 0);
+  const dataValues = view === "speed"
+    ? data.flatMap(w => [w.avgSpeed, w.p05Speed, w.p95Speed]).filter(v => v > 0)
+    : data.flatMap(w => [w.avgDuration, w.p95Duration]).filter(v => v > 0);
 
   let min = dataValues.length ? Math.min(...dataValues) : 0;
   let max = dataValues.length ? Math.max(...dataValues) : 0;

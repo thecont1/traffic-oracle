@@ -2,8 +2,8 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } fr
 import { createPortal } from "react-dom";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
-  AreaChart, Area, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer, ReferenceArea,
+  AreaChart, Area, ComposedChart, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { computeBaselineStats, computeChartDomain } from "@/lib/chartHelpers";
 import type { BaselineChartStats, ChartDomain } from "@/lib/chartHelpers";
@@ -98,22 +98,53 @@ function weeklyAvg(weeks: Record<string,number>[], key: string): number {
 }
 
 /* ── Recharts tooltip ─────────────────────────────────────────── */
-function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMuted:string; cardBg:string; cardBorder:string }) {
+function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMuted:string; cardBg:string; cardBorder:string }, view: 'speed' | 'duration' = 'speed') {
+  // Desired order: Best → Avg → Worst
+  const SPEED_ORDER = ["Best", "Avg Speed", "Worst"];
+  const DURATION_ORDER = ["Best", "Avg Duration", "Worst"];
+  const order = view === 'speed' ? SPEED_ORDER : DURATION_ORDER;
+
+  // Technical labels for the tooltip
+  const techLabel: Record<string, string> = {
+    "Best": view === 'speed' ? "Best (p95 speed)" : "Best (p5 duration)",
+    "Worst": view === 'speed' ? "Worst (p5 speed)" : "Worst (p95 duration)",
+    "Avg Speed": "Avg Speed",
+    "Avg Duration": "Avg Duration",
+  };
+
   return (props: any) => {
     const { active, payload, label } = props ?? {};
     if (!active || !payload?.length) return null;
     const tp = thm?.textPrimary  ?? "#2B2924";
     const ts = thm?.textSecondary ?? "#6E675B";
+
+    // Format weekKey (ISO date string) as "20 May 2026"
+    let dateLabel = label;
+    try {
+      const d = new Date(label);
+      if (!isNaN(d.getTime())) {
+        dateLabel = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      }
+    } catch { /* keep original */ }
+
+    // Sort payload by desired order
+    const sorted = [...payload].sort((a: any, b: any) => {
+      const ai = order.indexOf(a.name);
+      const bi = order.indexOf(b.name);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    const unit = view === 'speed' ? 'km/h' : 'min';
     return (
       <div style={{ background:"rgba(255,255,255,0.97)", border:`1px solid ${thm?.cardBorder ?? "hsl(var(--border))"}`,
         borderRadius:12, padding:"10px 14px", fontSize:13, boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
-        <p style={{ fontWeight:700, marginBottom:6, color:tp }}>{label}</p>
-        {payload.map((p: any) => (
+        <p style={{ fontWeight:700, marginBottom:6, color:tp }}>{dateLabel}</p>
+        {sorted.map((p: any) => (
           <div key={p.name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
             <span style={{ width:8, height:8, borderRadius:"50%", background:p.color, flexShrink:0 }} />
-            <span style={{ color:ts }}>{p.name}:</span>
+            <span style={{ color:ts }}>{techLabel[p.name] ?? p.name}:</span>
             <span style={{ fontWeight:600, color:tp }}>
-              {p.name.toLowerCase().includes("speed") ? `${p.value} km/h` : fmtDuration(p.value)}
+              {view === 'speed' ? `${p.value} ${unit}` : fmtDuration(p.value)}
             </span>
           </div>
         ))}
@@ -1340,7 +1371,7 @@ function DashboardInner() {
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
   const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
-  const { merged, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
+  const { merged, dailyData, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
   // Recharts' default tick auto-skipping can pick different ticks depending on
@@ -1348,28 +1379,12 @@ function DashboardInner() {
   // for longer windows like 3m/6m.
   //
   // We solve it by explicitly providing the same `ticks` list to both charts.
-  const chartMargin = { top: 4, right: 8, left: 8, bottom: 0 } as const;
+  const chartMargin = { top: 4, right: 32, left: 8, bottom: 0 } as const;
 
   // Keep the plot-area width aligned between charts.
   // Recharts auto-sizes the YAxis width based on label length; when it differs,
   // the same X ticks can look horizontally shifted between charts.
   const yAxisWidth = isMobile ? 46 : 58;
-
-  const xAxisTicks = useMemo(() => {
-    const n = merged.length;
-    if (n === 0) return [] as string[];
-
-    const maxLabels = isMobile ? 5 : 7;
-    const step = Math.max(1, Math.ceil((n - 1) / (maxLabels - 1)));
-
-    const ticks: string[] = [];
-    for (let i = 0; i < n; i += step) ticks.push(merged[i].weekKey);
-
-    const last = merged[n - 1].weekKey;
-    if (ticks[ticks.length - 1] !== last) ticks.push(last);
-
-    return ticks;
-  }, [merged, isMobile]);
 
   /* ── TrafficNOW! per-week percentile bands ───────────────────── */
   const { trafficNowData, trafficNowCompare } = useMemo(() => {
@@ -1420,6 +1435,37 @@ function DashboardInner() {
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
   const [tnOpen, setTnOpen] = useState(false);
   const [chartView, setChartView] = useState<'speed' | 'duration'>('speed');
+  const [chartGranularity, setChartGranularity] = useState<'daily' | 'weekly'>('daily');
+
+  // Unified chart data array based on granularity
+  const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
+  const chartDataArr = chartGranularity === 'daily' ? dailyData : merged;
+
+  const xAxisTicks = useMemo(() => {
+    const n = chartDataArr.length;
+    if (n === 0) return [] as string[];
+
+    const maxLabels = isMobile ? 5 : 7;
+    const step = Math.max(1, Math.ceil((n - 1) / (maxLabels - 1)));
+
+    const ticks: string[] = [];
+    const keyProp = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
+    for (let i = 0; i < n; i += step) ticks.push((chartDataArr[i] as any)[keyProp]);
+
+    // Ensure last data point is shown, but avoid crowding:
+    // if the last tick is too close (< step/2), replace it instead of appending.
+    const last = (chartDataArr[n - 1] as any)[keyProp];
+    if (ticks[ticks.length - 1] !== last) {
+      const lastTickIdx = chartDataArr.findIndex((d: any) => d[keyProp] === ticks[ticks.length - 1]);
+      if (n - 1 - lastTickIdx < step * 0.6) {
+        ticks[ticks.length - 1] = last; // replace — too close
+      } else {
+        ticks.push(last); // append — enough room
+      }
+    }
+
+    return ticks;
+  }, [chartDataArr, chartGranularity, isMobile]);
 
   /* ── Baseline reference stats for chart ─────────────────────── */
   const baselineChartStats = useMemo(
@@ -1427,15 +1473,19 @@ function DashboardInner() {
     [baselineWeeks],
   );
 
-  const speedDomain: ChartDomain = useMemo(
-    () => computeChartDomain(merged, "speed", baselineChartStats),
-    [merged, baselineChartStats],
-  );
+  const speedDomain: ChartDomain = useMemo(() => {
+    const vals = (chartDataArr as any[]).flatMap((d: any) => [d.avgSpeed, d.p05Speed, d.p95Speed]).filter((v: number) => v > 0);
+    if (!vals.length) return { min: 0, max: 1 };
+    const pad = (Math.max(...vals) - Math.min(...vals)) * 0.08 || 1;
+    return { min: Math.round(Math.max(0, Math.min(...vals) - pad) * 10) / 10, max: Math.round((Math.max(...vals) + pad) * 10) / 10 };
+  }, [chartDataArr]);
 
-  const durationDomain: ChartDomain = useMemo(
-    () => computeChartDomain(merged, "duration", baselineChartStats),
-    [merged, baselineChartStats],
-  );
+  const durationDomain: ChartDomain = useMemo(() => {
+    const vals = (chartDataArr as any[]).flatMap((d: any) => [d.avgDuration, d.p05Duration, d.p95Duration]).filter((v: number) => v > 0);
+    if (!vals.length) return { min: 0, max: 1 };
+    const pad = (Math.max(...vals) - Math.min(...vals)) * 0.08 || 1;
+    return { min: Math.round(Math.max(0, Math.min(...vals) - pad) * 10) / 10, max: Math.round((Math.max(...vals) + pad) * 10) / 10 };
+  }, [chartDataArr]);
 
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
@@ -1947,7 +1997,7 @@ function DashboardInner() {
                     {/*<span style={{ fontSize:28 }}>📊</span>*/}
                     <div style={kpiLabel}>No. of Trips <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
-                    <p style={kpiSub}>{merged.length} weeks · {periodLabel} window</p>
+                    <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
                   </div>
                 </div>
               ) : (
@@ -1962,7 +2012,7 @@ function DashboardInner() {
               )}
 
               {/* ── Charts ───────────────────────────────────── */}
-              {merged.length > 0 && (
+              {chartDataArr.length > 0 && (
                 <>
                   <div style={{ display:"grid", gap:16 }}>
                     {/* Merged Speed / Duration chart with toggle */}
@@ -1973,49 +2023,76 @@ function DashboardInner() {
                           color: thm.textPrimary, margin: 0 }}>
                           {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
                         </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
-                          <button
-                            onClick={() => setChartView('speed')}
-                            style={{
-                              padding: "4px 12px",
-                              borderRadius: 6,
-                              border: "none",
-                              background: chartView === 'speed' ? thm.cardBg : "transparent",
-                              color: chartView === 'speed' ? thm.textPrimary : thm.textMuted,
-                              fontSize: 12,
-                              fontWeight: chartView === 'speed' ? 600 : 400,
-                              cursor: "pointer",
-                              boxShadow: chartView === 'speed' ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                            }}
-                          >
-                            Speed
-                          </button>
-                          <button
-                            onClick={() => setChartView('duration')}
-                            style={{
-                              padding: "4px 12px",
-                              borderRadius: 6,
-                              border: "none",
-                              background: chartView === 'duration' ? thm.cardBg : "transparent",
-                              color: chartView === 'duration' ? thm.textPrimary : thm.textMuted,
-                              fontSize: 12,
-                              fontWeight: chartView === 'duration' ? 600 : 400,
-                              cursor: "pointer",
-                              boxShadow: chartView === 'duration' ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                            }}
-                          >
-                            Duration
-                          </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {/* Daily / Weekly toggle */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
+                            {(['daily', 'weekly'] as const).map(g => (
+                              <button key={g}
+                                onClick={() => setChartGranularity(g)}
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 6,
+                                  border: "none",
+                                  background: chartGranularity === g ? thm.cardBg : "transparent",
+                                  color: chartGranularity === g ? thm.textPrimary : thm.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: chartGranularity === g ? 600 : 400,
+                                  cursor: "pointer",
+                                  boxShadow: chartGranularity === g ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                  textTransform: "capitalize",
+                                }}
+                              >
+                                {g}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Speed / Duration toggle */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
+                            <button
+                              onClick={() => setChartView('speed')}
+                              style={{
+                                padding: "4px 12px",
+                                borderRadius: 6,
+                                border: "none",
+                                background: chartView === 'speed' ? thm.cardBg : "transparent",
+                                color: chartView === 'speed' ? thm.textPrimary : thm.textMuted,
+                                fontSize: 12,
+                                fontWeight: chartView === 'speed' ? 600 : 400,
+                                cursor: "pointer",
+                                boxShadow: chartView === 'speed' ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                              }}
+                            >
+                              Speed
+                            </button>
+                            <button
+                              onClick={() => setChartView('duration')}
+                              style={{
+                                padding: "4px 12px",
+                                borderRadius: 6,
+                                border: "none",
+                                background: chartView === 'duration' ? thm.cardBg : "transparent",
+                                color: chartView === 'duration' ? thm.textPrimary : thm.textMuted,
+                                fontSize: 12,
+                                fontWeight: chartView === 'duration' ? 600 : 400,
+                                cursor: "pointer",
+                                boxShadow: chartView === 'duration' ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                              }}
+                            >
+                              Duration
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
-                        Solid: actual average trend · Shaded band: baseline normal range · Dashed: baseline average
+                        {chartView === 'speed'
+                          ? `${chartGranularity === 'daily' ? 'Daily' : 'Weekly'} avg km/h vs. best & worst envelope — higher is faster`
+                          : `${chartGranularity === 'daily' ? 'Daily' : 'Weekly'} avg and bad-day trips — lower is better`}
                       </p>
                       <ResponsiveContainer width="100%" height={isMobile ? 240 : 280}>
                         {chartView === 'speed' ? (
-                          <AreaChart
-                            key={`speed-${baselineChartStats?.speedAvg || 'no-baseline'}`}
-                            data={merged} margin={chartMargin}>
+                          <ComposedChart
+                            key={`speed-${chartGranularity}`}
+                            data={chartDataArr} margin={chartMargin}>
                             <defs>
                               <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
@@ -2024,7 +2101,7 @@ function DashboardInner() {
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
                             <XAxis
-                              dataKey="weekKey"
+                              dataKey={chartDataKey}
                               tickFormatter={fmtWeek}
                               ticks={xAxisTicks}
                               interval={0}
@@ -2038,32 +2115,32 @@ function DashboardInner() {
                               tick={{fontSize:11,fill:thm.textMuted}}
                               tickLine={false}
                               axisLine={false}
+                              tickFormatter={(v: number) => Math.round(v).toString()}
                               unit=" km/h"
-                              domain={[speedDomain.min, speedDomain.max]}
-                              allowDecimals={true}
+                              domain={[Math.floor(speedDomain.min), Math.ceil(speedDomain.max)]}
+                              allowDecimals={false}
                             />
-                            <RCTooltip content={useChartTooltip(thm)}/>
-                            <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
-                            {/* Baseline normal range band */}
-                            {baselineChartStats && (
-                              <ReferenceArea
-                                y1={baselineChartStats.speedP05}
-                                y2={baselineChartStats.speedP95}
-                                fill={thm.key === "gray" ? "rgba(0,0,0,0.04)" : thm.key === "pastel" ? "rgba(58,134,200,0.06)" : "rgba(34,211,238,0.06)"}
-                                stroke="none"
-                              />
-                            )}
-                            {/* Actual data trend */}
-                            <Area type="monotone" dataKey="avgSpeed" name="Average"
+                            <RCTooltip content={useChartTooltip(thm, 'speed')}/>
+                            {/* Actual average trend (rendered first so fill doesn't cover lines) */}
+                            <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
                               stroke={colors.line1}
                               strokeWidth={thm.key==="gray" ? 2 : 2.5}
                               fill="url(#sg)" dot={false} connectNulls/>
-                            {baselineChartStats && (()=>{const h=(isMobile?240:280)-4,d=speedDomain,g=12,e=d.min-(d.max-d.min)*g/h,y=(v:number)=>4+(1-(v-e)/(d.max-e))*h,x=8+yAxisWidth,c=thm.key==="gray"?"#444":"#22c55e",a=thm.key==="gray"?"#222":"#3b82f6",w=thm.key==="gray"?"#444":"#ef4444";return<g><line x1={x}x2={9999}y1={y(baselineChartStats.speedP95)}y2={y(baselineChartStats.speedP95)}stroke={c}strokeDasharray="6 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.speedAvg)}y2={y(baselineChartStats.speedAvg)}stroke={a}strokeDasharray="8 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.speedP05)}y2={y(baselineChartStats.speedP05)}stroke={w}strokeDasharray="6 3"strokeWidth={1}/></g>})()}
-                          </AreaChart>
+                            {/* Per-week best (p95 = fastest) */}
+                            <Line type="monotone" dataKey="p95Speed" name="Best"
+                              stroke={thm.key === "gray" ? "#444" : "#22c55e"}
+                              strokeWidth={1.5} strokeDasharray="5 3"
+                              dot={false} connectNulls/>
+                            {/* Per-week worst (p05 = slowest) */}
+                            <Line type="monotone" dataKey="p05Speed" name="Worst"
+                              stroke={thm.key === "gray" ? "#444" : "#ef4444"}
+                              strokeWidth={1.5} strokeDasharray="5 3"
+                              dot={false} connectNulls/>
+                          </ComposedChart>
                         ) : (
-                          <AreaChart
-                            key={`duration-${baselineChartStats?.durationAvg || 'no-baseline'}`}
-                            data={merged} margin={chartMargin}>
+                          <ComposedChart
+                            key={`duration-${chartGranularity}`}
+                            data={chartDataArr} margin={chartMargin}>
                             <defs>
                               <linearGradient id="durAvg" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%"  stopColor={colors.line1} stopOpacity={0.25}/>
@@ -2072,7 +2149,7 @@ function DashboardInner() {
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke={thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"} vertical={false}/>
                             <XAxis
-                              dataKey="weekKey"
+                              dataKey={chartDataKey}
                               tickFormatter={fmtWeek}
                               ticks={xAxisTicks}
                               interval={0}
@@ -2086,65 +2163,67 @@ function DashboardInner() {
                               tick={{fontSize:11,fill:thm.textMuted}}
                               tickLine={false}
                               axisLine={false}
+                              tickFormatter={(v: number) => Math.round(v).toString()}
                               unit=" min"
-                              domain={[durationDomain.min, durationDomain.max]}
-                              allowDecimals={true}
+                              domain={[Math.floor(durationDomain.min), Math.ceil(durationDomain.max)]}
+                              allowDecimals={false}
                             />
-                            <RCTooltip content={useChartTooltip(thm)}/>
-                            <Legend wrapperStyle={{fontSize:12,paddingTop:8}}/>
-                            {/* Baseline normal range band */}
-                            {baselineChartStats && (
-                              <ReferenceArea
-                                y1={baselineChartStats.durationP05}
-                                y2={baselineChartStats.durationP95}
-                                fill={thm.key === "gray" ? "rgba(0,0,0,0.04)" : thm.key === "pastel" ? "rgba(58,134,200,0.06)" : "rgba(34,211,238,0.06)"}
-                                stroke="none"
-                              />
-                            )}
-                            {/* Actual data trend */}
-                            <Area type="monotone" dataKey="avgDuration" name="Average"
+                            <RCTooltip content={useChartTooltip(thm, 'duration')}/>
+                            {/* Actual average trend with fill (rendered first so fill doesn't cover line) */}
+                            <Area type="monotone" dataKey="avgDuration" name="Avg Duration"
                               stroke={colors.line1}
                               strokeWidth={thm.key==="gray" ? 2 : 2.5}
                               fill="url(#durAvg)" dot={false} connectNulls/>
-                            {baselineChartStats && (()=>{const h=(isMobile?240:280)-4,d=durationDomain,g=12,e=d.min-(d.max-d.min)*g/h,y=(v:number)=>4+(1-(v-e)/(d.max-e))*h,x=8+yAxisWidth,c=thm.key==="gray"?"#444":"#22c55e",a=thm.key==="gray"?"#222":"#3b82f6",w=thm.key==="gray"?"#444":"#ef4444";return<g><line x1={x}x2={9999}y1={y(baselineChartStats.durationP05)}y2={y(baselineChartStats.durationP05)}stroke={c}strokeDasharray="6 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.durationAvg)}y2={y(baselineChartStats.durationAvg)}stroke={a}strokeDasharray="8 3"strokeWidth={1}/><line x1={x}x2={9999}y1={y(baselineChartStats.durationP95)}y2={y(baselineChartStats.durationP95)}stroke={w}strokeDasharray="6 3"strokeWidth={1}/></g>})()}
-                          </AreaChart>
+                            {/* Best (p05 = shortest trips) */}
+                            <Line type="monotone" dataKey="p05Duration" name="Best"
+                              stroke={thm.key === "gray" ? "#444" : "#22c55e"}
+                              strokeWidth={1.5} strokeDasharray="5 3"
+                              dot={false} connectNulls/>
+                            {/* Worst (p95 = longest trips) */}
+                            <Line type="monotone" dataKey="p95Duration" name="Worst"
+                              stroke={thm.key === "gray" ? "#444" : "#ef4444"}
+                              strokeWidth={1.5} strokeDasharray="5 3"
+                              dot={false} connectNulls/>
+                          </ComposedChart>
                         )}
                       </ResponsiveContainer>
-                      {/* Baseline value legend — always visible fallback */}
-                      {baselineChartStats && (
+                      {/* Series legend — Best · Avg · Worst */}
+                      {chartView === 'speed' ? (
                         <div style={{
                           display: "flex", flexWrap: "wrap", gap: "12px", marginTop: 8,
                           fontSize: 11, color: thm.textMuted, alignItems: "center",
+                          justifyContent: "center",
                         }}>
                           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{
-                              width: 12, height: 3, borderRadius: 2,
-                              background: thm.key === "gray" ? "#444" : "#22c55e",
-                              display: "inline-block",
-                            }}/>
-                            Best {chartView === "speed"
-                              ? `${Math.round(baselineChartStats.speedP95 * 10) / 10} km/h`
-                              : `${Math.round(baselineChartStats.durationP05 * 10) / 10} min`}
+                            <span style={{ width: 14, height: 0, borderTop: `2px dashed ${thm.key === "gray" ? "#444" : "#22c55e"}`, display: "inline-block" }}/>
+                            Best
                           </span>
                           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{
-                              width: 12, height: 3, borderRadius: 2,
-                              background: thm.key === "gray" ? "#222" : "#3b82f6",
-                              display: "inline-block",
-                            }}/>
-                            Baseline {chartView === "speed"
-                              ? `${Math.round(baselineChartStats.speedAvg * 10) / 10} km/h`
-                              : `${Math.round(baselineChartStats.durationAvg * 10) / 10} min`}
+                            <span style={{ width: 14, height: 3, borderRadius: 2, background: colors.line1, display: "inline-block" }}/>
+                            Avg Speed
                           </span>
                           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{
-                              width: 12, height: 3, borderRadius: 2,
-                              background: thm.key === "gray" ? "#444" : "#ef4444",
-                              display: "inline-block",
-                            }}/>
-                            Worst {chartView === "speed"
-                              ? `${Math.round(baselineChartStats.speedP05 * 10) / 10} km/h`
-                              : `${Math.round(baselineChartStats.durationP95 * 10) / 10} min`}
+                            <span style={{ width: 14, height: 0, borderTop: `2px dashed ${thm.key === "gray" ? "#444" : "#ef4444"}`, display: "inline-block" }}/>
+                            Worst
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: "flex", flexWrap: "wrap", gap: "12px", marginTop: 8,
+                          fontSize: 11, color: thm.textMuted, alignItems: "center",
+                          justifyContent: "center",
+                        }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 14, height: 0, borderTop: `2px dashed ${thm.key === "gray" ? "#444" : "#22c55e"}`, display: "inline-block" }}/>
+                            Best
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 14, height: 3, borderRadius: 2, background: colors.line1, display: "inline-block" }}/>
+                            Avg Duration
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 14, height: 0, borderTop: `2px dashed ${thm.key === "gray" ? "#444" : "#ef4444"}`, display: "inline-block" }}/>
+                            Worst
                           </span>
                         </div>
                       )}

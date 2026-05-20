@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
+import type { WeatherRow } from "@/lib/useTrafficData";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -74,19 +75,6 @@ interface RouteTODStats {
   p90: number;
   p95: number;
   count: number;
-}
-
-interface WeatherRow {
-  route_code: string;
-  aqi: number | null;
-  aqi_category: string;
-  condition: string;
-  temp_c: number | null;
-  realfeel_c: number | null;
-  realfeel_word: string;
-  humidity_pct: number | null;
-  wind_gust_kmh: number | null;
-  uv_index: number | null;
 }
 
 interface RouteCardData {

@@ -56,6 +56,7 @@ export interface WeeklyAggregate {
   p05Speed: number; // best typical speed (p05 of weekly speeds — fast end of envelope)
   p95Speed: number; // worst typical speed (p95 of weekly speeds — slow end of envelope)
   avgDuration: number;
+  p05Duration: number;
   medianDuration: number;
   p95Duration: number;
   count: number;
@@ -147,6 +148,7 @@ export function aggregateRows(rows: TrafficRow[]): WeeklyAggregate[] {
         p05Speed: Math.round(percentile(speeds, 5) * 10) / 10,
         p95Speed: Math.round(percentile(speeds, 95) * 10) / 10,
         avgDuration: Math.round(avgDuration * 10) / 10,
+        p05Duration: Math.round(percentile(durations, 5) * 10) / 10,
         medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
         p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
         count: wrows.length,
@@ -503,6 +505,10 @@ export function useTrafficData(citySource?: CitySource) {
 export interface DayStats {
   dateKey: string;
   avgSpeed: number;
+  p05Speed: number;
+  p95Speed: number;
+  avgDuration: number;
+  p05Duration: number;
   medianDuration: number;
   p95Duration: number;
   count: number;
@@ -530,9 +536,14 @@ export function useDailyStats(
     for (const [dateKey, dayRows] of byDay.entries()) {
       const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
+      const sortedSpeeds = [...speeds].sort((a, b) => a - b);
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
+        p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
+        avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+        p05Duration: Math.round(percentile(durations, 5) * 10) / 10,
         medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
         p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
         count: dayRows.length,
@@ -563,9 +574,14 @@ export function useDailyStatsAllDay(
     for (const [dateKey, dayRows] of byDay.entries()) {
       const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
+      const sortedSpeeds = [...speeds].sort((a, b) => a - b);
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
+        p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
+        avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+        p05Duration: Math.round(percentile(durations, 5) * 10) / 10,
         medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
         p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
         count: dayRows.length,
@@ -645,6 +661,34 @@ export function useFilteredData(
       };
     });
 
+    // Daily aggregation for the chart
+    const byDay = new Map<string, TrafficRow[]>();
+    for (const r of filtered) {
+      const d = r.timestamp;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const arr = byDay.get(key) ?? [];
+      arr.push(r);
+      byDay.set(key, arr);
+    }
+    const dailyData: DayStats[] = Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dateKey, dayRows]) => {
+        const speeds = dayRows.map((r) => r.speed_kmh);
+        const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
+        const sortedSpeeds = [...speeds].sort((a, b) => a - b);
+        return {
+          dateKey,
+          avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+          p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
+          p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
+          avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+          p05Duration: Math.round(percentile(durations, 5) * 10) / 10,
+          medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
+          p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+          count: dayRows.length,
+        };
+      });
+
     return {
       filtered,
       baseline,
@@ -653,6 +697,7 @@ export function useFilteredData(
       selectedStats,
       baselineStats,
       merged,
+      dailyData,
     };
   }, [allRows, selectedRoute, period, tod, baselineRoute]);
 }

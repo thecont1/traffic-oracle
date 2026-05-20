@@ -556,7 +556,9 @@ function RouteCard({
             <span title="Temperature / Feels like">
               🌡 {card.weather.temp_c}°C
               {card.weather.realfeel_c !== null && (
-                <span style={{ opacity: 0.75 }}> (Feels like {card.weather.realfeel_c}°C)</span>
+                <span style={{ opacity: 0.75 }}>
+                  {" "}(Feels like {card.weather.realfeel_c}°C{card.weather.realfeel_word ? ` – ${card.weather.realfeel_word}` : ""})
+                </span>
               )}
             </span>
           )}

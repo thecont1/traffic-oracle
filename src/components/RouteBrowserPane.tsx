@@ -76,6 +76,19 @@ interface RouteTODStats {
   count: number;
 }
 
+interface WeatherRow {
+  route_code: string;
+  aqi: number | null;
+  aqi_category: string;
+  condition: string;
+  temp_c: number | null;
+  realfeel_c: number | null;
+  realfeel_word: string;
+  humidity_pct: number | null;
+  wind_gust_kmh: number | null;
+  uv_index: number | null;
+}
+
 interface RouteCardData {
   label: string;
   origin: string;
@@ -89,6 +102,7 @@ interface RouteCardData {
   status: LiveStatus;
   statusText: string;
   sortKey: string;
+  weather?: WeatherRow;
 }
 
 interface PaneProps {
@@ -543,7 +557,44 @@ function RouteCard({
       }}>
         {endpoints}
       </p>
-      
+
+      {/* Row 2b: weather strip */}
+      {card.weather && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 5,
+          fontSize: 10, color: thm.textMuted, flexWrap: "wrap",
+        }}>
+          {card.weather.temp_c !== null && (
+            <span title="Temperature / Feels like">
+              🌡 {card.weather.temp_c}°C
+              {card.weather.realfeel_c !== null && (
+                <span style={{ opacity: 0.75 }}> (Feels like {card.weather.realfeel_c}°C)</span>
+              )}
+            </span>
+          )}
+          {card.weather.humidity_pct !== null && (
+            <span title="Humidity">💧{card.weather.humidity_pct}%</span>
+          )}
+          {card.weather.aqi !== null && (
+            <span
+              title={`AQI · ${card.weather.aqi_category}`}
+              style={{
+                fontWeight: 600,
+                color:
+                  card.weather.aqi <= 50  ? (thm.key === "colour" ? "#34D399" : "#2E7D32") :
+                  card.weather.aqi <= 100 ? (thm.key === "colour" ? "#FBBF24" : "#F57F17") :
+                                            (thm.key === "colour" ? "#F87171" : "#C62828"),
+              }}
+            >
+              💨 {card.weather.aqi}
+            </span>
+          )}
+          {card.weather.condition && (
+            <span style={{ opacity: 0.8 }}>☁️ {card.weather.condition}</span>
+          )}
+        </div>
+      )}
+
       {/* Row 3: Nested-scale chart */}
       <div style={{ marginTop: 4 }} />
       <NestedScaleChart

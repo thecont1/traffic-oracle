@@ -9,9 +9,9 @@ import { computeBaselineStats, computeChartDomain } from "@/lib/chartHelpers";
 import type { BaselineChartStats, ChartDomain } from "@/lib/chartHelpers";
 import { Share2, RefreshCw, Plus, Minus } from "lucide-react";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
@@ -880,6 +880,8 @@ interface RouteCardData {
   statusText: string; // "much faster", "faster", "as expected", "slower", "much slower", "no data"
   // Stable sorting
   sortKey: string;
+  // Weather snapshot
+  weather?: WeatherRow;
 }
 
 /** Compute live status based on percentiles - industry standard for traffic */
@@ -949,7 +951,8 @@ function computeTODStats(
 function computeAllRouteCards(
   allRows: TrafficRow[],
   routeOptions: string[],
-  routes: { label_short: string; label_full: string }[],
+  routes: { label_short: string; label_full: string; route_code?: string }[],
+  weatherMap?: Map<string, WeatherRow>,
 ): RouteCardData[] {
   // Find the most recent data timestamp across all routes
   const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
@@ -1005,6 +1008,8 @@ function computeAllRouteCards(
   // Final pass: compute status and build final cards
   const cards: RouteCardData[] = preliminaryCards.map(card => {
     const { status, statusText } = computeLiveStatus(card.liveSpeed, card.typical);
+    const routeObj = routes.find(r => r.label_short === card.label);
+    const weather = routeObj?.route_code ? weatherMap?.get(routeObj.route_code) : undefined;
     
     return {
       label: card.label,
@@ -1019,6 +1024,7 @@ function computeAllRouteCards(
       status,
       statusText,
       sortKey: card.sortKey,
+      weather,
     };
   });
   
@@ -1133,6 +1139,7 @@ function DashboardInner() {
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
     useTrafficData(citySource);
+  const weatherMap = useWeatherData();
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -1307,12 +1314,13 @@ function DashboardInner() {
   useEffect(() => {
     if (allRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
-    if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, routes);
+    const weatherChanged = weatherMap.size > 0;
+    if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
+    const computed = computeAllRouteCards(allRows, routeOptions, routes, weatherMap);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
-  }, [allRows, routeOptions, baselineStartDate, baselineEndDate]);
+  }, [allRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
   const routeOrder = useMemo(() => {

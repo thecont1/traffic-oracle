@@ -7,59 +7,8 @@ import type { AppConfig } from "../lib/config";
 
 const cfg = appConfig as AppConfig;
 
-/* ── Info tip ────────────────────────────────────────────────── */
-function InfoTip({ thm }: { thm: AppTheme }) {
-  const tipRef = useRef<HTMLDivElement>(null);
-  const tooltipText = "See if traffic is normal right now. The colored diamond shows current speed; the neutral band shows what's typical for this hour (based on 90 days of data). Diamond within the band = typical, left = slower, right = faster. Tap any route to explore it on the main charts.";
-  
-  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
-    const el = tipRef.current;
-    if (!el) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const TW = el.offsetWidth || 240;
-    const TH = el.offsetHeight || 64;
-    const vw = window.innerWidth;
-    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
-    el.style.left = left + "px";
-    el.style.top = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
-    el.style.opacity = "1";
-  };
-  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
-  
-  return (
-    <>
-      <span
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 14, height: 14, borderRadius: "50%",
-          border: `1.5px solid ${thm.textMuted}`,
-          fontSize: 8, fontWeight: 900, cursor: "help",
-          color: thm.textMuted,
-          marginLeft: 5, userSelect: "none",
-          textTransform: "none", letterSpacing: "normal",
-          lineHeight: 1, flexShrink: 0,
-        }}
-      >
-        i
-      </span>
-      <div ref={tipRef} style={{
-        position: "fixed", pointerEvents: "none",
-        opacity: 0, transition: "opacity 0.15s ease",
-        background: thm.key === "gray" ? "#f0f0f0" : "#141A24",
-        border: thm.key === "gray" ? "1px solid #d0d0d0" : "none",
-        borderRadius: 10, padding: "9px 12px",
-        boxShadow: "0 6px 28px rgba(0,0,0,0.45)",
-        zIndex: 2000, maxWidth: 240,
-        fontSize: 12, lineHeight: 1.5, 
-        color: thm.key === "gray" ? "#333333" : "#F0F4F8",
-      }}>
-        {tooltipText}
-      </div>
-    </>
-  );
-}
+import InfoTip from "@/components/ui/InfoTip";
+import { TOOLTIP_CONTENT } from "@/lib/tooltipContent";
 
 /* ── Types ─────────────────────────────────────────────────────── */
 // RouteCardData is defined in Dashboard.tsx and passed as props
@@ -773,7 +722,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 Traffic NOW!
               </span>
               {/* Info tooltip — click to toggle animated callout */}
-              <InfoTip thm={thm} />
+              <InfoTip thm={thm}>{TOOLTIP_CONTENT.routeBrowserPane.body}</InfoTip>
             </div>
             <button onClick={onToggle} title="Close" aria-label="Close route browser"
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,

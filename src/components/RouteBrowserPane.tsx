@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import type { AppTheme } from "@/lib/theme";
 import type { WeatherRow } from "@/lib/useTrafficData";
@@ -7,59 +7,8 @@ import type { AppConfig } from "../lib/config";
 
 const cfg = appConfig as AppConfig;
 
-/* ── Info tip ────────────────────────────────────────────────── */
-function InfoTip({ thm }: { thm: AppTheme }) {
-  const tipRef = useRef<HTMLDivElement>(null);
-  const tooltipText = "See if traffic is normal right now. The colored diamond shows current speed; the neutral band shows what's typical for this hour (based on 90 days of data). Diamond within the band = typical, left = slower, right = faster. Tap any route to explore it on the main charts.";
-  
-  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
-    const el = tipRef.current;
-    if (!el) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const TW = el.offsetWidth || 240;
-    const TH = el.offsetHeight || 64;
-    const vw = window.innerWidth;
-    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
-    el.style.left = left + "px";
-    el.style.top = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
-    el.style.opacity = "1";
-  };
-  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
-  
-  return (
-    <>
-      <span
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 14, height: 14, borderRadius: "50%",
-          border: `1.5px solid ${thm.textMuted}`,
-          fontSize: 8, fontWeight: 900, cursor: "help",
-          color: thm.textMuted,
-          marginLeft: 5, userSelect: "none",
-          textTransform: "none", letterSpacing: "normal",
-          lineHeight: 1, flexShrink: 0,
-        }}
-      >
-        i
-      </span>
-      <div ref={tipRef} style={{
-        position: "fixed", pointerEvents: "none",
-        opacity: 0, transition: "opacity 0.15s ease",
-        background: thm.key === "gray" ? "#f0f0f0" : "#141A24",
-        border: thm.key === "gray" ? "1px solid #d0d0d0" : "none",
-        borderRadius: 10, padding: "9px 12px",
-        boxShadow: "0 6px 28px rgba(0,0,0,0.45)",
-        zIndex: 2000, maxWidth: 240,
-        fontSize: 12, lineHeight: 1.5, 
-        color: thm.key === "gray" ? "#333333" : "#F0F4F8",
-      }}>
-        {tooltipText}
-      </div>
-    </>
-  );
-}
+import InfoTip from "@/components/ui/InfoTip";
+import { TOOLTIP_CONTENT } from "@/lib/tooltipContent";
 
 /* ── Types ─────────────────────────────────────────────────────── */
 // RouteCardData is defined in Dashboard.tsx and passed as props
@@ -115,6 +64,78 @@ function relativeTime(date: Date): string {
   const hrs = Math.floor(mins / 60);
   if (hrs === 1) return "1 hr ago";
   return `${hrs} hr ago`;
+}
+
+/* ── Animated sorted card list (FLIP) ─────────────────────────── */
+function SortedCardList({
+  cards, thm, selectedRoute, onRouteSelect,
+}: {
+  cards: RouteCardData[];
+  thm: AppTheme;
+  selectedRoute: string;
+  onRouteSelect: (label: string) => void;
+}) {
+  // Sort ascending by liveSpeed; nulls sink to bottom
+  const sorted = useMemo(() => {
+    return [...cards].sort((a, b) => {
+      if (a.liveSpeed === null && b.liveSpeed === null) return a.sortKey.localeCompare(b.sortKey);
+      if (a.liveSpeed === null) return 1;
+      if (b.liveSpeed === null) return -1;
+      return a.liveSpeed - b.liveSpeed;
+    });
+  }, [cards]);
+
+  // FLIP: store DOM refs and previous top offsets per card label
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const prevTops = useRef<Map<string, number>>(new Map());
+
+  // Before paint: record current tops as "previous" for the upcoming render
+  useLayoutEffect(() => {
+    const map = new Map<string, number>();
+    itemRefs.current.forEach((el, label) => {
+      map.set(label, el.getBoundingClientRect().top);
+    });
+    prevTops.current = map;
+  });
+
+  // After paint: apply inverse offset then animate to zero
+  useEffect(() => {
+    itemRefs.current.forEach((el, label) => {
+      const prev = prevTops.current.get(label);
+      if (prev === undefined) return;
+      const next = el.getBoundingClientRect().top;
+      const dy = prev - next;
+      if (Math.abs(dy) < 1) return;
+      // Jump to old position instantly, then transition to natural position
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      // Force reflow
+      el.getBoundingClientRect();
+      el.style.transition = "transform 0.35s cubic-bezier(0.4,0,0.2,1)";
+      el.style.transform = "translateY(0)";
+    });
+  });
+
+  return (
+    <>
+      {sorted.map((card, i) => (
+        <div
+          key={card.label}
+          ref={el => {
+            if (el) itemRefs.current.set(card.label, el);
+            else itemRefs.current.delete(card.label);
+          }}
+        >
+          <RouteCard
+            card={card} thm={thm}
+            isSelected={card.label === selectedRoute}
+            onSelect={onRouteSelect}
+            isLast={i === sorted.length - 1}
+          />
+        </div>
+      ))}
+    </>
+  );
 }
 
 /* ── Progressive blur edge ─────────────────────────────────────── */
@@ -701,7 +722,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 Traffic NOW!
               </span>
               {/* Info tooltip — click to toggle animated callout */}
-              <InfoTip thm={thm} />
+              <InfoTip thm={thm}>{TOOLTIP_CONTENT.routeBrowserPane.body}</InfoTip>
             </div>
             <button onClick={onToggle} title="Close" aria-label="Close route browser"
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,
@@ -738,11 +759,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 No routes found
               </p>
             ) : (
-              cards.map((card, i) => (
-                <RouteCard key={card.label} card={card} thm={thm}
-                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect}
-                  isLast={i === cards.length - 1} />
-              ))
+              <SortedCardList
+                cards={cards}
+                thm={thm}
+                selectedRoute={selectedRoute}
+                onRouteSelect={onRouteSelect}
+              />
             )}
           </div>
         </div>
@@ -847,11 +869,12 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 Computing route summaries…
               </p>
             ) : (
-              cards.map((card, i) => (
-                <RouteCard key={card.label} card={card} thm={thm}
-                  isSelected={card.label === selectedRoute} onSelect={onRouteSelect}
-                  isLast={i === cards.length - 1} />
-              ))
+              <SortedCardList
+                cards={cards}
+                thm={thm}
+                selectedRoute={selectedRoute}
+                onRouteSelect={onRouteSelect}
+              />
             )}
           </div>
         </div>

@@ -47,14 +47,16 @@
     "question_mode": "improved",
     "route": "Double Decker Flyover",
     "time_of_day": "weekday_evening",
-    "period": "1.5m"
+    "period": "1.5m",
+    "time_aggregation": "weekly",
+    "chart_metric": "duration"
   },
   "route_pane": {
     "open": true,
     "min_width": 200,
     "width": 430,
     "max_width": 600,
-    "polling_interval_min": 10
+    "polling_interval_min": 6
   },
   "zoom": {
     "default": 1.00,

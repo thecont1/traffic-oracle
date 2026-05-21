@@ -24,6 +24,8 @@ export interface AppConfig {
     question_mode: "worsened" | "improved";
     baseline_start: string;
     baseline_end: string;
+    time_aggregation: "daily" | "weekly";
+    chart_metric: "speed" | "duration";
   };
   route_pane: {
     open: boolean;

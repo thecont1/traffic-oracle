@@ -66,6 +66,8 @@ function readUrlParams() {
   if (p.has("bl"))     out.bl     = Number(p.get("bl"));
   if (p.has("br"))     out.br     = Number(p.get("br"));
   if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));
+  if (p.has("aggregation")) out.aggregation = p.get("aggregation")!;
+  if (p.has("metric")) out.metric = p.get("metric")!;
   return out;
 }
 const URL_PARAMS = readUrlParams();
@@ -1067,6 +1069,12 @@ function DashboardInner() {
   const [questionMode, setQuestionMode] = useState<"worsened"|"improved">(
     URL_PARAMS.mode === "improved" ? "improved" : cfg.defaults.question_mode
   );
+  const [chartView, setChartView] = useState<'speed' | 'duration'>(
+    (URL_PARAMS.metric === "duration" ? "duration" : URL_PARAMS.metric === "speed" ? "speed" : null) ?? cfg.defaults.chart_metric
+  );
+  const [chartGranularity, setChartGranularity] = useState<'daily' | 'weekly'>(
+    (URL_PARAMS.aggregation === "weekly" ? "weekly" : URL_PARAMS.aggregation === "daily" ? "daily" : null) ?? cfg.defaults.time_aggregation
+  );
 
   /* chip animation */
   const [chipAnim, setChipAnim] = useState<Record<string,boolean>>({});
@@ -1253,6 +1261,8 @@ function DashboardInner() {
       bl:     String(safeLeft),
       br:     String(safeRight),
       zoom:   String(ZOOM_STEPS[zoomIdx]),
+      aggregation: chartGranularity,
+      metric: chartView,
     });
     const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
@@ -1260,7 +1270,7 @@ function DashboardInner() {
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx]);
+  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx, chartGranularity, chartView]);
 
   const lastDataMs = useMemo(
     () => allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
@@ -1442,8 +1452,6 @@ function DashboardInner() {
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
   const [tnOpen, setTnOpen] = useState(false);
-  const [chartView, setChartView] = useState<'speed' | 'duration'>('speed');
-  const [chartGranularity, setChartGranularity] = useState<'daily' | 'weekly'>('daily');
 
   // Unified chart data array based on granularity
   const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';

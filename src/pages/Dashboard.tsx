@@ -7,7 +7,9 @@ import {
 } from "recharts";
 import { computeBaselineStats, computeChartDomain } from "@/lib/chartHelpers";
 import type { BaselineChartStats, ChartDomain } from "@/lib/chartHelpers";
-import { Share2, RefreshCw, Plus, Minus } from "lucide-react";
+import { Share2, Plus, Minus } from "lucide-react";
+import InfoTip from "@/components/ui/InfoTip";
+import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
 } from "@/lib/useTrafficData";
@@ -463,113 +465,6 @@ function NapkinChart({
           stroke={GAP} strokeWidth={2} strokeDasharray="6 4" />
       )}
     </svg>
-  );
-}
-
-/* ── KPI info icon + tooltip ──────────────────────────────────── */
-function KpiInfo({ text }: { text: string }) {
-  const tipRef = useRef<HTMLDivElement>(null);
-  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
-    const el = tipRef.current;
-    if (!el) return;
-    const r  = e.currentTarget.getBoundingClientRect();
-    const TW = el.offsetWidth  || 240;
-    const TH = el.offsetHeight || 64;
-    const vw = window.innerWidth;
-    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
-    el.style.left = left + "px";
-    el.style.top  = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
-    el.style.opacity = "1";
-  };
-  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
-  return (
-    <>
-      <span onMouseEnter={show} onMouseLeave={hide}
-        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
-          width:14, height:14, borderRadius:"50%",
-          border:"1.5px solid hsl(var(--muted-foreground))",
-          fontSize:8, fontWeight:900, cursor:"help",
-          color:"hsl(var(--muted-foreground))",
-          marginLeft:5, userSelect:"none",
-          textTransform:"none", letterSpacing:"normal",
-          lineHeight:1, flexShrink:0 }}>
-        i
-      </span>
-      <div ref={tipRef} style={{
-        position:"fixed", pointerEvents:"none",
-        opacity:0, transition:"opacity 0.15s ease",
-        background:"rgba(20,26,36,0.95)",
-        borderRadius:10, padding:"9px 12px",
-        boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
-        zIndex:2000, maxWidth:240,
-        fontSize:12, lineHeight:1.5, color:"#94A3B8",
-        fontFamily:"var(--app-font)",
-        top:0, left:0,
-      }}>
-        {text}
-      </div>
-    </>
-  );
-}
-
-/* ── Chart info icon + tooltip ──────────────────────────────────── */
-function ChartInfoTooltip({ chartView }: { chartView: 'speed' | 'duration' }) {
-  const tipRef = useRef<HTMLDivElement>(null);
-  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
-    const el = tipRef.current;
-    if (!el) return;
-    const r  = e.currentTarget.getBoundingClientRect();
-    const TW = el.offsetWidth  || 280;
-    const TH = el.offsetHeight || 80;
-    const vw = window.innerWidth;
-    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
-    el.style.left = left + "px";
-    el.style.top  = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
-    el.style.opacity = "1";
-  };
-  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
-
-  return (
-    <>
-      <span onMouseEnter={show} onMouseLeave={hide}
-        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
-          width:14, height:14, borderRadius:"50%",
-          border:"1.5px solid hsl(var(--muted-foreground))",
-          fontSize:8, fontWeight:900, cursor:"help",
-          color:"hsl(var(--muted-foreground))",
-          userSelect:"none",
-          textTransform:"none", letterSpacing:"normal",
-          lineHeight:1, flexShrink:0 }}>
-        i
-      </span>
-      <div ref={tipRef} style={{
-        position:"fixed", pointerEvents:"none",
-        opacity:0, transition:"opacity 0.15s ease",
-        background:"rgba(20,26,36,0.95)",
-        borderRadius:10, padding:"9px 12px",
-        boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
-        zIndex:2000, maxWidth:280,
-        fontSize:12, lineHeight:1.5, color:"#94A3B8",
-        fontFamily:"var(--app-font)",
-        top:0, left:0,
-      }}>
-        {chartView === 'speed' ? (
-          <div>
-            <div style={{fontWeight:600, marginBottom:4}}>Best: 95th percentile speed</div>
-            <div style={{fontSize:11, marginBottom:6}}>Faster trips</div>
-            <div style={{fontWeight:600, marginBottom:4}}>Worst: 5th percentile speed</div>
-            <div style={{fontSize:11}}>Slower trips</div>
-          </div>
-        ) : (
-          <div>
-            <div style={{fontWeight:600, marginBottom:4}}>Best: 5th percentile duration</div>
-            <div style={{fontSize:11, marginBottom:6}}>Faster trips</div>
-            <div style={{fontWeight:600, marginBottom:4}}>Worst: 95th percentile duration</div>
-            <div style={{fontSize:11}}>Slower trips</div>
-          </div>
-        )}
-      </div>
-    </>
   );
 }
 
@@ -1692,21 +1587,6 @@ function DashboardInner() {
                   </span>
                 </button>
               )}
-              <button onClick={refresh} disabled={loading} style={{
-                display:"flex", alignItems:"center", justifyContent:"center", gap:5,
-                border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                borderRadius:9999, height:44, padding:"0 14px",
-                color: thm.textMuted,
-                background: thm.key==="colour" ? "#141A24" : "transparent",
-                cursor: loading ? "default" : "pointer",
-                transition:"color 0.2s, background 0.2s",
-                opacity: loading ? 0.4 : 1,
-              }} title="Refresh data from GitHub">
-                <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1 }}>
-                  {loading ? "Fetching…" : "Refresh"}
-                </span>
-              </button>
               {/* Size +/- */}
               <div style={{
                 display:"flex", alignItems:"center",
@@ -1854,10 +1734,13 @@ function DashboardInner() {
                 }}>
                   {showSparkle && <Sparkles />}
 
-                  <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                    color: thm.textPrimary, marginBottom:14 }}>
-                    Compare with this earlier period ↔
-                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14 }}>
+                    <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                      color: thm.textPrimary, margin: 0 }}>
+                      Compare with this earlier period ↔
+                    </p>
+                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
+                  </div>
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     <SliderPrimitive.Root
@@ -1983,7 +1866,12 @@ function DashboardInner() {
                 background: thm.verdictBg(v.bg),
                 border: `2px solid ${thm.verdictBorder(v.border)}`,
                 borderRadius:"1.5rem", padding:"1.5rem 2rem",
+                position: "relative",
               }}>
+                {/* Info icon — top-right corner */}
+                <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                  <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
+                </div>
                 <div style={{ textAlign:"center" }}>
                   <div className="animate-bounce-in" key={verdictKey}
                     style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
@@ -2047,7 +1935,7 @@ function DashboardInner() {
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
                     {/*<span style={{ fontSize:28 }}>⚡</span>*/}
-                    <div style={kpiLabel}>Avg Speed ({periodLabel}) <KpiInfo text="Average speed across all trips in the selected period and time slot, for this route." /></div>
+                    <div style={kpiLabel}>Avg Speed ({periodLabel}) <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip></div>
                     <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
                       {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
                     </p>
@@ -2058,21 +1946,21 @@ function DashboardInner() {
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[1] }}>
                     {/*<span style={{ fontSize:28 }}>🕐</span>*/}
-                    <div style={kpiLabel}>Median Trip <KpiInfo text="Half of all trips were faster than this, half were slower. A better everyday estimate than the average." /></div>
+                    <div style={kpiLabel}>Median Trip <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
                     <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
                     {/*<span style={{ fontSize:28 }}>🔥</span>*/}
-                    <div style={kpiLabel}>Bad Day Trip <KpiInfo text={`On a bad day, your trip could take this long. Specifically, 1 in every ${badDayN} trips (the ${cfg.percentile.worst_case}${cfg.percentile.worst_case === 11 ? "st" : cfg.percentile.worst_case === 12 ? "nd" : cfg.percentile.worst_case === 13 ? "rd" : "th"} percentile) is at least this slow.`} /></div>
+                    <div style={kpiLabel}>Bad Day Trip <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip></div>
                     <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
                     {/*<span style={{ fontSize:28 }}>📊</span>*/}
-                    <div style={kpiLabel}>No. of Trips <KpiInfo text="Total number of hourly traffic readings used to calculate the above figures." /></div>
+                    <div style={kpiLabel}>No. of Trips <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip></div>
                     <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
                   </div>
@@ -2101,7 +1989,22 @@ function DashboardInner() {
                             color: thm.textPrimary, margin: 0 }}>
                             {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
                           </p>
-                          <ChartInfoTooltip chartView={chartView} />
+                          <InfoTip thm={thm} maxWidth={280}>
+                            {chartView === 'speed'
+                              ? TOOLTIP_CONTENT.chartSpeed.sections.map((s, i) => (
+                                  <div key={i}>
+                                    <div style={{fontWeight:600, marginBottom:4}}>{s.label}</div>
+                                    <div style={{fontSize:11, marginBottom:i === 0 ? 6 : 0}}>{s.body}</div>
+                                  </div>
+                                ))
+                              : TOOLTIP_CONTENT.chartDuration.sections.map((s, i) => (
+                                  <div key={i}>
+                                    <div style={{fontWeight:600, marginBottom:4}}>{s.label}</div>
+                                    <div style={{fontSize:11, marginBottom:i === 0 ? 6 : 0}}>{s.body}</div>
+                                  </div>
+                                ))
+                            }
+                          </InfoTip>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {/* Daily / Weekly toggle */}
@@ -2325,6 +2228,9 @@ function DashboardInner() {
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
                             📡 TrafficNOW! — Speed Forecast Bands
                           </p>
+                          <InfoTip thm={thm}>
+                            {TOOLTIP_CONTENT.forecastBands.body}
+                          </InfoTip>
                           <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                             transform: tnOpen ? "rotate(180deg)" : "rotate(0deg)",
                             transition: "transform 0.2s ease" }}>▾</span>
@@ -2367,8 +2273,15 @@ function DashboardInner() {
                   <div className="chart-card animate-fade-in"
                     style={{
                       padding:"1.25rem 1.5rem",
+                      position: "relative",
                       ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
                     }}>
+                    {/* Info icon — top-right corner */}
+                    <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                      <InfoTip thm={thm}>
+                        {TOOLTIP_CONTENT.dailyCalendar.body}
+                      </InfoTip>
+                    </div>
                     <CalendarWidget
                       dailyStats={dailyStats}
                       fmtDur={fmtDuration}
@@ -2411,9 +2324,9 @@ function DashboardInner() {
             );
           })()}
           {" · "}
-          {rowCount > 0 && <span>{rowCount.toLocaleString()} rows</span>}
-          {" · "}
-          Hit Refresh for latest data.
+          {rowCount > 0 && dataTimestamp && (
+            <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+          )}
           <span style={{ marginLeft:"auto" }}>© 2026 <a href="https://thecontrarian.in/" target="_blank" rel="noopener noreferrer" style={{ color: thm.chart.line4 }}>Mahesh Shantaram</a></span>
         </footer>
 

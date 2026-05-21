@@ -1991,18 +1991,8 @@ function DashboardInner() {
                           </p>
                           <InfoTip thm={thm} maxWidth={280}>
                             {chartView === 'speed'
-                              ? TOOLTIP_CONTENT.chartSpeed.sections.map((s, i) => (
-                                  <div key={i}>
-                                    <div style={{fontWeight:600, marginBottom:4}}>{s.label}</div>
-                                    <div style={{fontSize:11, marginBottom:i === 0 ? 6 : 0}}>{s.body}</div>
-                                  </div>
-                                ))
-                              : TOOLTIP_CONTENT.chartDuration.sections.map((s, i) => (
-                                  <div key={i}>
-                                    <div style={{fontWeight:600, marginBottom:4}}>{s.label}</div>
-                                    <div style={{fontSize:11, marginBottom:i === 0 ? 6 : 0}}>{s.body}</div>
-                                  </div>
-                                ))
+                              ? TOOLTIP_CONTENT.chartSpeed.body
+                              : TOOLTIP_CONTENT.chartDuration.body
                             }
                           </InfoTip>
                         </div>

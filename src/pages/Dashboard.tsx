@@ -108,8 +108,8 @@ function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMu
 
   // Technical labels for the tooltip
   const techLabel: Record<string, string> = {
-    "Best": view === 'speed' ? "Best (p95 speed)" : "Best (p5 duration)",
-    "Worst": view === 'speed' ? "Worst (p5 speed)" : "Worst (p95 duration)",
+    "Best": view === 'speed' ? "Best" : "Best",
+    "Worst": view === 'speed' ? "Worst" : "Worst",
     "Avg Speed": "Avg Speed",
     "Avg Duration": "Avg Duration",
   };
@@ -507,6 +507,67 @@ function KpiInfo({ text }: { text: string }) {
         top:0, left:0,
       }}>
         {text}
+      </div>
+    </>
+  );
+}
+
+/* ── Chart info icon + tooltip ──────────────────────────────────── */
+function ChartInfoTooltip({ chartView }: { chartView: 'speed' | 'duration' }) {
+  const tipRef = useRef<HTMLDivElement>(null);
+  const show = (e: React.MouseEvent<HTMLSpanElement>) => {
+    const el = tipRef.current;
+    if (!el) return;
+    const r  = e.currentTarget.getBoundingClientRect();
+    const TW = el.offsetWidth  || 280;
+    const TH = el.offsetHeight || 80;
+    const vw = window.innerWidth;
+    const left = Math.max(8, Math.min(vw - TW - 8, r.left + r.width / 2 - TW / 2));
+    el.style.left = left + "px";
+    el.style.top  = (r.top > TH + 20 ? r.top - TH - 10 : r.bottom + 10) + "px";
+    el.style.opacity = "1";
+  };
+  const hide = () => { if (tipRef.current) tipRef.current.style.opacity = "0"; };
+
+  return (
+    <>
+      <span onMouseEnter={show} onMouseLeave={hide}
+        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
+          width:14, height:14, borderRadius:"50%",
+          border:"1.5px solid hsl(var(--muted-foreground))",
+          fontSize:8, fontWeight:900, cursor:"help",
+          color:"hsl(var(--muted-foreground))",
+          userSelect:"none",
+          textTransform:"none", letterSpacing:"normal",
+          lineHeight:1, flexShrink:0 }}>
+        i
+      </span>
+      <div ref={tipRef} style={{
+        position:"fixed", pointerEvents:"none",
+        opacity:0, transition:"opacity 0.15s ease",
+        background:"rgba(20,26,36,0.95)",
+        borderRadius:10, padding:"9px 12px",
+        boxShadow:"0 6px 28px rgba(0,0,0,0.45)",
+        zIndex:2000, maxWidth:280,
+        fontSize:12, lineHeight:1.5, color:"#94A3B8",
+        fontFamily:"var(--app-font)",
+        top:0, left:0,
+      }}>
+        {chartView === 'speed' ? (
+          <div>
+            <div style={{fontWeight:600, marginBottom:4}}>Best: 95th percentile speed</div>
+            <div style={{fontSize:11, marginBottom:6}}>Faster trips</div>
+            <div style={{fontWeight:600, marginBottom:4}}>Worst: 5th percentile speed</div>
+            <div style={{fontSize:11}}>Slower trips</div>
+          </div>
+        ) : (
+          <div>
+            <div style={{fontWeight:600, marginBottom:4}}>Best: 5th percentile duration</div>
+            <div style={{fontSize:11, marginBottom:6}}>Faster trips</div>
+            <div style={{fontWeight:600, marginBottom:4}}>Worst: 95th percentile duration</div>
+            <div style={{fontSize:11}}>Slower trips</div>
+          </div>
+        )}
       </div>
     </>
   );
@@ -2035,10 +2096,13 @@ function DashboardInner() {
                     <div className="chart-card animate-fade-in"
                       style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                          color: thm.textPrimary, margin: 0 }}>
-                          {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
-                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                            color: thm.textPrimary, margin: 0 }}>
+                            {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
+                          </p>
+                          <ChartInfoTooltip chartView={chartView} />
+                        </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {/* Daily / Weekly toggle */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>

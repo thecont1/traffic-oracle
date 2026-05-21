@@ -437,28 +437,6 @@ export function useTrafficData(citySource?: CitySource) {
       });
   }, [citySource]);
 
-  /* Start / restart the polling interval */
-  useEffect(() => {
-    // Clear any existing interval when citySource changes
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    // Wait for initial load to complete before starting to poll
-    if (loading) return;
-
-    const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
-    intervalRef.current = setInterval(doPoll, intervalMs);
-
-    return () => {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [loading, doPoll]);
-
   /* Page Visibility: skip ticks when tab is hidden */
   useEffect(() => {
     const onVisibilityChange = () => {

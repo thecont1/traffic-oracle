@@ -731,12 +731,12 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               ✕
             </button>
           </div>
-          {lastUpdated && (
+          {dataTimestamp && (
             <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0",
               display: "flex", alignItems: "center", gap: 5, opacity: 0.8 }}>
               <span className="live-dot" aria-hidden="true" />
               <span>
-                Live · updated {relativeTime(lastUpdated)}
+                Live · updated {relativeTime(dataTimestamp)}
               </span>
             </p>
           )}
@@ -849,11 +849,11 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
             }}>Traffic NOW!</span>
           </div>
-          {lastUpdated && (
+          {dataTimestamp && (
             <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0",
               display: "flex", alignItems: "center", gap: 4 }}>
               <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />
-              <span>Live · {relativeTime(lastUpdated)}</span>
+              <span>Live · {relativeTime(dataTimestamp)}</span>
             </p>
           )}
         </div>

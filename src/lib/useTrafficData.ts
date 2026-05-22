@@ -515,15 +515,15 @@ async function fetchWeatherData(signal?: AbortSignal): Promise<Map<string, Weath
     const num = (k: string) => { const v = parseFloat(r[k]); return isNaN(v) ? null : v; };
     map.set(rc, {
       route_code: rc,
-      aqi: num("aqi"),
-      aqi_category: (r["aqi_category"] ?? "").trim(),
-      condition: (r["condition"] ?? "").trim(),
-      temp_c: num("temp_c"),
-      realfeel_c: num("realfeel_c"),
-      realfeel_word: (r["realfeel_word"] ?? "").trim(),
-      humidity_pct: num("humidity_pct"),
-      wind_gust_kmh: num("wind_gust_kmh"),
-      uv_index: num("uv_index"),
+      aqi: num("aqi_score"),
+      aqi_category: (r["aqi_flag"] ?? "").trim(),
+      condition: (r["rsi_flag"] ?? "").trim(),
+      temp_c: num("temp"),
+      realfeel_c: num("realfeel_temp"),
+      realfeel_word: (r["realfeel_status"] ?? "").trim(),
+      humidity_pct: num("humidity"),
+      wind_gust_kmh: null,
+      uv_index: null,
     });
   }
   return map;

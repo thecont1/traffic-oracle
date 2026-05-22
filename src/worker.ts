@@ -32,8 +32,8 @@ export default {
         return new Response("Not Found", { status: 404 });
       }
 
-      // Forward to GitHub, ignoring any query params (they're only for cache-busting)
-      const upstreamUrl = `${GITHUB_RAW_BASE}/${filename}`;
+      // Forward to GitHub, prepending data/ directory
+      const upstreamUrl = `${GITHUB_RAW_BASE}/data/${filename}`;
 
       const upstream = await fetch(upstreamUrl, {
         // Tell Cloudflare's own fetch not to use its cache for this subrequest

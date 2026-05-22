@@ -29,7 +29,7 @@ export default defineConfig({
       "/api/traffic-csv": {
         target: "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/traffic-csv/, ""),
+        rewrite: (path) => path.replace(/^\/api\/traffic-csv/, "/data"),
         configure: (proxy) => {
           proxy.on("proxyRes", (proxyRes) => {
             proxyRes.headers["cache-control"] =

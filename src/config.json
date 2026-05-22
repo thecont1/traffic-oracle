@@ -56,7 +56,7 @@
     "min_width": 200,
     "width": 430,
     "max_width": 600,
-    "polling_interval_min": 6
+    "polling_interval_min": 10
   },
   "zoom": {
     "default": 1.00,

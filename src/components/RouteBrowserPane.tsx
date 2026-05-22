@@ -588,7 +588,6 @@ function RouteCard({
           )}
           {card.weather.aqi !== null && (
             <span
-              title={`AQI · ${card.weather.aqi_category}`}
               style={{
                 fontWeight: 600,
                 color:
@@ -597,7 +596,9 @@ function RouteCard({
                                             (thm.key === "colour" ? "#F87171" : "#C62828"),
               }}
             >
-              💨 {card.weather.aqi}
+              💨 {card.weather.aqi}{card.weather.aqi_category && (
+                <span style={{ fontWeight: 400, opacity: 0.8 }}> {card.weather.aqi_category}</span>
+              )}
             </span>
           )}
           {card.weather.condition && (

@@ -119,8 +119,9 @@ function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMu
   return (props: any) => {
     const { active, payload, label } = props ?? {};
     if (!active || !payload?.length) return null;
-    const tp = thm?.textPrimary  ?? "#2B2924";
-    const ts = thm?.textSecondary ?? "#6E675B";
+    // Tooltip always has white/light background, so use dark text colors
+    const tp = "#2B2924"; // dark primary
+    const ts = "#6E675B"; // dark secondary
 
     // Format weekKey (ISO date string) as "20 May 2026"
     let dateLabel = label;

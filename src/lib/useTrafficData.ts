@@ -468,6 +468,15 @@ export function useTrafficData(citySource?: CitySource) {
     };
   }, [fetchData]);
 
+  /* Start polling interval after initial data load completes */
+  useEffect(() => {
+    // Only start polling if initial load is done and we have route data
+    if (!loading && routeByCodeRef.current.size > 0 && intervalRef.current === null) {
+      const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
+      intervalRef.current = setInterval(doPoll, intervalMs);
+    }
+  }, [loading, doPoll]);
+
   /* Manual refresh — exposed to the caller */
   const refresh = useCallback(() => {
     const ctrl = new AbortController();

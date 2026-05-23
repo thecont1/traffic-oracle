@@ -1883,7 +1883,7 @@ function DashboardInner() {
             display: "flex",
             flexDirection: "column",
             gap: "1.5rem",
-            visibility: citySource ? "visible" : "hidden",
+            visibility: showCar ? "hidden" : (citySource ? "visible" : "hidden"),
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}

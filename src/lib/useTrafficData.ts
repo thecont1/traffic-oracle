@@ -358,7 +358,7 @@ export async function refreshTrafficData(
   };
 }
 
-export function useTrafficData(citySource?: CitySource) {
+export function useTrafficData(citySource?: CitySource, paused?: boolean) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [allRows, setAllRows] = useState<TrafficRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -448,16 +448,19 @@ export function useTrafficData(citySource?: CitySource) {
         }
       } else {
         // Tab visible again — do an immediate poll, then restart interval
-        doPoll();
-        const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
-        intervalRef.current = setInterval(doPoll, intervalMs);
+        // Don't restart polling if paused (Time Travel active)
+        if (!paused) {
+          doPoll();
+          const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
+          intervalRef.current = setInterval(doPoll, intervalMs);
+        }
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [doPoll]);
+  }, [doPoll, paused]);
 
   /* Initial load on mount */
   useEffect(() => {
@@ -470,12 +473,20 @@ export function useTrafficData(citySource?: CitySource) {
 
   /* Start polling interval after initial data load completes */
   useEffect(() => {
+    // If paused (TT active), clear any running interval and don't start a new one
+    if (paused) {
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
     // Only start polling if initial load is done and we have route data
     if (!loading && routeByCodeRef.current.size > 0 && intervalRef.current === null) {
       const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
       intervalRef.current = setInterval(doPoll, intervalMs);
     }
-  }, [loading, doPoll]);
+  }, [loading, doPoll, paused]);
 
   /* Manual refresh — exposed to the caller */
   const refresh = useCallback(() => {

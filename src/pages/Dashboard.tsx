@@ -1138,7 +1138,7 @@ function DashboardInner() {
 
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
-    useTrafficData(citySource);
+    useTrafficData(citySource, tt.isActive);
   const weatherMap = useWeatherData();
 
   // Time Travel: filter allRows to historical subset when TT is active

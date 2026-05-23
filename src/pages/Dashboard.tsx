@@ -17,6 +17,7 @@ import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, Weat
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
+import { TimeTravelProvider, useTimeTravel } from "@/lib/TimeTravelContext";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
 import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandChart";
@@ -70,6 +71,7 @@ function readUrlParams() {
   if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));
   if (p.has("aggregation")) out.aggregation = p.get("aggregation")!;
   if (p.has("metric")) out.metric = p.get("metric")!;
+  if (p.has("tt"))     out.tt     = p.get("tt")!;
   return out;
 }
 const URL_PARAMS = readUrlParams();
@@ -981,6 +983,7 @@ function computeAllRouteCards(
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
 function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
+  const tt = useTimeTravel();
   const isMobile = useIsMobile();
   const liveRef = useRef<HTMLDivElement>(null);
 
@@ -1137,6 +1140,19 @@ function DashboardInner() {
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
     useTrafficData(citySource);
   const weatherMap = useWeatherData();
+
+  // Hydrate Time Travel from ?tt= URL param on mount
+  const ttHydrated = useRef(false);
+  useEffect(() => {
+    if (ttHydrated.current) return;
+    if (URL_PARAMS.tt && typeof URL_PARAMS.tt === "string" && !tt.isActive) {
+      const dt = new Date(URL_PARAMS.tt);
+      if (!isNaN(dt.getTime())) {
+        tt.activate(dt);
+      }
+    }
+    ttHydrated.current = true;
+  }, []);
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -2546,8 +2562,10 @@ function DashboardInner() {
 /* ── Public export — wraps inner component with ThemeProvider ─── */
 export default function Dashboard() {
   return (
-    <ThemeProvider initialTheme={URL_PARAMS.theme as any}>
-      <DashboardInner />
-    </ThemeProvider>
+    <TimeTravelProvider>
+      <ThemeProvider initialTheme={URL_PARAMS.theme as any}>
+        <DashboardInner />
+      </ThemeProvider>
+    </TimeTravelProvider>
   );
 }

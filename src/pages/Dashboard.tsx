@@ -1066,13 +1066,25 @@ function DashboardInner() {
   /* ── Car animation — runs on mount and on every city change ──── */
   const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
+  const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
   useEffect(() => {
     setShowIntro(true);
     setShowCar(true);
-    const t1 = setTimeout(() => setShowIntro(false), 2500);      /* reveal cards */
-    const t2 = setTimeout(() => setShowCar(false),   2500 + 650); /* then remove car */
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [selectedCity]);  /* re-run on every city switch */
+    setLoadPct(0);
+    const start = performance.now();
+    const DURATION = 2500;
+    let raf: number;
+    const tick = (now: number) => {
+      const pct = Math.min(100, Math.round(((now - start) / DURATION) * 100));
+      setLoadPct(pct);
+      if (pct < 100) { raf = requestAnimationFrame(tick); }
+    };
+    raf = requestAnimationFrame(tick);
+    /* For cities with data: reveal cards then remove car */
+    const t1 = citySource ? setTimeout(() => setShowIntro(false), 2500) : null;
+    const t2 = setTimeout(() => setShowCar(false), 2500 + 650);
+    return () => { cancelAnimationFrame(raf); if (t1) clearTimeout(t1); clearTimeout(t2); };
+  }, [selectedCity]); /* re-run on every city switch */
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
   const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
@@ -1668,6 +1680,7 @@ function DashboardInner() {
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "2rem",
               background: thm.paneBg,
+              animation: "cards-reveal 0.5s ease both",
             }}>
               <div style={{
                 maxWidth: 480,
@@ -1822,8 +1835,26 @@ function DashboardInner() {
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* ── Intro car races along the slider track ── */}
-                    {showCar && trackW > 0 && (
-                      <svg
+                    {showCar && trackW > 0 && <>
+                    {/* 0→100% loading counter */}
+                    <div style={{
+                      position: "absolute",
+                      top: "60px",
+                      left: 0, right: 0,
+                      textAlign: "center",
+                      fontFamily: "var(--app-font-display)",
+                      fontWeight: 800,
+                      fontSize: "clamp(2rem,6vw,3.5rem)",
+                      letterSpacing: "-0.04em",
+                      color: thm.textPrimary,
+                      opacity: 0.15,
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      lineHeight: 1,
+                    }}>
+                      {loadPct}%
+                    </div>
+                    <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="80" height="80"
                         viewBox="0 0 24 24"
@@ -1851,7 +1882,7 @@ function DashboardInner() {
                         <path d="M9 17h6" />
                         <circle cx="17" cy="17" r="2" />
                       </svg>
-                    )}
+                    </> /* end showCar && trackW>0 */}
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}

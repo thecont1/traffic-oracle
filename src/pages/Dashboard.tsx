@@ -1097,7 +1097,7 @@ function DashboardInner() {
     raf = requestAnimationFrame(tick);
 
     /* Retract pane invisibly, remember whether to reopen */
-    willReopenPane.current = paneOpen;
+    willReopenPane.current = paneOpen || (cfg.route_pane.open ?? true);
     setPaneOpen(false);
 
     /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */

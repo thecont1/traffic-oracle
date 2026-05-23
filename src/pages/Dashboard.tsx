@@ -1842,7 +1842,7 @@ function DashboardInner() {
                   border: showIntro ? "none" : thm.cardBorder,
                   boxShadow: showIntro ? "none" : thm.cardShadow,
                   borderRadius:"1.5rem",
-                  padding: "1.25rem 1.5rem 1rem",
+                  padding: "1.25rem 1.5rem 2rem",
                   position:"relative", overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}

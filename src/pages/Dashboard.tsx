@@ -1067,6 +1067,7 @@ function DashboardInner() {
   const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
+  const [settledCity, setSettledCity] = useState<string | null>(null);
   useEffect(() => {
     setShowIntro(true);
     setShowCar(true);
@@ -1082,7 +1083,10 @@ function DashboardInner() {
     raf = requestAnimationFrame(tick);
     /* For cities with data: reveal cards then remove car */
     const t1 = citySource ? setTimeout(() => setShowIntro(false), 2500) : null;
-    const t2 = setTimeout(() => setShowCar(false), 2500 + 650);
+    const t2 = setTimeout(() => {
+      setShowCar(false);
+      setSettledCity(selectedCity);
+    }, 2500 + 650);
     return () => { cancelAnimationFrame(raf); if (t1) clearTimeout(t1); clearTimeout(t2); };
   }, [selectedCity]); /* re-run on every city switch */
 
@@ -1673,17 +1677,14 @@ function DashboardInner() {
             position: "relative",
           }}>
 
-          {/* ── City 404 overlay — always present for no-data cities;
-               invisible during car animation so it covers any flash ── */}
-          {!citySource && (
+          {/* ── City 404 overlay — only after animation settles on this city ── */}
+          {!citySource && settledCity === selectedCity && (
             <div style={{
               position: "absolute", inset: 0, zIndex: 100,
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "2rem",
               background: thm.paneBg,
-              opacity: showCar ? 0 : 1,
-              pointerEvents: showCar ? "none" : "auto",
-              transition: "opacity 0.5s ease",
+              animation: "cards-reveal 0.5s ease both",
             }}>
               <div style={{
                 maxWidth: 480,

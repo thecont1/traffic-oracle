@@ -1772,14 +1772,19 @@ function DashboardInner() {
             </p>
           </div>
 
-          {/* Loading */}
-          {loading && (
-            <div style={{ textAlign:"center", padding:"4rem 0",
-              opacity: showIntro ? 0 : 1,
+          {/* Loading — message shown below slider (or centred if slider not yet rendered) */}
+          {loading && showCar && (
+            <p style={{
+              textAlign: "center", fontSize: 11,
+              color: thm.textMuted, marginTop: 12, opacity: 0.8,
             }}>
-              <div className="animate-float" style={{ fontSize:56, marginBottom:16 }}>🚗</div>
+              Fetching traffic data…
+            </p>
+          )}
+          {loading && !showCar && (
+            <div style={{ textAlign:"center", padding:"4rem 0" }}>
               <p style={{ color: thm.textMuted, fontWeight:600 }}>
-                Fetching 60k traffic records from GitHub…
+                Fetching traffic data…
               </p>
             </div>
           )}

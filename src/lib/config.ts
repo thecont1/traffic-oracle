@@ -33,8 +33,4 @@ export interface AppConfig {
     max_width: number;
     polling_interval_min: number;
   };
-  zoom: {
-    default: number;
-    steps: number[];
-  };
 }

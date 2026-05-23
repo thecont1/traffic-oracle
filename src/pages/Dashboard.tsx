@@ -1070,9 +1070,8 @@ function DashboardInner() {
     return () => clearTimeout(t);
   }, []);
 
-  /* Zoom control */
-  const ZOOM_STEPS = cfg.zoom.steps;
-  const defaultZoom = cfg.zoom.default;
+  /* Zoom control — steps hardcoded; no longer read from config.json */
+  const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
   const [zoomIdx, setZoomIdx] = useState(() => {
     const z = URL_PARAMS.zoom as number | undefined;
     if (z) {
@@ -1080,17 +1079,17 @@ function DashboardInner() {
         Math.abs(v - z) < Math.abs(ZOOM_STEPS[best] - z) ? i : best, 0);
       return closest;
     }
-    return ZOOM_STEPS.indexOf(defaultZoom) >= 0 ? ZOOM_STEPS.indexOf(defaultZoom) : 1;
+    return 2; /* default 1.00 */
   });
+  const mainContentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const zoom = ZOOM_STEPS[zoomIdx];
-    document.documentElement.style.zoom = String(zoom);
-    /* Compensate for zoom: the container uses 100vh CSS but zoom scales
-       the rendered output, leaving a gap. Override height to vh/zoom so
-       the rendered height always equals the viewport. */
-    const container = document.querySelector('.transition-colors') as HTMLElement | null;
-    if (container) {
-      container.style.height = `${window.innerHeight / zoom}px`;
+    /* Apply scale only to the main content area, not the header */
+    if (mainContentRef.current) {
+      mainContentRef.current.style.transform = `scale(${zoom})`;
+      mainContentRef.current.style.transformOrigin = "top center";
+      /* Compensate layout height so content doesn't get clipped */
+      mainContentRef.current.style.height = `${(1 / zoom) * 100}%`;
     }
   }, [zoomIdx]);
   const zoomIn = useCallback(() => setZoomIdx(i => Math.min(i + 1, ZOOM_STEPS.length - 1)), []);
@@ -1544,36 +1543,6 @@ function DashboardInner() {
           Skip to main content
         </a>
 
-        {/* ── Page-load intro: car zips across the screen ─── */}
-        {showIntro && (
-          <div style={{
-            position: "fixed", inset: 0, zIndex: 9999,
-            background: thm.bodyBg,
-            display: "flex", alignItems: "center",
-            overflow: "hidden",
-            pointerEvents: "none",
-          }}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="48" height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={thm.textPrimary}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{
-                animation: "car-zip 1s ease-in-out forwards",
-                flexShrink: 0,
-              }}
-            >
-              <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-              <circle cx="7" cy="17" r="2" />
-              <path d="M9 17h6" />
-              <circle cx="17" cy="17" r="2" />
-            </svg>
-          </div>
-        )}
 
         {/* ── Header ──────────────────────────────────────────── */}
         <header style={{
@@ -1684,7 +1653,7 @@ function DashboardInner() {
             flexDirection: "column",
             overflow: "hidden",
           }}>
-          <main id="main-content" tabIndex={-1} className="scrollbar-hide" style={{
+          <main id="main-content" tabIndex={-1} className="scrollbar-hide" ref={mainContentRef} style={{
             flex: 1,
             overflowY: "auto",
             position: "relative",
@@ -1773,7 +1742,10 @@ function DashboardInner() {
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}
-          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem" }}>
+          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem",
+            opacity: showIntro ? 0 : 1,
+            animation: showIntro ? "none" : "cards-reveal 0.5s ease both",
+          }}>
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
               fontSize:"clamp(1.3rem,3.2vw,2rem)", lineHeight:1.7,
@@ -1802,7 +1774,9 @@ function DashboardInner() {
 
           {/* Loading */}
           {loading && (
-            <div style={{ textAlign:"center", padding:"4rem 0" }}>
+            <div style={{ textAlign:"center", padding:"4rem 0",
+              opacity: showIntro ? 0 : 1,
+            }}>
               <div className="animate-float" style={{ fontSize:56, marginBottom:16 }}>🚗</div>
               <p style={{ color: thm.textMuted, fontWeight:600 }}>
                 Fetching 60k traffic records from GitHub…
@@ -1812,7 +1786,9 @@ function DashboardInner() {
 
           {/* Error — 404-style full-page */}
           {!loading && error && (
-            <div style={{ textAlign:"center", padding:"6rem 2rem" }}>
+            <div style={{ textAlign:"center", padding:"6rem 2rem",
+              opacity: showIntro ? 0 : 1,
+            }}>
               <div style={{ fontSize:64, marginBottom:16 }}>📡</div>
               <p style={{ fontWeight:700, fontSize:18, color: thm.textPrimary, marginBottom:8 }}>
                 Data unavailable for {selectedCity}
@@ -1835,6 +1811,35 @@ function DashboardInner() {
                   position:"relative", overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}
+
+                  {/* ── Intro car races along the slider track ── */}
+                  {showIntro && trackW > 0 && (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="72" height="72"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={thm.textPrimary}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        zIndex: 50,
+                        pointerEvents: "none",
+                        "--car-from": `calc(${leftPct}% - 36px)`,
+                        "--car-to": `calc(${rightPct}% - 36px)`,
+                        animation: "track-run 1s ease-in-out forwards",
+                      } as React.CSSProperties}
+                    >
+                      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                      <circle cx="7" cy="17" r="2" />
+                      <path d="M9 17h6" />
+                      <circle cx="17" cy="17" r="2" />
+                    </svg>
+                  )}
 
                   <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14 }}>
                     <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
@@ -1962,6 +1967,15 @@ function DashboardInner() {
                   )}
                 </div>
               )}
+
+              {/* ── Cards reveal wrapper (hidden during intro) ── */}
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.5rem",
+                opacity: showIntro ? 0 : 1,
+                animation: showIntro ? "none" : "cards-reveal 0.55s ease 0.05s both",
+              }}>
 
               {/* ── Verdict ──────────────────────────────────── */}
               <div className="animate-fade-in" style={{
@@ -2381,6 +2395,8 @@ function DashboardInner() {
                   </div>
                 </>
               )}
+
+              </div>{/* close cards reveal wrapper */}
 
             </>
           )}

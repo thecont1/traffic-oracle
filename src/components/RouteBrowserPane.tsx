@@ -601,8 +601,8 @@ function RouteCard({
               )}
             </span>
           )}
-          {card.weather.condition && (
-            <span style={{ opacity: 0.8 }}>☁️ {card.weather.condition}</span>
+          {card.weather.condition && !card.weather.condition.toLowerCase().startsWith("no precipitation") && (
+            <span style={{ opacity: 0.8 }}>🌧️ {card.weather.condition}</span>
           )}
         </div>
       )}

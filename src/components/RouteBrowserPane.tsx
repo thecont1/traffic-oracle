@@ -907,23 +907,32 @@ interface Props {
   dataTimestamp: Date | null;
   lastUpdated: Date | null;
   mobile?: boolean;
+  isOpen?: boolean;
+  onToggle?: () => void;
+  paneWidth?: number;
 }
 
 export default function RouteBrowserPane(props: Props) {
   const { theme: thm } = useTheme();
-  const [isOpen, setIsOpen] = useState(cfg.route_pane.open);
-  const [paneWidth, setPaneWidth] = useState(cfg.route_pane.width);
+  const [internalOpen, setInternalOpen] = useState(cfg.route_pane.open);
+  const [internalWidth, setInternalWidth] = useState(cfg.route_pane.width);
+
+  const isOpen = props.isOpen !== undefined ? props.isOpen : internalOpen;
+  const paneWidth = props.paneWidth !== undefined ? props.paneWidth : internalWidth;
 
   useEffect(() => {
     const handler = (e: Event) => {
       const w = (e as CustomEvent).detail;
-      if (typeof w === "number" && w >= cfg.route_pane.min_width && w <= cfg.route_pane.max_width) setPaneWidth(w);
+      if (typeof w === "number" && w >= cfg.route_pane.min_width && w <= cfg.route_pane.max_width) setInternalWidth(w);
     };
     window.addEventListener("route-pane-resize", handler);
     return () => window.removeEventListener("route-pane-resize", handler);
   }, []);
 
-  const handleToggle = useCallback(() => setIsOpen(v => !v), []);
+  const handleToggle = useCallback(() => {
+    if (props.onToggle) { props.onToggle(); }
+    else { setInternalOpen(v => !v); }
+  }, [props.onToggle]);
   const handleRouteSelect = useCallback((label: string) => {
     props.onRouteSelect(label);
   }, [props.onRouteSelect]);

@@ -2507,25 +2507,18 @@ function DashboardInner() {
 
           {/* ── Route browser pane (desktop) ──────────────────────── */}
           {!isMobile && citySource && (
-            <div style={{
-              width: paneOpen ? cfg.route_pane.width : 0,
-              opacity: paneOpen ? 1 : 0,
-              overflow: "hidden",
-              transition: "width 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease",
-              display: "flex",
-              minHeight: 0,
-              zoom: ZOOM_STEPS[zoomIdx],
-            }}>
-              <div style={{ width: cfg.route_pane.width, flexShrink: 0 }}>
-                <RouteBrowserPane
-                  cards={allRouteCards}
-                  selectedRoute={selectedRoute}
-                  onRouteSelect={handleRouteSelectFromPane}
-                  dataTimestamp={dataTimestamp}
-                  lastUpdated={lastUpdated}
-                  mobile={false}
-                />
-              </div>
+            <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
+              <RouteBrowserPane
+                cards={allRouteCards}
+                selectedRoute={selectedRoute}
+                onRouteSelect={handleRouteSelectFromPane}
+                dataTimestamp={dataTimestamp}
+                lastUpdated={lastUpdated}
+                mobile={false}
+                isOpen={paneOpen}
+                onToggle={() => setPaneOpen(o => !o)}
+                paneWidth={cfg.route_pane.width}
+              />
             </div>
           )}
 

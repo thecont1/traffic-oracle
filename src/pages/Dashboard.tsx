@@ -1040,7 +1040,7 @@ function DashboardInner() {
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
   sliderValsRef.current = sliderVals;
-  const trackRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const [trackW, setTrackW] = useState(0);
   useLayoutEffect(() => {
     if (trackRef.current) {
@@ -1063,14 +1063,16 @@ function DashboardInner() {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  /* ── Page-load car animation ─────────────────────────────────── */
+  /* ── Car animation — runs on mount and on every city change ──── */
   const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   useEffect(() => {
+    setShowIntro(true);
+    setShowCar(true);
     const t1 = setTimeout(() => setShowIntro(false), 2500);      /* reveal cards */
     const t2 = setTimeout(() => setShowCar(false),   2500 + 650); /* then remove car */
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
+  }, [selectedCity]);  /* re-run on every city switch */
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
   const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
@@ -1659,8 +1661,8 @@ function DashboardInner() {
             position: "relative",
           }}>
 
-          {/* ── City 404 overlay ─────────────────────────────── */}
-          {!citySource && (
+          {/* ── City 404 overlay — shown only after animation finishes ── */}
+          {!citySource && !showCar && (
             <div style={{
               position: "absolute", inset: 0, zIndex: 100,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -1731,6 +1733,72 @@ function DashboardInner() {
             </div>
           )}
 
+          {/* ── Standalone intro track — always shown during showCar ── */}
+          {showCar && (
+            <div style={{
+              maxWidth: isMobile ? "100%" : 1320,
+              margin: "0 auto",
+              padding: isMobile ? "0 1rem" : "0 1.5rem",
+              position: "relative",
+            }}>
+              {/* synthetic track bar */}
+              <div ref={trackRef} style={{
+                height: 4, borderRadius: 9999,
+                background: thm.slider?.track ?? "hsl(var(--border))",
+                margin: "2.5rem 0 0",
+                position: "relative",
+              }}>
+                {/* left thumb */}
+                <div style={{
+                  position: "absolute", left: `${leftPct}%`, top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 7, height: 28, borderRadius: 9999,
+                  background: thm.slider?.thumbFg ?? thm.textPrimary,
+                  border: `2px solid ${thm.slider?.thumbBorder ?? thm.textMuted}`,
+                }} />
+                {/* right thumb */}
+                <div style={{
+                  position: "absolute", left: `${rightPct}%`, top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 7, height: 28, borderRadius: 9999,
+                  background: thm.slider?.thumbFg ?? thm.textPrimary,
+                  border: `2px solid ${thm.slider?.thumbBorder ?? thm.textMuted}`,
+                }} />
+              </div>
+              {/* car SVG */}
+              {trackW > 0 && (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="80" height="80" viewBox="0 0 24 24"
+                  fill="none" stroke={thm.textPrimary}
+                  strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{
+                    position: "absolute",
+                    top: "calc(2.5rem - 20px)",
+                    zIndex: 50, pointerEvents: "none",
+                    "--car-from": `calc(${leftPct}% + 11px + 4px)`,
+                    "--car-to":   `calc(${rightPct}% - 11px - 80px)`,
+                    animation: "track-run 2.5s ease-in-out forwards",
+                  } as React.CSSProperties}
+                >
+                  <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                  <circle cx="7" cy="17" r="2" />
+                  <path d="M9 17h6" />
+                  <circle cx="17" cy="17" r="2" />
+                </svg>
+              )}
+              {/* loading message */}
+              {loading && (
+                <p style={{
+                  textAlign: "center", fontSize: 11,
+                  color: thm.textMuted, marginTop: 14, opacity: 0.8,
+                }}>
+                  Fetching traffic data…
+                </p>
+              )}
+            </div>
+          )}
+
           <div style={{
             maxWidth: isMobile ? "100%" : 1320,
             margin: "0 auto",
@@ -1772,20 +1840,10 @@ function DashboardInner() {
             </p>
           </div>
 
-          {/* Loading — message shown below slider (or centred if slider not yet rendered) */}
-          {loading && showCar && (
-            <p style={{
-              textAlign: "center", fontSize: 11,
-              color: thm.textMuted, marginTop: 12, opacity: 0.8,
-            }}>
-              Fetching traffic data…
-            </p>
-          )}
+          {/* Loading — after intro only (during intro the standalone stage shows the message) */}
           {loading && !showCar && (
             <div style={{ textAlign:"center", padding:"4rem 0" }}>
-              <p style={{ color: thm.textMuted, fontWeight:600 }}>
-                Fetching traffic data…
-              </p>
+              <p style={{ color: thm.textMuted, fontWeight:600 }}>Fetching traffic data…</p>
             </div>
           )}
 
@@ -1829,37 +1887,6 @@ function DashboardInner() {
                   </div>
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
-                    {/* ── Intro car races along the slider track ── */}
-                    {showCar && trackW > 0 && (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="80" height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={thm.textPrimary}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{
-                          position: "absolute",
-                          /* Wrapper is 28px top-pad + 40px slider + 4px bottom = 72px.
-                             Track centreline is at 48px. Float car just above it. */
-                          top: "-20px",
-                          zIndex: 50,
-                          pointerEvents: "none",
-                          /* Start: right edge of left thumb (thumb=22px, centre at leftPct%) */
-                          "--car-from": `calc(${leftPct}% + 11px + 4px)`,
-                          /* Stop: left edge of right thumb minus car width and gap */
-                          "--car-to": `calc(${rightPct}% - 11px - 72px - 0px)`,
-                          animation: "track-run 2.5s ease-in-out forwards",
-                        } as React.CSSProperties}
-                      >
-                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                        <circle cx="7" cy="17" r="2" />
-                        <path d="M9 17h6" />
-                        <circle cx="17" cy="17" r="2" />
-                      </svg>
-                    )}
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}
@@ -1897,7 +1924,7 @@ function DashboardInner() {
                       )}
 
                       {/* Track */}
-                      <SliderPrimitive.Track ref={trackRef} style={{
+                      <SliderPrimitive.Track style={{
                         position:"relative", flexGrow:1,
                         height:10, borderRadius:9999, overflow:"hidden",
                         background: thm.slider.rail,

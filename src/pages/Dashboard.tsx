@@ -1823,24 +1823,24 @@ function DashboardInner() {
                     {showIntro && trackW > 0 && (
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        width="72" height="72"
+                        width="80" height="80"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke={thm.textPrimary}
-                        strokeWidth="2"
+                        strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         style={{
                           position: "absolute",
                           /* Wrapper is 28px top-pad + 40px slider + 4px bottom = 72px.
                              Track centreline is at 48px. Float car just above it. */
-                          top: "4px",
+                          top: "-20px",
                           zIndex: 50,
                           pointerEvents: "none",
                           /* Start: right edge of left thumb (thumb=22px, centre at leftPct%) */
                           "--car-from": `calc(${leftPct}% + 11px + 4px)`,
                           /* Stop: left edge of right thumb minus car width and gap */
-                          "--car-to": `calc(${rightPct}% - 11px - 72px - 6px)`,
+                          "--car-to": `calc(${rightPct}% - 11px - 72px - 0px)`,
                           animation: "track-run 2.5s ease-in-out forwards",
                         } as React.CSSProperties}
                       >
@@ -2410,6 +2410,8 @@ function DashboardInner() {
           display:"flex", alignItems:"baseline", justifyContent:"center",
           flexWrap:"wrap", gap:"0 4px",
           fontSize:11, color: thm.textMuted,
+          opacity: showIntro ? 0 : 1,
+          transition: "opacity 0.4s ease",
         }}>
           <b style={{ lineHeight:1 }}>Data Source</b>{" "}
           {(() => {
@@ -2444,6 +2446,7 @@ function DashboardInner() {
 
           {/* ── Route browser pane (desktop) ──────────────────────── */}
           {!isMobile && citySource && (
+            <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0 }}>
             <RouteBrowserPane
               cards={allRouteCards}
               selectedRoute={selectedRoute}
@@ -2452,20 +2455,23 @@ function DashboardInner() {
               lastUpdated={lastUpdated}
               mobile={false}
             />
+            </div>
           )}
 
         </div>{/* close flex row */}
 
         {/* ── Mobile route browser (overlay) ──────────────────── */}
       {isMobile && citySource && (
-        <RouteBrowserPane
-          cards={allRouteCards}
-          selectedRoute={selectedRoute}
-          onRouteSelect={handleRouteSelectFromPane}
-          dataTimestamp={dataTimestamp}
-          lastUpdated={lastUpdated}
-          mobile={true}
-        />
+        <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease" }}>
+          <RouteBrowserPane
+            cards={allRouteCards}
+            selectedRoute={selectedRoute}
+            onRouteSelect={handleRouteSelectFromPane}
+            dataTimestamp={dataTimestamp}
+            lastUpdated={lastUpdated}
+            mobile={true}
+          />
+        </div>
       )}
 
       </div>

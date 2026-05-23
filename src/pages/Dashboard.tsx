@@ -1064,10 +1064,12 @@ function DashboardInner() {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   /* ── Page-load car animation ─────────────────────────────────── */
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
+  const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   useEffect(() => {
-    const t = setTimeout(() => setShowIntro(false), 2500);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => setShowIntro(false), 2500);      /* reveal cards */
+    const t2 = setTimeout(() => setShowCar(false),   2500 + 650); /* then remove car */
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
@@ -1823,7 +1825,7 @@ function DashboardInner() {
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* ── Intro car races along the slider track ── */}
-                    {showIntro && trackW > 0 && (
+                    {showCar && trackW > 0 && (
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="80" height="80"

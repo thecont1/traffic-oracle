@@ -21,7 +21,7 @@
   },
   "defaults": {
     "baseline_start": "2025-10-20",
-    "baseline_end": "2026-03-23",
+    "baseline_end": "2026-01-23",
     "question_mode": "improved",
     "route": "Double Decker Flyover",
     "time_of_day": "weekday_evening",

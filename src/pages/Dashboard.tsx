@@ -1802,15 +1802,18 @@ function DashboardInner() {
               {/* ── Baseline slider ──────────────────────────── */}
               {allRouteWeeks.length > 1 && (
                 <div className="animate-fade-in" style={{
-                  background: thm.sectionBg,
-                  border: thm.cardBorder,
-                  boxShadow: thm.cardShadow,
-                  borderRadius:"1.5rem", padding:"1.25rem 1.5rem 1rem",
+                  background: showIntro ? "transparent" : thm.sectionBg,
+                  border: showIntro ? "none" : thm.cardBorder,
+                  boxShadow: showIntro ? "none" : thm.cardShadow,
+                  borderRadius:"1.5rem",
+                  padding: "1.25rem 1.5rem 1rem",
                   position:"relative", overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14,
+                    opacity: showIntro ? 0 : 1,
+                  }}>
                     <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                       color: thm.textPrimary, margin: 0 }}>
                       Compare with this earlier period 
@@ -1860,6 +1863,7 @@ function DashboardInner() {
                       {/* Left thumb date label */}
                       {baselineStartDate && (
                         <div style={{
+                          opacity: showIntro ? 0 : 1,
                           position:"absolute", left:`${leftPct}%`, top:-20,
                           transform:"translateX(-50%)",
                           fontSize:10, fontWeight: dragThumb === 0 ? 600 : 400,
@@ -1873,6 +1877,7 @@ function DashboardInner() {
                       {/* Right thumb date label */}
                       {baselineEndDate && (
                         <div style={{
+                          opacity: showIntro ? 0 : 1,
                           position:"absolute", left:`${rightPct}%`, top:-20,
                           transform:"translateX(-50%)",
                           fontSize:10, fontWeight: dragThumb === 1 ? 600 : 400,
@@ -1950,7 +1955,9 @@ function DashboardInner() {
 
                   {/* Boundary dates */}
                   <div style={{ display:"flex", justifyContent:"space-between",
-                    fontSize:10, fontWeight:400, color: thm.textMuted, marginTop:6 }}>
+                    fontSize:10, fontWeight:400, color: thm.textMuted, marginTop:6,
+                    opacity: showIntro ? 0 : 1,
+                  }}>
                     <span>{fmtDate(allRouteWeeks[0]?.weekKey)}</span>
                     <span>{lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate)}</span>
                   </div>

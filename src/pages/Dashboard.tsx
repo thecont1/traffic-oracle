@@ -1063,6 +1063,13 @@ function DashboardInner() {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  /* ── Page-load car animation ─────────────────────────────────── */
+  const [showIntro, setShowIntro] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowIntro(false), 1000);
+    return () => clearTimeout(t);
+  }, []);
+
   /* Zoom control */
   const ZOOM_STEPS = cfg.zoom.steps;
   const defaultZoom = cfg.zoom.default;
@@ -1536,6 +1543,37 @@ function DashboardInner() {
         <a href="#main-content" className="sr-only focusable">
           Skip to main content
         </a>
+
+        {/* ── Page-load intro: car zips across the screen ─── */}
+        {showIntro && (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: thm.bodyBg,
+            display: "flex", alignItems: "center",
+            overflow: "hidden",
+            pointerEvents: "none",
+          }}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="48" height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={thm.textPrimary}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                animation: "car-zip 1s ease-in-out forwards",
+                flexShrink: 0,
+              }}
+            >
+              <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+              <circle cx="7" cy="17" r="2" />
+              <path d="M9 17h6" />
+              <circle cx="17" cy="17" r="2" />
+            </svg>
+          </div>
+        )}
 
         {/* ── Header ──────────────────────────────────────────── */}
         <header style={{

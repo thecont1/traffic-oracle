@@ -43,6 +43,12 @@ export interface TrafficRow {
   hour: number;
   dayOfWeek: number;
   weekKey: string;
+  /* optional weather snapshot fields — present when the CSV contains them */
+  temp_c?: number | null;
+  realfeel_c?: number | null;
+  humidity_pct?: number | null;
+  rsi_flag?: string;
+  aqi?: number | null;
 }
 
 export interface WeeklyAggregate {
@@ -246,6 +252,7 @@ export function fetchTrafficData(
           Math.round((distance_km / (duration_min / 60)) * 10) / 10;
         if (speed_kmh <= 0 || speed_kmh > 150) continue;
 
+        const numOrNull = (k: string) => { const v = parseFloat(r[k]); return isNaN(v) ? null : v; };
         rows.push({
           timestamp: ts,
           route_code: route.route_code,
@@ -256,6 +263,11 @@ export function fetchTrafficData(
           hour: ts.getHours(),
           dayOfWeek: ts.getDay(),
           weekKey: toWeekKey(ts),
+          temp_c: numOrNull("temp"),
+          realfeel_c: numOrNull("realfeel"),
+          humidity_pct: numOrNull("humidity"),
+          rsi_flag: getCol(r, "rsi_flag").trim() || undefined,
+          aqi: numOrNull("aqi"),
         });
       }
 
@@ -328,6 +340,7 @@ export async function refreshTrafficData(
       Math.round((distance_km / (duration_min / 60)) * 10) / 10;
     if (speed_kmh <= 0 || speed_kmh > 150) continue;
 
+    const numOrNull2 = (k: string) => { const v = parseFloat(r[k]); return isNaN(v) ? null : v; };
     newRows.push({
       timestamp: ts,
       route_code: route.route_code,
@@ -338,6 +351,11 @@ export async function refreshTrafficData(
       hour: ts.getHours(),
       dayOfWeek: ts.getDay(),
       weekKey: toWeekKey(ts),
+      temp_c: numOrNull2("temp"),
+      realfeel_c: numOrNull2("realfeel"),
+      humidity_pct: numOrNull2("humidity"),
+      rsi_flag: getCol(r, "rsi_flag").trim() || undefined,
+      aqi: numOrNull2("aqi"),
     });
   }
 
@@ -358,7 +376,7 @@ export async function refreshTrafficData(
   };
 }
 
-export function useTrafficData(citySource?: CitySource) {
+export function useTrafficData(citySource?: CitySource | null, timeTravelDate?: Date | null) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [allRows, setAllRows] = useState<TrafficRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -378,7 +396,7 @@ export function useTrafficData(citySource?: CitySource) {
       setError(null);
       setRowCount(0);
 
-      fetchTrafficData(signal, citySource)
+      fetchTrafficData(signal, citySource ?? undefined)
         .then(({ routes: rl, allRows: ar, rowCount: rc }) => {
           setRoutes(rl);
           setAllRows(ar);
@@ -421,7 +439,7 @@ export function useTrafficData(citySource?: CitySource) {
     refreshTrafficData(
       routeByCodeRef.current,
       ctrl.signal,
-      citySource,
+      citySource ?? undefined,
     )
       .then((result) => {
         setAllRows(result.allRows);
@@ -468,14 +486,21 @@ export function useTrafficData(citySource?: CitySource) {
     };
   }, [fetchData]);
 
-  /* Start polling interval after initial data load completes */
+  /* Start polling interval after initial data load completes — skip when time-travelling */
   useEffect(() => {
-    // Only start polling if initial load is done and we have route data
+    if (timeTravelDate) {
+      // Clear any running interval when time travel is active
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
     if (!loading && routeByCodeRef.current.size > 0 && intervalRef.current === null) {
       const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
       intervalRef.current = setInterval(doPoll, intervalMs);
     }
-  }, [loading, doPoll]);
+  }, [loading, doPoll, timeTravelDate]);
 
   /* Manual refresh — exposed to the caller */
   const refresh = useCallback(() => {
@@ -487,6 +512,36 @@ export function useTrafficData(citySource?: CitySource) {
   }, [fetchData]);
 
   return { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh };
+}
+
+/** Build a WeatherRow map from historical TrafficRow data — used during time
+ *  travel so the right pane shows weather values from the travel date rather
+ *  than the live weather snapshot CSV. */
+export function buildWeatherMapFromRows(rows: TrafficRow[]): Map<string, WeatherRow> {
+  const map = new Map<string, WeatherRow>();
+  /* pick the most recent row per route_code that has at least one weather field */
+  const best = new Map<string, TrafficRow>();
+  for (const r of rows) {
+    if (r.temp_c == null && r.humidity_pct == null && r.aqi == null) continue;
+    const prev = best.get(r.route_code);
+    if (!prev || r.timestamp > prev.timestamp) best.set(r.route_code, r);
+  }
+  for (const [rc, r] of best.entries()) {
+    map.set(rc, {
+      route_code: rc,
+      aqi: r.aqi ?? null,
+      aqi_category: "",
+      condition: r.rsi_flag ?? "",
+      temp_c: r.temp_c ?? null,
+      temp_flag: "",
+      realfeel_c: r.realfeel_c ?? null,
+      realfeel_word: "",
+      humidity_pct: r.humidity_pct ?? null,
+      wind_gust_kmh: null,
+      uv_index: null,
+    });
+  }
+  return map;
 }
 
 /* ── Weather snapshot ──────────────────────────────────────────── */

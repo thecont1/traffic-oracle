@@ -7,6 +7,14 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes tt-glow {
+  0%,100% { box-shadow: 0 0 6px 2px rgba(139,92,246,0.7),  0 0 16px 4px rgba(236,72,153,0.4); }
+  50%      { box-shadow: 0 0 14px 5px rgba(99,102,241,0.9), 0 0 28px 8px rgba(168,85,247,0.5); }
+}
+.time-travel-glow {
+  animation: tt-glow 2s ease-in-out infinite;
+}
+
 @keyframes track-run {
   0%   { left: var(--car-from); opacity: 0; }
   15%   { left: var(--car-from); opacity: 1; }  /* pause at left thumb */

@@ -11,7 +11,7 @@ import { Share2, Plus, Minus } from "lucide-react";
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData, buildWeatherMapFromRows,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
@@ -1097,10 +1097,48 @@ function DashboardInner() {
   const zoomIn = useCallback(() => setZoomIdx(i => Math.min(i + 1, ZOOM_STEPS.length - 1)), []);
   const zoomOut = useCallback(() => setZoomIdx(i => Math.max(i - 1, 0)), []);
 
+  /* ── Time Travel ──────────────────────────────────────────────── */
+  const [timeTravelDate, setTimeTravelDate] = useState<Date | null>(null);
+  const [timeTravelOpen, setTimeTravelOpen] = useState(false);
+
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
-    useTrafficData(citySource);
-  const weatherMap = useWeatherData();
+    useTrafficData(citySource ?? null, timeTravelDate);
+  const liveWeatherMap = useWeatherData();
+
+  /* When time-travelling, derive a synthetic weather map from the historical rows;
+     otherwise use the live snapshot. */
+  const displayRows = useMemo(
+    () => timeTravelDate
+      ? allRows.filter(r => r.timestamp <= timeTravelDate)
+      : allRows,
+    [allRows, timeTravelDate],
+  );
+  const weatherMap = useMemo(
+    () => timeTravelDate
+      ? buildWeatherMapFromRows(displayRows)
+      : liveWeatherMap,
+    [timeTravelDate, displayRows, liveWeatherMap],
+  );
+
+  /* Reset time travel when switching cities */
+  useEffect(() => { setTimeTravelDate(null); }, [selectedCity]);
+
+  /* Close time-travel popover on Escape or click-outside */
+  useEffect(() => {
+    if (!timeTravelOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setTimeTravelOpen(false); };
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (!target.closest("[data-tt-popover]")) setTimeTravelOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [timeTravelOpen]);
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -1150,7 +1188,7 @@ function DashboardInner() {
   };
 
   /* ── Slider ─────────────────────────────────────────────────── */
-  const allRouteWeeks = useAllRouteWeeks(allRows, selectedRoute, tod);
+  const allRouteWeeks = useAllRouteWeeks(displayRows, selectedRoute, tod);
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
@@ -1275,15 +1313,14 @@ function DashboardInner() {
   const prevBaselineKeyForPane = useRef("");
 
   useEffect(() => {
-    if (allRows.length === 0) return;
-    const key = `${baselineStartDate}|${baselineEndDate}`;
-    const weatherChanged = weatherMap.size > 0;
-    if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, routes, weatherMap);
+    if (displayRows.length === 0) return;
+    const key = `${baselineStartDate}|${baselineEndDate}|${timeTravelDate?.toISOString() ?? ""}`;
+    if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && weatherMap.size === 0) return;
+    const computed = computeAllRouteCards(displayRows, routeOptions, routes, weatherMap);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
-  }, [allRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap]);
+  }, [displayRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap, timeTravelDate]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
   const routeOrder = useMemo(() => {
@@ -1341,8 +1378,8 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
-  const { merged, dailyData, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
+  const dailyStats = useDailyStatsAllDay(displayRows, selectedRoute);
+  const { merged, dailyData, selectedStats } = useFilteredData(displayRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
   // Recharts' default tick auto-skipping can pick different ticks depending on
@@ -1570,6 +1607,112 @@ function DashboardInner() {
 
             {/* Right: Share + Refresh + Theme */}
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+              {/* ── Time Travel pill ──────────────────────────── */}
+              {!loading && rowCount > 0 && (() => {
+                const minDateStr = allRows[0]
+                  ? allRows[0].timestamp.toISOString().slice(0, 10)
+                  : "";
+                const maxDateStr = allRows[allRows.length - 1]
+                  ? allRows[allRows.length - 1].timestamp.toISOString().slice(0, 10)
+                  : "";
+                const ttDateStr = timeTravelDate
+                  ? timeTravelDate.toISOString().slice(0, 10)
+                  : "";
+                const isActive = timeTravelDate !== null;
+                return (
+                  <div style={{ position: "relative" }} key="time-travel" data-tt-popover>
+                    <button
+                      onClick={() => setTimeTravelOpen(o => !o)}
+                      className={isActive ? "time-travel-glow" : ""}
+                      title={isActive ? `Time travelling to ${ttDateStr}` : "Time Travel"}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                        height: 44, borderRadius: 9999, padding: "0 14px",
+                        border: `1px solid ${isActive ? "transparent" : thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+                        background: isActive
+                          ? "linear-gradient(135deg,#6366f1,#a855f7,#ec4899)"
+                          : thm.key === "colour" ? "#141A24" : "transparent",
+                        color: isActive ? "#fff" : thm.textMuted,
+                        cursor: "pointer",
+                        fontFamily: "var(--app-font-display)",
+                        fontSize: 11, fontWeight: 600,
+                        transition: "background 0.3s, color 0.3s",
+                      }}
+                    >
+                      <span>⏪</span>
+                      <span>{isActive ? ttDateStr : "Time Travel"}</span>
+                    </button>
+                    {timeTravelOpen && (
+                      <div style={{
+                        position: "absolute", top: "calc(100% + 8px)", right: 0,
+                        zIndex: 600,
+                        background: thm.paneBg,
+                        border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+                        borderRadius: "1rem",
+                        padding: "1rem",
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                        minWidth: 240,
+                      }}>
+                        <p style={{ margin: "0 0 0.6rem", fontSize: 11, fontWeight: 700,
+                          color: thm.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          Travel back in time
+                        </p>
+                        <input
+                          type="date"
+                          min={minDateStr}
+                          max={maxDateStr}
+                          value={ttDateStr}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v) {
+                              /* End of the selected day */
+                              const d = new Date(`${v}T23:59:59`);
+                              setTimeTravelDate(d);
+                            }
+                          }}
+                          style={{
+                            width: "100%", padding: "0.5rem 0.75rem",
+                            borderRadius: "0.5rem",
+                            border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+                            background: thm.sectionBg, color: thm.textPrimary,
+                            fontSize: 13, fontFamily: "var(--app-font-display)",
+                            cursor: "pointer",
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 8, marginTop: "0.75rem" }}>
+                          {isActive && (
+                            <button
+                              onClick={() => { setTimeTravelDate(null); setTimeTravelOpen(false); }}
+                              style={{
+                                flex: 1, padding: "0.4rem 0",
+                                borderRadius: "0.5rem",
+                                border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+                                background: "transparent", color: thm.textMuted,
+                                fontSize: 11, fontWeight: 600, cursor: "pointer",
+                              }}
+                            >
+                              Return to now
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setTimeTravelOpen(false)}
+                            style={{
+                              flex: 1, padding: "0.4rem 0",
+                              borderRadius: "0.5rem",
+                              border: "none",
+                              background: "linear-gradient(135deg,#6366f1,#a855f7)",
+                              color: "#fff",
+                              fontSize: 11, fontWeight: 600, cursor: "pointer",
+                            }}
+                          >
+                            {isActive ? "Done" : "Close"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {!loading && rowCount > 0 && (
                 <button onClick={handleShare} style={{
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,

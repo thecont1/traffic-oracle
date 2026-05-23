@@ -1068,9 +1068,23 @@ function DashboardInner() {
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
   const [settledCity, setSettledCity] = useState<string | null>(null);
-  useEffect(() => {
+  const [paneOpen,  setPaneOpen]  = useState(cfg.route_pane.open ?? true);
+  const willReopenPane = useRef(false);
+
+  /* Sync reset before paint — prevents one-frame card flash on city switch */
+  useLayoutEffect(() => {
     setShowIntro(true);
-    setShowCar(true);
+    setShowCar(!!citySource);
+    setSettledCity(citySource ? null : selectedCity);
+    if (!citySource) {
+      setPaneOpen(false);
+      willReopenPane.current = false;
+    }
+  }, [selectedCity]);
+
+  useEffect(() => {
+    if (!citySource) return; /* no animation for no-data cities */
+
     setLoadPct(0);
     const start = performance.now();
     const DURATION = 2500;
@@ -1081,13 +1095,19 @@ function DashboardInner() {
       if (pct < 100) { raf = requestAnimationFrame(tick); }
     };
     raf = requestAnimationFrame(tick);
-    /* For cities with data: reveal cards then remove car */
-    const t1 = citySource ? setTimeout(() => setShowIntro(false), 2500) : null;
+
+    /* Retract pane invisibly, remember whether to reopen */
+    willReopenPane.current = paneOpen;
+    setPaneOpen(false);
+
+    /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */
+    const t1 = setTimeout(() => setShowIntro(false), 2500);
     const t2 = setTimeout(() => {
       setShowCar(false);
       setSettledCity(selectedCity);
+      if (willReopenPane.current) setPaneOpen(true);
     }, 2500 + 650);
-    return () => { cancelAnimationFrame(raf); if (t1) clearTimeout(t1); clearTimeout(t2); };
+    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); };
   }, [selectedCity]); /* re-run on every city switch */
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
@@ -2487,15 +2507,25 @@ function DashboardInner() {
 
           {/* ── Route browser pane (desktop) ──────────────────────── */}
           {!isMobile && citySource && (
-            <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
-            <RouteBrowserPane
-              cards={allRouteCards}
-              selectedRoute={selectedRoute}
-              onRouteSelect={handleRouteSelectFromPane}
-              dataTimestamp={dataTimestamp}
-              lastUpdated={lastUpdated}
-              mobile={false}
-            />
+            <div style={{
+              width: paneOpen ? cfg.route_pane.width : 0,
+              opacity: paneOpen ? 1 : 0,
+              overflow: "hidden",
+              transition: "width 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease",
+              display: "flex",
+              minHeight: 0,
+              zoom: ZOOM_STEPS[zoomIdx],
+            }}>
+              <div style={{ width: cfg.route_pane.width, flexShrink: 0 }}>
+                <RouteBrowserPane
+                  cards={allRouteCards}
+                  selectedRoute={selectedRoute}
+                  onRouteSelect={handleRouteSelectFromPane}
+                  dataTimestamp={dataTimestamp}
+                  lastUpdated={lastUpdated}
+                  mobile={false}
+                />
+              </div>
             </div>
           )}
 

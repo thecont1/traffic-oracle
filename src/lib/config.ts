@@ -4,7 +4,6 @@
 
 export interface CityConfig {
   name: string;
-  ready: boolean;
   data_source?: {
     routes_csv: string;
     traffic_csv: string;

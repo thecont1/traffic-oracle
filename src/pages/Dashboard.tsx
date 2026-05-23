@@ -259,48 +259,36 @@ function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; 
           padding: "4px 0",
           zIndex: 1000,
         }}>
-          {CITIES.map((city) => (
-            <button
-              key={city.name}
-              onClick={() => {
-                if (city.ready) {
-                  onCityChange(city.name);
-                  setIsOpen(false);
-                }
-              }}
-              disabled={!city.ready}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                width: "100%",
-                padding: "8px 12px",
-                minHeight: 44,
-                border: "none",
-                background: "transparent",
-                cursor: city.ready ? "pointer" : "not-allowed",
-                fontSize: 12,
-                fontWeight: city.name === selectedCity ? 700 : 400,
-                color: city.ready ? thm.textPrimary : thm.textMuted,
-                opacity: city.ready ? 1 : 0.4,
-                textAlign: "left",
-              }}
-            >
-              <span style={{ fontSize: 10 }}>
-                {city.name === selectedCity ? "●" : city.ready ? "○" : "◌"}
-              </span>
-              <span>{city.name}</span>
-              {!city.ready && (
-                <span style={{ 
-                  marginLeft: "auto", 
-                  fontSize: 9, 
-                  color: thm.textMuted,
-                  fontStyle: "italic",
-                  fontFamily: "var(--app-font)",
-                }}>soon</span>
-              )}
-            </button>
-          ))}
+          {CITIES.map((city) => {
+            const hasData = !!city.data_source;
+            return (
+              <button
+                key={city.name}
+                onClick={() => { onCityChange(city.name); setIsOpen(false); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  width: "100%",
+                  padding: "8px 12px",
+                  minHeight: 44,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: city.name === selectedCity ? 700 : 400,
+                  color: hasData ? thm.textPrimary : thm.textMuted,
+                  opacity: hasData ? 1 : 0.55,
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ fontSize: 10 }}>
+                  {city.name === selectedCity ? "●" : hasData ? "○" : "◌"}
+                </span>
+                <span>{city.name}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1002,7 +990,7 @@ function DashboardInner() {
   }, []);
 
   /* City selection */
-  const defaultCityName = CITIES.find(c => c.ready)?.name ?? CITIES[0].name;
+  const defaultCityName = CITIES.find(c => c.data_source)?.name ?? CITIES[0].name;
   const initialCity = URL_PARAMS.city
     ? (CITIES.find(c => c.name === URL_PARAMS.city)?.name ?? defaultCityName)
     : defaultCityName;
@@ -1661,7 +1649,70 @@ function DashboardInner() {
           <main id="main-content" tabIndex={-1} className="scrollbar-hide" style={{
             flex: 1,
             overflowY: "auto",
+            position: "relative",
           }}>
+
+          {/* ── City 404 overlay ─────────────────────────────── */}
+          {!citySource && (
+            <div style={{
+              position: "absolute", inset: 0, zIndex: 100,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "2rem",
+              background: thm.paneBg,
+            }}>
+              <div style={{
+                maxWidth: 520,
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "1rem",
+              }}>
+                <p style={{
+                  fontFamily: "var(--app-font-display)",
+                  fontWeight: 900,
+                  fontSize: "clamp(2.5rem, 8vw, 4.5rem)",
+                  lineHeight: 1,
+                  color: thm.textPrimary,
+                  margin: 0,
+                  letterSpacing: "-0.02em",
+                }}>four‑oh‑oh‑four</p>
+                <p style={{
+                  fontSize: 14,
+                  lineHeight: 1.75,
+                  color: thm.textSecondary,
+                  margin: 0,
+                  maxWidth: 420,
+                }}>
+                  This city page isn't ready yet, but I'd love to build it with the right local collaborators.
+                  A good city view needs thoughtful route selection and reliable on-ground data, so if you're
+                  interested in helping shape the coverage, please get in touch with me over email and let's make it happen.
+                </p>
+                <a
+                  href="mailto:hello@thecontrarian.in"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: 4,
+                    padding: "10px 20px",
+                    borderRadius: 9999,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    fontFamily: "var(--app-font-display)",
+                    background: thm.key === "colour" ? "rgba(255,255,255,0.12)" : thm.sectionBg,
+                    color: thm.textPrimary,
+                    border: `1.5px solid ${thm.key === "gray" ? "#d0d0d0" : "hsl(var(--border))"}`,
+                    textDecoration: "none",
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  ✉️ get in touch
+                </a>
+              </div>
+            </div>
+          )}
+
           <div style={{
             maxWidth: isMobile ? "100%" : 1320,
             margin: "0 auto",
@@ -1669,6 +1720,7 @@ function DashboardInner() {
             display: "flex",
             flexDirection: "column",
             gap: "1.5rem",
+            visibility: citySource ? "visible" : "hidden",
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}
@@ -1738,7 +1790,7 @@ function DashboardInner() {
                   <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14 }}>
                     <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                       color: thm.textPrimary, margin: 0 }}>
-                      Compare with this earlier period ↔
+                      Compare with this earlier period 
                     </p>
                     <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
                   </div>
@@ -2326,7 +2378,7 @@ function DashboardInner() {
         </div>{/* close Question pane wrapper */}
 
           {/* ── Route browser pane (desktop) ──────────────────────── */}
-          {!isMobile && (
+          {!isMobile && citySource && (
             <RouteBrowserPane
               cards={allRouteCards}
               selectedRoute={selectedRoute}
@@ -2340,7 +2392,7 @@ function DashboardInner() {
         </div>{/* close flex row */}
 
         {/* ── Mobile route browser (overlay) ──────────────────── */}
-      {isMobile && (
+      {isMobile && citySource && (
         <RouteBrowserPane
           cards={allRouteCards}
           selectedRoute={selectedRoute}

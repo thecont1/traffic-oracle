@@ -6,7 +6,7 @@ import type { AppConfig } from "./config";
 
 const cfg = appConfig as AppConfig;
 const WORST_CASE_PCT: number = cfg.percentile.worst_case;
-const defaultCity = cfg.cities.find(c => c.ready && c.data_source) ?? cfg.cities[0];
+const defaultCity = cfg.cities.find(c => c.data_source) ?? cfg.cities[0];
 /** Extract the bare filename from a GitHub raw URL and return a same-origin
  *  proxy path.  Works in both dev (Vite proxy) and prod (Worker). */
 function toProxyPath(url: string): string {

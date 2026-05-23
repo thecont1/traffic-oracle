@@ -2,40 +2,18 @@
   "cities": [
     {
       "name": "Bangalore",
-      "ready": true,
       "data_source": {
         "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/data/csv-routes-bangalore.csv",
         "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/data/csv-traffic-bangalore.csv"
       }
     },
-    {
-      "name": "Chennai",
-      "ready": true
-    },
-    {
-      "name": "Delhi",
-      "ready": true
-    },
-    {
-      "name": "Kolkata",
-      "ready": true
-    },
-    {
-      "name": "Mumbai",
-      "ready": true
-    },
-    {
-      "name": "Kochi",
-      "ready": true
-    },
-    {
-      "name": "Hyderabad",
-      "ready": true
-    },
-    {
-      "name": "Jaipur",
-      "ready": true
-    }
+    { "name": "Chennai" },
+    { "name": "Delhi" },
+    { "name": "Kolkata" },
+    { "name": "Mumbai" },
+    { "name": "Kochi" },
+    { "name": "Hyderabad" },
+    { "name": "Jaipur" }
   ],
   "percentile": {
     "worst_case": 96,

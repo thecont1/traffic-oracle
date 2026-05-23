@@ -1063,14 +1063,16 @@ function DashboardInner() {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  /* ── Page-load car animation ─────────────────────────────────── */
+  /* ── Car animation — runs on mount and on every city change ──── */
   const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   useEffect(() => {
+    setShowIntro(true);
+    setShowCar(true);
     const t1 = setTimeout(() => setShowIntro(false), 2500);      /* reveal cards */
     const t2 = setTimeout(() => setShowCar(false),   2500 + 650); /* then remove car */
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
+  }, [selectedCity]);  /* re-run on every city switch */
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
   const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
@@ -1659,8 +1661,8 @@ function DashboardInner() {
             position: "relative",
           }}>
 
-          {/* ── City 404 overlay ─────────────────────────────── */}
-          {!citySource && (
+          {/* ── City 404 overlay — shown only after animation finishes ── */}
+          {!citySource && !showCar && (
             <div style={{
               position: "absolute", inset: 0, zIndex: 100,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -1772,15 +1774,10 @@ function DashboardInner() {
             </p>
           </div>
 
-          {/* Loading */}
-          {loading && (
-            <div style={{ textAlign:"center", padding:"4rem 0",
-              opacity: showIntro ? 0 : 1,
-            }}>
-              <div className="animate-float" style={{ fontSize:56, marginBottom:16 }}>🚗</div>
-              <p style={{ color: thm.textMuted, fontWeight:600 }}>
-                Fetching 60k traffic records from GitHub…
-              </p>
+          {/* Loading — hidden during intro (car animation is shown instead) */}
+          {loading && !showCar && (
+            <div style={{ textAlign:"center", padding:"4rem 0" }}>
+              <p style={{ color: thm.textMuted, fontWeight:600 }}>Fetching traffic data…</p>
             </div>
           )}
 

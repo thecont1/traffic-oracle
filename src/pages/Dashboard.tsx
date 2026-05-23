@@ -1740,7 +1740,7 @@ function DashboardInner() {
             display: "flex",
             flexDirection: "column",
             gap: "1.5rem",
-            visibility: citySource ? "visible" : "hidden",
+            visibility: "visible",
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}

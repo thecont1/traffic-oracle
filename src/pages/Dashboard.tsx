@@ -1075,7 +1075,8 @@ function DashboardInner() {
     const DURATION = 2500;
     let raf: number;
     const tick = (now: number) => {
-      const pct = Math.min(100, Math.round(((now - start) / DURATION) * 100));
+      const raw = Math.min(100, ((now - start) / DURATION) * 100);
+      const pct = raw >= 100 ? 100 : Math.floor(raw / 10) * 10;
       setLoadPct(pct);
       if (pct < 100) { raf = requestAnimationFrame(tick); }
     };
@@ -1756,6 +1757,73 @@ function DashboardInner() {
             visibility: "visible",
           }}>
 
+          {/* ── Intro car — always rendered during showCar, in baseline-slider position ── */}
+          {showCar && (
+            <div style={{
+              background: thm.sectionBg,
+              border: thm.cardBorder,
+              boxShadow: thm.cardShadow,
+              borderRadius: "1.5rem",
+              padding: "1.25rem 1.5rem 1rem",
+              position: "relative",
+              overflow: "hidden",
+            }}>
+              <div style={{ padding: "28px 0 4px", position: "relative" }}>
+                {/* 0→10-step counter */}
+                <div style={{
+                  position: "absolute",
+                  top: "60px",
+                  left: 0, right: 0,
+                  textAlign: "center",
+                  fontFamily: "var(--app-font-display)",
+                  fontWeight: 800,
+                  fontSize: "clamp(2rem,6vw,3.5rem)",
+                  letterSpacing: "-0.04em",
+                  color: thm.textPrimary,
+                  opacity: 0.12,
+                  pointerEvents: "none",
+                  userSelect: "none",
+                  lineHeight: 1,
+                }}>
+                  {loadPct}%
+                </div>
+                {/* Synthetic track for car to drive on */}
+                <div ref={el => { if (el) setTrackW(el.getBoundingClientRect().width); }} style={{
+                  position: "relative", flexGrow: 1,
+                  height: 10, borderRadius: 9999,
+                  background: thm.slider?.rail ?? "#e0e0e0",
+                  margin: "15px 0",
+                }} />
+                {trackW > 0 && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="80" height="80"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={thm.textPrimary}
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      position: "absolute",
+                      top: "-20px",
+                      zIndex: 50,
+                      pointerEvents: "none",
+                      "--car-from": "0px",
+                      "--car-to": `calc(100% - 80px)`,
+                      animation: "track-run 2.5s ease-in-out forwards",
+                    } as React.CSSProperties}
+                  >
+                    <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                    <circle cx="7" cy="17" r="2" />
+                    <path d="M9 17h6" />
+                    <circle cx="17" cy="17" r="2" />
+                  </svg>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Hero question ────────────────────────────────── */}
           <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem",
             opacity: showIntro ? 0 : 1,
@@ -1834,55 +1902,6 @@ function DashboardInner() {
                   </div>
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
-                    {/* ── Intro car races along the slider track ── */}
-                    {showCar && trackW > 0 && <>
-                    {/* 0→100% loading counter */}
-                    <div style={{
-                      position: "absolute",
-                      top: "60px",
-                      left: 0, right: 0,
-                      textAlign: "center",
-                      fontFamily: "var(--app-font-display)",
-                      fontWeight: 800,
-                      fontSize: "clamp(2rem,6vw,3.5rem)",
-                      letterSpacing: "-0.04em",
-                      color: thm.textPrimary,
-                      opacity: 0.15,
-                      pointerEvents: "none",
-                      userSelect: "none",
-                      lineHeight: 1,
-                    }}>
-                      {loadPct}%
-                    </div>
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="80" height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={thm.textPrimary}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{
-                          position: "absolute",
-                          /* Wrapper is 28px top-pad + 40px slider + 4px bottom = 72px.
-                             Track centreline is at 48px. Float car just above it. */
-                          top: "-20px",
-                          zIndex: 50,
-                          pointerEvents: "none",
-                          /* Start: right edge of left thumb (thumb=22px, centre at leftPct%) */
-                          "--car-from": `calc(${leftPct}% + 11px + 4px)`,
-                          /* Stop: left edge of right thumb minus car width and gap */
-                          "--car-to": `calc(${rightPct}% - 11px - 72px - 0px)`,
-                          animation: "track-run 2.5s ease-in-out forwards",
-                        } as React.CSSProperties}
-                      >
-                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                        <circle cx="7" cy="17" r="2" />
-                        <path d="M9 17h6" />
-                        <circle cx="17" cy="17" r="2" />
-                      </svg>
-                    </> /* end showCar && trackW>0 */}
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}

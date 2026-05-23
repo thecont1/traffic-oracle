@@ -1673,14 +1673,17 @@ function DashboardInner() {
             position: "relative",
           }}>
 
-          {/* ── City 404 overlay — shown only after animation finishes ── */}
-          {!citySource && !showCar && (
+          {/* ── City 404 overlay — always present for no-data cities;
+               invisible during car animation so it covers any flash ── */}
+          {!citySource && (
             <div style={{
               position: "absolute", inset: 0, zIndex: 100,
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "2rem",
               background: thm.paneBg,
-              animation: "cards-reveal 0.5s ease both",
+              opacity: showCar ? 0 : 1,
+              pointerEvents: showCar ? "none" : "auto",
+              transition: "opacity 0.5s ease",
             }}>
               <div style={{
                 maxWidth: 480,

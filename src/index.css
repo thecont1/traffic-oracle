@@ -9,9 +9,11 @@
 
 @keyframes track-run {
   0%   { left: var(--car-from); opacity: 0; }
-  6%   { opacity: 1; }
-  94%  { opacity: 1; }
-  100% { left: var(--car-to);   opacity: 0; }
+  8%   { left: var(--car-from); opacity: 1; }  /* pause at left thumb */
+  22%  { left: var(--car-from); opacity: 1; }  /* hold */
+  75%  { left: var(--car-to);   opacity: 1; }  /* arrive at right thumb */
+  88%  { left: var(--car-to);   opacity: 1; }  /* pause at right thumb */
+  100% { left: var(--car-to);   opacity: 0; }  /* fade out */
 }
 
 @keyframes cards-reveal {

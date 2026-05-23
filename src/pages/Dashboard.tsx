@@ -1066,7 +1066,7 @@ function DashboardInner() {
   /* ── Page-load car animation ─────────────────────────────────── */
   const [showIntro, setShowIntro] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setShowIntro(false), 1000);
+    const t = setTimeout(() => setShowIntro(false), 1400);
     return () => clearTimeout(t);
   }, []);
 
@@ -1081,15 +1081,13 @@ function DashboardInner() {
     }
     return 2; /* default 1.00 */
   });
-  const mainContentRef = useRef<HTMLDivElement>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const zoom = ZOOM_STEPS[zoomIdx];
-    /* Apply scale only to the main content area, not the header */
+    /* CSS zoom affects layout flow (unlike transform:scale), so the scrollable
+       area grows/shrinks naturally and there is no empty space at the bottom. */
     if (mainContentRef.current) {
-      mainContentRef.current.style.transform = `scale(${zoom})`;
-      mainContentRef.current.style.transformOrigin = "top center";
-      /* Compensate layout height so content doesn't get clipped */
-      mainContentRef.current.style.height = `${(1 / zoom) * 100}%`;
+      mainContentRef.current.style.zoom = String(zoom);
     }
   }, [zoomIdx]);
   const zoomIn = useCallback(() => setZoomIdx(i => Math.min(i + 1, ZOOM_STEPS.length - 1)), []);
@@ -1812,35 +1810,6 @@ function DashboardInner() {
                 }}>
                   {showSparkle && <Sparkles />}
 
-                  {/* ── Intro car races along the slider track ── */}
-                  {showIntro && trackW > 0 && (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="72" height="72"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={thm.textPrimary}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        position: "absolute",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        zIndex: 50,
-                        pointerEvents: "none",
-                        "--car-from": `calc(${leftPct}% - 36px)`,
-                        "--car-to": `calc(${rightPct}% - 36px)`,
-                        animation: "track-run 1s ease-in-out forwards",
-                      } as React.CSSProperties}
-                    >
-                      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                      <circle cx="7" cy="17" r="2" />
-                      <path d="M9 17h6" />
-                      <circle cx="17" cy="17" r="2" />
-                    </svg>
-                  )}
-
                   <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14 }}>
                     <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
                       color: thm.textPrimary, margin: 0 }}>
@@ -1850,6 +1819,34 @@ function DashboardInner() {
                   </div>
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
+                    {/* ── Intro car races along the slider track ── */}
+                    {showIntro && trackW > 0 && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="72" height="72"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke={thm.textPrimary}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          zIndex: 50,
+                          pointerEvents: "none",
+                          "--car-from": `calc(${leftPct}% - 36px)`,
+                          "--car-to": `calc(${rightPct}% - 36px)`,
+                          animation: "track-run 1.4s ease-in-out forwards",
+                        } as React.CSSProperties}
+                      >
+                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                        <circle cx="7" cy="17" r="2" />
+                        <path d="M9 17h6" />
+                        <circle cx="17" cy="17" r="2" />
+                      </svg>
+                    )}
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}

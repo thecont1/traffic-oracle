@@ -2453,7 +2453,7 @@ function DashboardInner() {
 
           {/* ── Route browser pane (desktop) ──────────────────────── */}
           {!isMobile && citySource && (
-            <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0 }}>
+            <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
             <RouteBrowserPane
               cards={allRouteCards}
               selectedRoute={selectedRoute}
@@ -2469,7 +2469,7 @@ function DashboardInner() {
 
         {/* ── Mobile route browser (overlay) ──────────────────── */}
       {isMobile && citySource && (
-        <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease" }}>
+        <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", zoom: ZOOM_STEPS[zoomIdx] }}>
           <RouteBrowserPane
             cards={allRouteCards}
             selectedRoute={selectedRoute}

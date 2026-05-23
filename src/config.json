@@ -34,6 +34,6 @@
     "min_width": 200,
     "width": 430,
     "max_width": 600,
-    "polling_interval_min": 10
+    "polling_interval_min": 3
   }
 }

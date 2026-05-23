@@ -1141,6 +1141,19 @@ function DashboardInner() {
     useTrafficData(citySource);
   const weatherMap = useWeatherData();
 
+  // Time Travel: filter allRows to historical subset when TT is active
+  const ttAllRows = useMemo(() => {
+    if (!tt.isActive || !tt.simulatedNow) return allRows;
+    const cutoff = tt.simulatedNow.getTime();
+    return allRows.filter(r => r.timestamp.getTime() <= cutoff);
+  }, [allRows, tt.isActive, tt.simulatedNow]);
+
+  const effectiveRowCount = ttAllRows.length;
+  const effectiveDataTimestamp = useMemo(() => {
+    if (tt.isActive && tt.simulatedNow) return tt.simulatedNow;
+    return dataTimestamp;
+  }, [tt.isActive, tt.simulatedNow, dataTimestamp]);
+
   // Hydrate Time Travel from ?tt= URL param on mount
   const ttHydrated = useRef(false);
   useEffect(() => {
@@ -1162,9 +1175,9 @@ function DashboardInner() {
   }, [loading, error, rowCount, selectedCity, announce]);
 
   const routeOptions = useMemo(() => {
-    const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
+    const labels = Array.from(new Set(ttAllRows.map(r => r.label_short))).sort();
     return labels.length ? labels : ["Old Airport Road"];
-  }, [allRows]);
+  }, [ttAllRows]);
 
   useEffect(() => {
     if (allRows.length === 0 || urlParamsRef.current.routeApplied) return;
@@ -1202,7 +1215,7 @@ function DashboardInner() {
   };
 
   /* ── Slider ─────────────────────────────────────────────────── */
-  const allRouteWeeks = useAllRouteWeeks(allRows, selectedRoute, tod);
+  const allRouteWeeks = useAllRouteWeeks(ttAllRows, selectedRoute, tod);
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
@@ -1278,8 +1291,8 @@ function DashboardInner() {
   }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx, chartGranularity, chartView]);
 
   const lastDataMs = useMemo(
-    () => allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
-    [allRows],
+    () => ttAllRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
+    [ttAllRows],
   );
   const periodCutoffDate = useMemo(() => {
     const d = new Date(lastDataMs || Date.now());
@@ -1327,15 +1340,15 @@ function DashboardInner() {
   const prevBaselineKeyForPane = useRef("");
 
   useEffect(() => {
-    if (allRows.length === 0) return;
+    if (ttAllRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
     const weatherChanged = weatherMap.size > 0;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, routes, weatherMap);
+    const computed = computeAllRouteCards(ttAllRows, routeOptions, routes, weatherMap);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
-  }, [allRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap]);
+  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
   const routeOrder = useMemo(() => {
@@ -1393,8 +1406,8 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
-  const { merged, dailyData, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
+  const dailyStats = useDailyStatsAllDay(ttAllRows, selectedRoute);
+  const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
   // Recharts' default tick auto-skipping can pick different ticks depending on
@@ -1421,7 +1434,7 @@ function DashboardInner() {
       return { percentile: pct };
     })();
 
-    const routeRows = allRows.filter(r => r.label_short === selectedRoute);
+    const routeRows = ttAllRows.filter(r => r.label_short === selectedRoute);
 
     // Helper: build IntervalDatum[] from a slice of WeeklyAggregates
     function buildBands(weeks: WeeklyAggregate[]): IntervalDatum[] {
@@ -1452,7 +1465,7 @@ function DashboardInner() {
     const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : []);
 
     return { trafficNowData: recentData, trafficNowCompare: baselineData };
-  }, [allRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
+  }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
 
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";

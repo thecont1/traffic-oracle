@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
@@ -1040,13 +1040,16 @@ function DashboardInner() {
   const [dragThumb,   setDragThumb]   = useState<-1|0|1>(-1);
   const sliderValsRef = useRef(sliderVals);
   sliderValsRef.current = sliderVals;
-  const trackRef = useRef<HTMLElement>(null);
   const [trackW, setTrackW] = useState(0);
-  useLayoutEffect(() => {
-    if (trackRef.current) {
-      setTrackW(trackRef.current.getBoundingClientRect().width);
-    }
-  });
+  /* Callback ref — ResizeObserver fires even when element is visibility:hidden,
+     so trackW is non-zero by the time the car animation checks it. */
+  const trackRef = useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setTrackW(entry.contentRect.width));
+    ro.observe(el);
+    (el as HTMLElement & { _ro?: () => void })._ro?.();
+    (el as HTMLElement & { _ro?: () => void })._ro = () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const up = () => setDragThumb(-1);
     window.addEventListener("pointerup", up);

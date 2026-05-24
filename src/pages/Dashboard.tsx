@@ -12,6 +12,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
+  matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
@@ -1368,6 +1369,15 @@ function DashboardInner() {
   const periodLabel   = PERIOD_LIST[periodIdx].label;
   const todLabel      = TOD_LIST[todIdx].label;
 
+  // Live-mode route/weeks — computed from allRows, independent of TT filtering.
+  // Used in the save block to capture the user's pre-TT context.
+  const liveRouteOptions = useMemo(() => {
+    const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
+    return labels.length ? labels : ["Old Airport Road"];
+  }, [allRows]);
+  const liveSelectedRoute = liveRouteOptions[routeIdx % liveRouteOptions.length] ?? "Old Airport Road";
+  const liveAllRouteWeeks = useAllRouteWeeks(allRows, liveSelectedRoute, tod);
+
   // Always-current snapshot of user-facing state for TT save/restore.
   // Updated every render so the save effect captures correct values
   // without stale-closure risk.
@@ -1440,18 +1450,21 @@ function DashboardInner() {
 
   useEffect(() => {
     if (tt.isActive && !preTtStateRef.current) {
-      // Save current state — read from stateSnapshotRef to avoid stale closures
-      const snap = stateSnapshotRef.current;
-      const lKey = allRouteWeeks[safeLeft]?.weekKey ?? null;
-      const rKey = allRouteWeeks[safeRight]?.weekKey ?? null;
+      // Save current state — use live route/weeks (allRows), not TT-filtered
+      // to capture the user's pre-TT context accurately.
+      const liveMaxIdx = Math.max(1, liveAllRouteWeeks.length - 1);
+      const liveSafeLeft = Math.max(0, Math.min(sliderVals[0], liveMaxIdx));
+      const liveSafeRight = Math.max(liveSafeLeft, Math.min(sliderVals[1], liveMaxIdx));
+      const lKey = liveAllRouteWeeks[liveSafeLeft]?.weekKey ?? null;
+      const rKey = liveAllRouteWeeks[liveSafeRight]?.weekKey ?? null;
       preTtStateRef.current = {
         sliderWeekKeys: lKey && rKey ? [lKey, rKey] : null,
-        periodIdx: snap.periodIdx,
-        todIdx: snap.todIdx,
-        questionMode: snap.questionMode,
-        chartView: snap.chartView,
-        chartGranularity: snap.chartGranularity,
-        routeName: snap.routeName,
+        periodIdx: periodIdx,
+        todIdx: todIdx,
+        questionMode,
+        chartView,
+        chartGranularity,
+        routeName: liveSelectedRoute,
       };
       setSliderManuallySet(false); // allow auto-setting for TT defaults
     } else if (!tt.isActive && preTtStateRef.current) {
@@ -1477,8 +1490,15 @@ function DashboardInner() {
       }
       // If route not found, keep current routeIdx — modulo handles bounds
 
-      // Restore slider using validated weekKey resolution
-      const sliderResult = resolveSliderFromWeekKeys(saved.sliderWeekKeys, allRouteWeeks);
+      // Restore slider — compute weeks for the saved route/tod directly.
+      // React state updates (setTodIdx, setRouteIdx) haven't taken effect yet,
+      // so allRouteWeeks still reflects the TT-mode route/tod.
+      const savedTod = TOD_LIST[saved.todIdx].value;
+      const savedRouteRows = allRows.filter(
+        r => r.label_short === saved.routeName && matchesToD(r.hour, r.dayOfWeek, savedTod)
+      );
+      const savedWeeks = aggregateRows(savedRouteRows);
+      const sliderResult = resolveSliderFromWeekKeys(saved.sliderWeekKeys, savedWeeks);
       if (sliderResult) {
         setSliderVals(sliderResult);
         setSliderManuallySet(true); // prevent auto-set from overwriting restored state

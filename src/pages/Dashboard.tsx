@@ -1419,11 +1419,11 @@ function DashboardInner() {
     setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
   }, [tod, allRouteWeeks.length, sliderManuallySet]);
 
-  // Time Travel: save pre-TT state on activate, restore on cancel
-  // We snapshot the CLAMPED slider values (safeLeft/safeRight) since raw
-  // sliderVals may not reflect the user-visible position yet.
+  // Time Travel: save pre-TT state on activate, restore on cancel.
+  // Store slider as weekKeys (stable strings) so they re-resolve correctly
+  // even if allRouteWeeks changes length between entering and exiting TT.
   const preTtStateRef = useRef<{
-    slider: [number, number];
+    sliderKeys: [string, string] | null; // weekKey of left/right thumb
     period: number;
     tod: number;
     questionMode: "worsened" | "improved";
@@ -1434,8 +1434,10 @@ function DashboardInner() {
   useEffect(() => {
     if (tt.isActive && !preTtStateRef.current) {
       // Save current state BEFORE TT overwrites it
+      const lKey = allRouteWeeks[safeLeft]?.weekKey ?? null;
+      const rKey = allRouteWeeks[safeRight]?.weekKey ?? null;
       preTtStateRef.current = {
-        slider: [safeLeft, safeRight],
+        sliderKeys: lKey && rKey ? [lKey, rKey] : null,
         period: periodIdx,
         tod: todIdx,
         questionMode,
@@ -1446,16 +1448,24 @@ function DashboardInner() {
     } else if (!tt.isActive && preTtStateRef.current) {
       // Restore pre-TT state
       const saved = preTtStateRef.current;
-      setSliderVals(saved.slider);
       setPeriodIdx(saved.period);
       setTodIdx(saved.tod);
       setQuestionMode(saved.questionMode);
       setChartView(saved.chartView);
       setChartGranularity(saved.chartGranularity);
+      if (saved.sliderKeys) {
+        // Re-resolve week keys to current indices (live allRouteWeeks may differ from TT window)
+        const [lKey, rKey] = saved.sliderKeys;
+        const lIdx = allRouteWeeks.findIndex(w => w.weekKey === lKey);
+        const rIdx = allRouteWeeks.findIndex(w => w.weekKey === rKey);
+        if (lIdx >= 0 && rIdx >= 0) {
+          setSliderVals([Math.min(lIdx, rIdx), Math.max(lIdx, rIdx)]);
+        }
+      }
       setSliderManuallySet(true); // prevent auto-set from overwriting restored state
       preTtStateRef.current = null;
     }
-  }, [tt.isActive]);
+  }, [tt.isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When TT is active and allRouteWeeks are ready, set TT default comparison windows
   useEffect(() => {
@@ -1837,17 +1847,25 @@ function DashboardInner() {
   const curMeta  = THEME_META[themeKey];
   const ttBg = themeKey === "colour"
     ? {
-      glowA: "rgba(168,85,247,0.12)",
-      glowB: "rgba(34,211,238,0.08)",
+      gradients: [
+        "radial-gradient(ellipse at 14% 10%, rgba(168,85,247,0.12), transparent 52%)",
+        "radial-gradient(ellipse at 90% 12%, rgba(34,211,238,0.08), transparent 48%)",
+      ],
     }
     : themeKey === "pastel"
       ? {
-        glowA: "rgba(245,158,11,0.10)",
-        glowB: "rgba(58,134,200,0.07)",
+        gradients: [
+          "radial-gradient(ellipse at 0% 0%, rgba(245,158,11,0.28), transparent 46%)",
+          "radial-gradient(ellipse at 100% 0%, rgba(251,113,133,0.20), transparent 44%)",
+          "radial-gradient(ellipse at 50% 100%, rgba(52,211,153,0.16), transparent 52%)",
+        ],
       }
       : {
-        glowA: "rgba(0,0,0,0.045)",
-        glowB: "rgba(0,0,0,0.035)",
+        gradients: [
+          "radial-gradient(ellipse at 0% 0%, rgba(40,40,40,0.38), transparent 50%)",
+          "radial-gradient(ellipse at 100% 0%, rgba(200,200,200,0.30), transparent 48%)",
+          "radial-gradient(ellipse at 50% 100%, rgba(90,90,90,0.22), transparent 55%)",
+        ],
       };
 
   /* ── Render ─────────────────────────────────────────────────── */

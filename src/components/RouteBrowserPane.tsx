@@ -52,6 +52,8 @@ interface PaneProps {
   paneWidth: number;
   dataTimestamp: Date | null;
   lastUpdated: Date | null;
+  ttActive?: boolean;
+  ttSimulatedNow?: Date | null;
 }
 
 /* ── Relative time label ─────────────────────────────────────── */
@@ -64,6 +66,16 @@ function relativeTime(date: Date): string {
   const hrs = Math.floor(mins / 60);
   if (hrs === 1) return "1 hr ago";
   return `${hrs} hr ago`;
+}
+
+/* ── TT date format for pane labels ─────────────────────────── */
+function ttFormatPane(dt: Date): string {
+  const d = dt.getDate();
+  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+  const yr = String(dt.getFullYear()).slice(2);
+  const hh = String(dt.getHours()).padStart(2, "0");
+  const mm = String(dt.getMinutes()).padStart(2, "0");
+  return `${d} ${mon} '${yr} · ${hh}:${mm}`;
 }
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
@@ -234,7 +246,7 @@ function NestedScaleChart({
 
   const ariaLabel = !hasData
     ? 'No data available.'
-    : `Current speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h. City-wide range ${fmt(cityMin)} to ${fmt(cityMax)} km/h.`;
+    : `Speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h. City-wide range ${fmt(cityMin)} to ${fmt(cityMax)} km/h.`;
 
   // Layout: top labels (14px) + gap (2px) + bar row (28px) + gap (4px) + bottom labels (14px) = 62px
   const BAR_ROW_H = 28;
@@ -633,13 +645,20 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
   const RAIL_WIDTH = 36;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+  const paneBorderColor = ttActive
+    ? thm.key === "colour" ? "rgba(167,139,250,0.35)" : thm.key === "pastel" ? "rgba(138,126,104,0.55)" : "rgba(17,17,17,0.45)"
+    : thm.paneBorder;
+  const railBorderColor = ttActive
+    ? thm.key === "colour" ? "rgba(167,139,250,0.16)" : thm.key === "pastel" ? "rgba(138,126,104,0.22)" : "rgba(17,17,17,0.18)"
+    : thm.key === "colour" ? "#2A3545" : thm.key === "pastel" ? "#DCCFB8" : "#e0e0e0";
+  const railHoverBg = thm.key === "colour" ? "rgba(255,255,255,0.04)" : thm.key === "pastel" ? "rgba(138,126,104,0.08)" : "rgba(0,0,0,0.04)";
 
   /* Tick every 60 s so the "Live · updated X min ago" label stays fresh */
   const [, setTick] = useState(0);
@@ -677,8 +696,10 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       overflow: "hidden",
       display: "flex",
       background: thm.paneBg,
-      border: `1px solid ${thm.paneBorder}`,
+      border: `1px solid ${paneBorderColor}`,
       borderRadius: 16,
+      backgroundClip: "padding-box",
+      boxShadow: ttActive ? "0 10px 28px rgba(0,0,0,0.08)" : undefined,
       margin: "8px 0 8px 8px",
       position: "relative",
     }}>
@@ -703,15 +724,15 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       <div style={{
         width: paneWidth, flexShrink: 0,
         display: "flex", flexDirection: "column", overflow: "hidden",
+        background: thm.paneBg,
         opacity: isOpen ? 1 : 0,
         transition: "opacity 0.2s ease",
         pointerEvents: isOpen ? "auto" : "none",
-        marginLeft: isOpen ? 8 : 0,
       }}>
         {/* Header */}
         <div style={{
           padding: "10px 12px 7px",
-          borderBottom: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
+          borderBottom: `1px solid ${railBorderColor}`,
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -720,7 +741,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 fontFamily: "var(--app-font-display)", fontWeight: 900, fontSize: 18,
                 color: thm.textPrimary, letterSpacing: "-0.02em", lineHeight: 1,
               }}>
-                Traffic NOW!
+                {ttActive ? "Traffic THEN!" : "Traffic NOW!"}
               </span>
               {/* Info tooltip — click to toggle animated callout */}
               <InfoTip thm={thm}>{TOOLTIP_CONTENT.routeBrowserPane.body}</InfoTip>
@@ -735,9 +756,11 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           {dataTimestamp && (
             <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0",
               display: "flex", alignItems: "center", gap: 5, opacity: 0.8 }}>
-              <span className="live-dot" aria-hidden="true" />
+              {!ttActive && <span className="live-dot" aria-hidden="true" />}
               <span>
-                Live · updated {relativeTime(dataTimestamp)}
+                {ttActive && ttSimulatedNow
+                  ? `Time Travel · as of ${ttFormatPane(ttSimulatedNow)}`
+                  : `Live · updated ${relativeTime(dataTimestamp)}`}
               </span>
             </p>
           )}
@@ -785,22 +808,26 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           width: RAIL_WIDTH,
           display: "flex", flexDirection: "column", alignItems: "center",
           paddingTop: 14, cursor: "pointer",
-          background: thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f0f0f0",
-          borderLeft: `1px solid ${thm.key === "colour" ? "#2A3545" : thm.key === "pastel" ? "#DCCFB8" : "#e0e0e0"}`,
+          background: thm.paneBg,
+          borderLeft: `1px solid ${railBorderColor}`,
           transition: "background 0.2s", zIndex: 2,
+          boxShadow: "none",
+          outline: "none",
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#1A2030" : thm.key === "pastel" ? "#EDE5D5" : "#e8e8e8";
+            railHoverBg;
         }}
         onMouseLeave={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f0f0f0";
+            thm.paneBg;
         }}
       >
-        <span className="live-dot" aria-hidden="true" style={{
-          width: 5, height: 5, marginBottom: 6,
-        }} />
+        {!ttActive && (
+          <span className="live-dot" aria-hidden="true" style={{
+            width: 5, height: 5, marginBottom: 6,
+          }} />
+        )}
         <span style={{
           fontSize: 12, fontWeight: 700, letterSpacing: "0.15em",
           textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",
@@ -819,7 +846,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 }
 
 /* ── Mobile bottom sheet ───────────────────────────────────────── */
-function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated }: PaneProps) {
+function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
   return (
     <>
       {isOpen && (
@@ -848,13 +875,13 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             <span style={{ fontSize: 13 }}>🗺️</span>
             <span style={{
               fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
-            }}>Traffic NOW!</span>
+            }}>{ttActive ? "Traffic THEN!" : "Traffic NOW!"}</span>
           </div>
           {dataTimestamp && (
             <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0",
               display: "flex", alignItems: "center", gap: 4 }}>
-              <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />
-              <span>Live · {relativeTime(dataTimestamp)}</span>
+              {!ttActive && <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />}
+              <span>{ttActive && ttSimulatedNow ? `Time Travel · ${ttFormatPane(ttSimulatedNow)}` : `Live · ${relativeTime(dataTimestamp)}`}</span>
             </p>
           )}
         </div>
@@ -910,6 +937,8 @@ interface Props {
   isOpen?: boolean;
   onToggle?: () => void;
   paneWidth?: number;
+  ttActive?: boolean;
+  ttSimulatedNow?: Date | null;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -941,6 +970,7 @@ export default function RouteBrowserPane(props: Props) {
     cards: props.cards, selectedRoute: props.selectedRoute,
     onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle, paneWidth,
     dataTimestamp: props.dataTimestamp, lastUpdated: props.lastUpdated,
+    ttActive: props.ttActive, ttSimulatedNow: props.ttSimulatedNow,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

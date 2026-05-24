@@ -17,6 +17,9 @@ import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, Weat
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
+import { TimeTravelProvider, useTimeTravel } from "@/lib/TimeTravelContext";
+import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "@/lib/ttStateHelpers";
+import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
 import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandChart";
@@ -70,6 +73,7 @@ function readUrlParams() {
   if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));
   if (p.has("aggregation")) out.aggregation = p.get("aggregation")!;
   if (p.has("metric")) out.metric = p.get("metric")!;
+  if (p.has("tt"))     out.tt     = p.get("tt")!;
   return out;
 }
 const URL_PARAMS = readUrlParams();
@@ -981,8 +985,80 @@ function computeAllRouteCards(
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
 function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
+  const tt = useTimeTravel();
   const isMobile = useIsMobile();
   const liveRef = useRef<HTMLDivElement>(null);
+
+  // Time Travel pill state and helpers
+  const [ttPopoverOpen, setTtPopoverOpen] = useState(false);
+  const ttButtonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedTime, setSelectedTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
+  function ttFormat(dt: Date): string {
+    const d = dt.getDate();
+    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+    const yr = String(dt.getFullYear()).slice(2);
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mm = String(dt.getMinutes()).padStart(2, "0");
+    return `${d} ${mon} '${yr} · ${hh}:${mm}`;
+  }
+
+  // TT glow colours per theme — blazing tier
+  const ttGlowMap: Record<string, string> = {
+    colour: "0 0 18px rgba(139,92,246,0.55), 0 0 6px rgba(139,92,246,0.4), 0 0 40px rgba(139,92,246,0.15)",
+    gray:   "0 0 14px rgba(160,160,160,0.4), 0 0 4px rgba(200,200,200,0.3), 0 0 32px rgba(160,160,160,0.1)",
+    pastel: "0 0 18px rgba(251,191,36,0.5), 0 0 6px rgba(251,191,36,0.35), 0 0 40px rgba(251,191,36,0.12)",
+  };
+  const ttBgActiveMap: Record<string, string> = {
+    colour: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.15), rgba(139,92,246,0.2))",
+    gray:   "linear-gradient(135deg, #e0e0e0, #d0d0d0)",
+    pastel: "linear-gradient(135deg, #FDE68A, #F5E6C8)",
+  };
+  const ttBorderActiveMap: Record<string, string> = {
+    colour: "rgba(139,92,246,0.8)",
+    gray:   "#777",
+    pastel: "#B8860B",
+  };
+  const ttTextActiveMap: Record<string, string> = {
+    colour: "#E9D5FF",
+    gray:   "#333",
+    pastel: "#78350F",
+  };
+
+  // Build month grid for calendar (Monday-start)
+  function buildMonthGrid(year: number, month: number): (number | null)[][] {
+    const firstDay = new Date(year, month, 1);
+    let startDow = firstDay.getDay() - 1;
+    if (startDow < 0) startDow = 6;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length < 42) cells.push(null);
+    const rows: (number | null)[][] = [];
+    for (let i = 0; i < 42; i += 7) rows.push(cells.slice(i, i + 7));
+    return rows;
+  }
+
+  // Click-outside dismiss for TT popover
+  useEffect(() => {
+    if (!ttPopoverOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
+          ttButtonRef.current && !ttButtonRef.current.contains(e.target as Node)) {
+        setTtPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ttPopoverOpen]);
 
   // Announce dynamic changes to screen readers
   const announce = useCallback((msg: string) => {
@@ -1068,7 +1144,10 @@ function DashboardInner() {
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
   const [settledCity, setSettledCity] = useState<string | null>(null);
-  const [paneOpen,  setPaneOpen]  = useState(cfg.route_pane.open ?? true);
+  const [paneOpen,  setPaneOpen]  = useState(() => {
+    try { const s = localStorage.getItem("to:paneOpen"); if (s !== null) return s === "1"; } catch {}
+    return cfg.route_pane.open ?? true;
+  });
   const willReopenPane = useRef(false);
 
   /* Sync reset before paint — prevents one-frame card flash on city switch */
@@ -1097,7 +1176,7 @@ function DashboardInner() {
     raf = requestAnimationFrame(tick);
 
     /* Retract pane invisibly, remember whether to reopen */
-    willReopenPane.current = paneOpen || (cfg.route_pane.open ?? true);
+    try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
     setPaneOpen(false);
 
     /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */
@@ -1135,8 +1214,129 @@ function DashboardInner() {
 
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
-    useTrafficData(citySource);
+    useTrafficData(citySource, tt.isActive);
   const weatherMap = useWeatherData();
+
+  // Time Travel: filter allRows to historical subset when TT is active
+  const ttAllRows = useMemo(() => {
+    if (!tt.isActive || !tt.simulatedNow) return allRows;
+    const cutoff = tt.simulatedNow.getTime();
+    return allRows.filter(r => r.timestamp.getTime() <= cutoff);
+  }, [allRows, tt.isActive, tt.simulatedNow]);
+
+  // TT weather: derive from last eligible row per route when TT is active
+  const effectiveWeatherMap = useMemo(() => {
+    if (!tt.isActive || !tt.simulatedNow) return weatherMap;
+    // Build weather from the last eligible row per route_code
+    const lastByRoute = new Map<string, TrafficRow>();
+    for (const row of ttAllRows) {
+      const existing = lastByRoute.get(row.route_code);
+      if (!existing || row.timestamp.getTime() > existing.timestamp.getTime()) {
+        lastByRoute.set(row.route_code, row);
+      }
+    }
+    const map = new Map<string, WeatherRow>();
+    for (const [rc, row] of lastByRoute) {
+      // Only include if at least one weather field is populated
+      if (row.temp_c === null && row.realfeel_c === null && row.humidity_pct === null && row.aqi === null) continue;
+      map.set(rc, {
+        route_code: rc,
+        aqi: row.aqi,
+        aqi_category: "",       // not available from traffic CSV
+        condition: "",           // not available from traffic CSV
+        temp_c: row.temp_c,
+        temp_flag: "",           // not available from traffic CSV
+        realfeel_c: row.realfeel_c,
+        realfeel_word: "",       // not available from traffic CSV
+        humidity_pct: row.humidity_pct,
+        wind_gust_kmh: null,     // not available from traffic CSV
+        uv_index: null,          // not available from traffic CSV
+      });
+    }
+    return map;
+  }, [tt.isActive, tt.simulatedNow, ttAllRows, weatherMap]);
+
+  const effectiveRowCount = ttAllRows.length;
+  const effectiveDataTimestamp = useMemo(() => {
+    if (tt.isActive && tt.simulatedNow) return tt.simulatedNow;
+    return dataTimestamp;
+  }, [tt.isActive, tt.simulatedNow, dataTimestamp]);
+
+  // Hydrate Time Travel from ?tt= URL param on mount
+  const ttHydrated = useRef(false);
+  useEffect(() => {
+    if (ttHydrated.current) return;
+    if (URL_PARAMS.tt && typeof URL_PARAMS.tt === "string" && !tt.isActive) {
+      const dt = new Date(URL_PARAMS.tt);
+      if (!isNaN(dt.getTime())) {
+        tt.activate(dt);
+      }
+    }
+    ttHydrated.current = true;
+  }, []);
+
+  // Inject TT animation keyframes when TT is active; remove when off
+  useEffect(() => {
+    if (!tt.isActive) {
+      const el = document.getElementById("tt-animations");
+      if (el) el.remove();
+      return;
+    }
+    if (document.getElementById("tt-animations")) return;
+    const style = document.createElement("style");
+    style.id = "tt-animations";
+    style.textContent = `
+      @keyframes tt-glow-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.65; }
+      }
+      @keyframes tt-ember-sweep {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+      }
+      @keyframes tt-aura-breath {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 0.9; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .tt-pill-blaze, .tt-aura-overlay, .tt-shimmer { animation: none !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  }, [tt.isActive]);
+
+  // Update URL during TT playback (replaceState to avoid flooding history)
+  const wasTtActiveRef = useRef(false);
+  useEffect(() => {
+    if (!tt.isActive) {
+      if (wasTtActiveRef.current) {
+        const p = new URLSearchParams(window.location.search);
+        p.delete("tt");
+        const qs = p.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+        wasTtActiveRef.current = false;
+      }
+      return;
+    }
+    if (!tt.simulatedNow) return;
+    wasTtActiveRef.current = true;
+    const p = new URLSearchParams(window.location.search);
+    p.set("tt", tt.simulatedNow.toISOString());
+    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}${window.location.hash}`);
+  }, [tt.isActive, tt.simulatedNow]);
+
+  // Calendar data availability (uses full allRows, not TT-filtered)
+  const dataDays = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRows) {
+      const d = r.timestamp;
+      set.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+    }
+    return set;
+  }, [allRows]);
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -1146,9 +1346,9 @@ function DashboardInner() {
   }, [loading, error, rowCount, selectedCity, announce]);
 
   const routeOptions = useMemo(() => {
-    const labels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
+    const labels = Array.from(new Set(ttAllRows.map(r => r.label_short))).sort();
     return labels.length ? labels : ["Old Airport Road"];
-  }, [allRows]);
+  }, [ttAllRows]);
 
   useEffect(() => {
     if (allRows.length === 0 || urlParamsRef.current.routeApplied) return;
@@ -1168,6 +1368,18 @@ function DashboardInner() {
   const periodLabel   = PERIOD_LIST[periodIdx].label;
   const todLabel      = TOD_LIST[todIdx].label;
 
+  // Always-current snapshot of user-facing state for TT save/restore.
+  // Updated every render so the save effect captures correct values
+  // without stale-closure risk.
+  const stateSnapshotRef = useRef<Omit<DashboardSnapshot, "sliderWeekKeys">>({
+    periodIdx, todIdx, questionMode, chartView, chartGranularity,
+    routeName: selectedRoute,
+  });
+  stateSnapshotRef.current = {
+    periodIdx, todIdx, questionMode, chartView, chartGranularity,
+    routeName: selectedRoute,
+  };
+
   const selectedRouteInfo = useMemo(
     () => routes.find(r => r.label_short === selectedRoute),
     [routes, selectedRoute],
@@ -1186,7 +1398,7 @@ function DashboardInner() {
   };
 
   /* ── Slider ─────────────────────────────────────────────────── */
-  const allRouteWeeks = useAllRouteWeeks(allRows, selectedRoute, tod);
+  const allRouteWeeks = useAllRouteWeeks(ttAllRows, selectedRoute, tod);
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
@@ -1221,6 +1433,88 @@ function DashboardInner() {
     setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
   }, [tod, allRouteWeeks.length, sliderManuallySet]);
 
+  // Time Travel: save pre-TT state on activate, restore on cancel.
+  // Uses stateSnapshotRef for closure-safe capture and ttStateHelpers
+  // for validated restore logic.
+  const preTtStateRef = useRef<DashboardSnapshot | null>(null);
+
+  useEffect(() => {
+    if (tt.isActive && !preTtStateRef.current) {
+      // Save current state — read from stateSnapshotRef to avoid stale closures
+      const snap = stateSnapshotRef.current;
+      const lKey = allRouteWeeks[safeLeft]?.weekKey ?? null;
+      const rKey = allRouteWeeks[safeRight]?.weekKey ?? null;
+      preTtStateRef.current = {
+        sliderWeekKeys: lKey && rKey ? [lKey, rKey] : null,
+        periodIdx: snap.periodIdx,
+        todIdx: snap.todIdx,
+        questionMode: snap.questionMode,
+        chartView: snap.chartView,
+        chartGranularity: snap.chartGranularity,
+        routeName: snap.routeName,
+      };
+      setSliderManuallySet(false); // allow auto-setting for TT defaults
+    } else if (!tt.isActive && preTtStateRef.current) {
+      const saved = preTtStateRef.current;
+      if (!validateSnapshot(saved)) {
+        // Corrupted snapshot — bail out cleanly
+        preTtStateRef.current = null;
+        return;
+      }
+
+      // Restore filter/chart state
+      setPeriodIdx(saved.periodIdx);
+      setTodIdx(saved.todIdx);
+      setQuestionMode(saved.questionMode);
+      setChartView(saved.chartView);
+      setChartGranularity(saved.chartGranularity);
+
+      // Restore route — validate it still exists in Live data
+      const liveRouteLabels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
+      const restoredRouteIdx = resolveRouteIndex(saved.routeName, liveRouteLabels);
+      if (restoredRouteIdx >= 0) {
+        setRouteIdx(restoredRouteIdx);
+      }
+      // If route not found, keep current routeIdx — modulo handles bounds
+
+      // Restore slider using validated weekKey resolution
+      const sliderResult = resolveSliderFromWeekKeys(saved.sliderWeekKeys, allRouteWeeks);
+      if (sliderResult) {
+        setSliderVals(sliderResult);
+        setSliderManuallySet(true); // prevent auto-set from overwriting restored state
+      } else {
+        setSliderManuallySet(false); // weekKeys missing — let auto-set handle it
+      }
+
+      preTtStateRef.current = null;
+    }
+  }, [tt.isActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When TT is active and allRouteWeeks are ready, set TT default comparison windows
+  useEffect(() => {
+    if (!tt.isActive || !tt.simulatedNow || allRouteWeeks.length === 0 || sliderManuallySet) return;
+
+    const simMs = tt.simulatedNow.getTime();
+    const recentStart = simMs - 45 * 86400000; // D - 45 days
+    const baselineStart = simMs - 120 * 86400000; // D - 4 months
+    const baselineEnd = simMs - 75 * 86400000; // D - 2.5 months
+
+    // Find week indices
+    let blIdx = allRouteWeeks.findIndex(w => w.weekStart.getTime() >= baselineStart);
+    if (blIdx < 0) blIdx = 0;
+    let brIdx = -1;
+    for (let i = allRouteWeeks.length - 1; i >= 0; i--) {
+      if (allRouteWeeks[i].weekStart.getTime() <= baselineEnd) { brIdx = i; break; }
+    }
+    if (brIdx < 0) brIdx = Math.min(blIdx + 4, allRouteWeeks.length - 1);
+
+    // Set period to 1.5m
+    const pIdx = PERIOD_LIST.findIndex(p => p.value === "1.5m");
+    if (pIdx >= 0) setPeriodIdx(pIdx);
+
+    setSliderVals([Math.min(blIdx, brIdx), Math.max(blIdx, brIdx)]);
+  }, [tt.isActive, tt.simulatedNow, allRouteWeeks.length]);
+
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
@@ -1253,17 +1547,20 @@ function DashboardInner() {
       aggregation: chartGranularity,
       metric: chartView,
     });
+    if (tt.isActive && tt.simulatedNow) {
+      p.set("tt", tt.simulatedNow.toISOString());
+    }
     const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx, chartGranularity, chartView]);
+  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx, chartGranularity, chartView, tt.isActive, tt.simulatedNow]);
 
   const lastDataMs = useMemo(
-    () => allRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
-    [allRows],
+    () => ttAllRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
+    [ttAllRows],
   );
   const periodCutoffDate = useMemo(() => {
     const d = new Date(lastDataMs || Date.now());
@@ -1311,15 +1608,15 @@ function DashboardInner() {
   const prevBaselineKeyForPane = useRef("");
 
   useEffect(() => {
-    if (allRows.length === 0) return;
+    if (ttAllRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
-    const weatherChanged = weatherMap.size > 0;
+    const weatherChanged = effectiveWeatherMap.size > 0;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
-    const computed = computeAllRouteCards(allRows, routeOptions, routes, weatherMap);
+    const computed = computeAllRouteCards(ttAllRows, routeOptions, routes, effectiveWeatherMap);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
-  }, [allRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap]);
+  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, effectiveWeatherMap]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
   const routeOrder = useMemo(() => {
@@ -1377,8 +1674,8 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStatsAllDay(allRows, selectedRoute);
-  const { merged, dailyData, selectedStats } = useFilteredData(allRows, selectedRoute, period, tod);
+  const dailyStats = useDailyStatsAllDay(ttAllRows, selectedRoute);
+  const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
   // Recharts' default tick auto-skipping can pick different ticks depending on
@@ -1405,7 +1702,7 @@ function DashboardInner() {
       return { percentile: pct };
     })();
 
-    const routeRows = allRows.filter(r => r.label_short === selectedRoute);
+    const routeRows = ttAllRows.filter(r => r.label_short === selectedRoute);
 
     // Helper: build IntervalDatum[] from a slice of WeeklyAggregates
     function buildBands(weeks: WeeklyAggregate[]): IntervalDatum[] {
@@ -1436,7 +1733,7 @@ function DashboardInner() {
     const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : []);
 
     return { trafficNowData: recentData, trafficNowCompare: baselineData };
-  }, [allRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
+  }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
 
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
@@ -1559,6 +1856,8 @@ function DashboardInner() {
     fontSize:11, color: thm.textSecondary,
   };
   const kpiCardBase: React.CSSProperties = {
+    position: "relative",
+    zIndex: 1,
     border: thm.cardBorder,
     boxShadow: thm.cardShadow,
     borderRadius:18,
@@ -1569,12 +1868,34 @@ function DashboardInner() {
   /* ── Theme toggle button style ──────────────────────────────── */
   const nextMeta = THEME_META[nextThemeKey];
   const curMeta  = THEME_META[themeKey];
+  const ttBg = themeKey === "colour"
+    ? {
+      gradients: [
+        "radial-gradient(ellipse at 14% 10%, rgba(168,85,247,0.12), transparent 52%)",
+        "radial-gradient(ellipse at 90% 12%, rgba(34,211,238,0.08), transparent 48%)",
+      ],
+    }
+    : themeKey === "pastel"
+      ? {
+        gradients: [
+          "radial-gradient(ellipse at 0% 0%, rgba(245,158,11,0.28), transparent 46%)",
+          "radial-gradient(ellipse at 100% 0%, rgba(251,113,133,0.20), transparent 44%)",
+          "radial-gradient(ellipse at 50% 100%, rgba(52,211,153,0.16), transparent 52%)",
+        ],
+      }
+      : {
+        gradients: [
+          "radial-gradient(ellipse at 0% 0%, rgba(40,40,40,0.38), transparent 50%)",
+          "radial-gradient(ellipse at 100% 0%, rgba(200,200,200,0.30), transparent 48%)",
+          "radial-gradient(ellipse at 50% 100%, rgba(90,90,90,0.22), transparent 55%)",
+        ],
+      };
 
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className={thm.isDark ? "dark" : ""}>
       <div aria-live="polite" aria-atomic="true" ref={liveRef} className="sr-only" />
-      <div className="transition-colors" style={{ background: thm.bodyBg, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div className="transition-colors" style={{ position: "relative", zIndex: 1, background: thm.bodyBg, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
 
         {/* ── Skip link ─────────────────────────────────────── */}
         <a href="#main-content" className="sr-only focusable">
@@ -1604,9 +1925,246 @@ function DashboardInner() {
               <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} />
             </div>
 
-            {/* Right: Share + Refresh + Theme */}
-            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-              {!loading && rowCount > 0 && (
+            {/* Right: Time Travel + Theme + Share + Zoom */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>
+              {/* Time Travel pill — blazing when active */}
+              <button
+                ref={ttButtonRef}
+                onClick={() => {
+                  if (tt.isActive) {
+                    tt.deactivate();
+                  } else {
+                    setTtPopoverOpen(o => !o);
+                  }
+                }}
+                className={tt.isActive ? "tt-pill-blaze" : undefined}
+                style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:5,
+                  border:`${tt.isActive ? 2 : 1}px solid ${tt.isActive
+                    ? ttBorderActiveMap[themeKey] ?? ttBorderActiveMap.colour
+                    : thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  borderRadius:9999, height:44, padding:"0 16px",
+                  color: tt.isActive
+                    ? (ttTextActiveMap[themeKey] ?? ttTextActiveMap.colour)
+                    : thm.textMuted,
+                  background: tt.isActive
+                    ? (ttBgActiveMap[themeKey] ?? ttBgActiveMap.colour)
+                    : themeKey==="colour" ? "#141A24" : "transparent",
+                  boxShadow: tt.isActive ? (ttGlowMap[themeKey] ?? ttGlowMap.colour) : "none",
+                  cursor:"pointer",
+                  transition:"color 0.2s, background 0.2s, box-shadow 0.4s, border-color 0.2s",
+                  animation: tt.isActive ? "tt-glow-pulse 3s ease-in-out infinite" : "none",
+                }}
+                title={tt.isActive ? "Click to cancel Time Travel" : "Open Time Travel"}
+              >
+                {/* Shimmer sweep overlay */}
+                {tt.isActive && (
+                  <span className="tt-shimmer" style={{
+                    position:"absolute", inset:0,
+                    background:"linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%)",
+                    backgroundSize:"200% 100%",
+                    animation:"tt-ember-sweep 4s ease-in-out infinite",
+                    pointerEvents:"none",
+                    borderRadius:9999,
+                  }} />
+                )}
+                <span style={{ fontSize:14, position:"relative", zIndex:1 }}>{tt.isActive ? "★" : "⏳"}</span>
+                <span style={{
+                  fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1,
+                  whiteSpace:"nowrap", position:"relative", zIndex:1,
+                }}>
+                  Time Travel
+                </span>
+              </button>
+
+              {/* Time Travel calendar popover */}
+              {ttPopoverOpen && !tt.isActive && createPortal(
+                <div ref={popoverRef} style={{
+                  position:"fixed",
+                  top: (ttButtonRef.current?.getBoundingClientRect().bottom ?? 60) + 6,
+                  right: Math.max(8, window.innerWidth - (ttButtonRef.current?.getBoundingClientRect().right ?? window.innerWidth) + 20),
+                  zIndex: 9999,
+                  background: thm.key==="colour" ? "#1A2030" : thm.key==="pastel" ? "#FFF8F0" : "#fff",
+                  border:`1px solid ${thm.key==="gray"?"#ccc":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
+                  borderRadius:12,
+                  boxShadow: thm.key==="colour"
+                    ? "0 8px 32px rgba(0,0,0,0.5)"
+                    : "0 8px 24px rgba(0,0,0,0.12)",
+                  padding:16,
+                  minWidth:280,
+                  animation:"fade-in 0.15s ease",
+                }}>
+                  {/* Month navigation */}
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                    <button onClick={() => {
+                      if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1); }
+                      else setCalMonth(m => m-1);
+                    }} style={{
+                      background:"none", border:"none", cursor:"pointer", color:thm.textMuted,
+                      fontSize:18, padding:"4px 8px", borderRadius:4,
+                    }}>‹</button>
+                    <span style={{
+                      fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:14,
+                      color:thm.textPrimary,
+                    }}>
+                      {["January","February","March","April","May","June","July","August","September","October","November","December"][calMonth]} {calYear}
+                    </span>
+                    <button onClick={() => {
+                      const nowM = new Date().getMonth();
+                      const nowY = new Date().getFullYear();
+                      if (calYear > nowY || (calYear === nowY && calMonth >= nowM)) return;
+                      if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); }
+                      else setCalMonth(m => m+1);
+                    }} style={{
+                      background:"none", border:"none", cursor:"pointer", color:thm.textMuted,
+                      fontSize:18, padding:"4px 8px", borderRadius:4,
+                      opacity: (calYear > today.getFullYear() || (calYear === today.getFullYear() && calMonth >= today.getMonth())) ? 0.3 : 1,
+                    }}>›</button>
+                  </div>
+
+                  {/* Weekday labels */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:2, marginBottom:4 }}>
+                    {["Mo","Tu","We","Th","Fr","Sa","Su"].map(d => (
+                      <div key={d} style={{
+                        textAlign:"center", fontSize:10, fontWeight:600,
+                        color:thm.textMuted, padding:"4px 0",
+                      }}>{d}</div>
+                    ))}
+                  </div>
+
+                  {/* Calendar grid */}
+                  {buildMonthGrid(calYear, calMonth).map((row, ri) => (
+                    <div key={ri} style={{ display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:2, marginBottom:2 }}>
+                      {row.map((day, ci) => {
+                        if (day === null) return <div key={ci} />;
+                        const dateStr = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                        const isFuture = dateStr > todayStr;
+                        const hasData = dataDays.has(dateStr);
+                        const isToday = dateStr === todayStr;
+                        const isSelected = selectedDate &&
+                          selectedDate.getFullYear() === calYear &&
+                          selectedDate.getMonth() === calMonth &&
+                          selectedDate.getDate() === day;
+                        const canClick = !isFuture && hasData;
+
+                        const cellBg = isSelected
+                          ? (themeKey==="colour" ? "rgba(139,92,246,0.3)" : themeKey==="pastel" ? "#FDE68A" : "#111")
+                          : "transparent";
+                        const cellColor = isSelected
+                          ? (themeKey==="colour" ? "#E9D5FF" : themeKey==="pastel" ? "#92400E" : "#fff")
+                          : isFuture
+                            ? thm.textMuted
+                            : hasData ? thm.textPrimary : thm.textMuted;
+
+                        return (
+                          <div
+                            key={ci}
+                            onClick={() => canClick && setSelectedDate(new Date(calYear, calMonth, day))}
+                            style={{
+                              textAlign:"center", fontSize:12, padding:"6px 0",
+                              borderRadius:6,
+                              background: cellBg,
+                              color: cellColor,
+                              cursor: canClick ? "pointer" : "default",
+                              opacity: isFuture ? 0.3 : hasData ? 1 : 0.4,
+                              border: isToday
+                                ? `1px dashed ${themeKey==="colour"?"rgba(139,92,246,0.5)":themeKey==="pastel"?"#D4A574":"#999"}`
+                                : !hasData && !isFuture ? "1px dashed rgba(128,128,128,0.3)" : "1px solid transparent",
+                              transition:"background 0.15s, color 0.15s",
+                            }}
+                            onMouseEnter={e => {
+                              if (canClick && !isSelected) (e.currentTarget as HTMLElement).style.background = thm.key==="colour" ? "rgba(139,92,246,0.1)" : thm.key==="pastel" ? "#FEF3C7" : "#f0f0f0";
+                            }}
+                            onMouseLeave={e => {
+                              if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
+                            }}
+                          >{day}</div>
+                        );
+                      })}
+                    </div>
+                  ))}
+
+                  {/* Time picker */}
+                  <div style={{
+                    display:"flex", alignItems:"center", justifyContent:"space-between",
+                    marginTop:12, paddingTop:12,
+                    borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
+                  }}>
+                    <span style={{ fontSize:11, fontWeight:600, color:thm.textSecondary }}>
+                      Time
+                    </span>
+                    <input
+                      type="time"
+                      value={selectedTime}
+                      onChange={e => setSelectedTime(e.target.value)}
+                      style={{
+                        background: thm.key==="colour" ? "#0F1218" : thm.key==="pastel" ? "#fff" : "#f5f5f5",
+                        border:`1px solid ${thm.key==="gray"?"#ccc":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
+                        borderRadius:6, padding:"4px 8px",
+                        fontSize:13, fontWeight:600,
+                        color: thm.textPrimary,
+                        fontFamily:"var(--app-font-display)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Activate button */}
+                  <button
+                    onClick={() => {
+                      if (!selectedDate) return;
+                      const [hh, mm] = selectedTime.split(":").map(Number);
+                      const dt = new Date(selectedDate);
+                      dt.setHours(hh, mm, 0, 0);
+                      tt.activate(dt);
+                      setTtPopoverOpen(false);
+                    }}
+                    disabled={!selectedDate}
+                    style={{
+                      width:"100%", marginTop:10, padding:"8px 0",
+                      borderRadius:8, border:"none",
+                      background: selectedDate
+                        ? (themeKey==="colour" ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(99,102,241,0.2))" : themeKey==="pastel" ? "#FDE68A" : "#111")
+                        : (thm.key==="colour" ? "#2A3545" : "#e0e0e0"),
+                      color: selectedDate
+                        ? (themeKey==="colour" ? "#E9D5FF" : themeKey==="pastel" ? "#92400E" : "#fff")
+                        : thm.textMuted,
+                      fontFamily:"var(--app-font-display)", fontSize:12, fontWeight:700,
+                      cursor: selectedDate ? "pointer" : "default",
+                      transition:"background 0.2s, color 0.2s",
+                    }}
+                  >
+                    {selectedDate ? `Travel to ${selectedDate.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][selectedDate.getMonth()]} at ${selectedTime}` : "Select a date above"}
+                  </button>
+                </div>,
+                document.body
+              )}
+
+              {/* Theme pill */}
+              <button
+                onClick={cycleTheme}
+                title={`Switch to ${nextMeta.label}`}
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                  height:44, borderRadius:9999, padding:"0 12px",
+                  minWidth: 160,
+                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
+                  cursor:"pointer",
+                  transition:"background 0.2s",
+                }}
+                aria-label="Cycle theme"
+              >
+                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
+                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
+                  {curMeta.label}
+                </span>
+              </button>
+
+              {/* Share pill */}
+              {!loading && effectiveRowCount > 0 && (
                 <button onClick={handleShare} style={{
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
@@ -1621,7 +2179,8 @@ function DashboardInner() {
                   </span>
                 </button>
               )}
-              {/* Size +/- */}
+
+              {/* Zoom +/- */}
               <div style={{
                 display:"flex", alignItems:"center",
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
@@ -1656,32 +2215,68 @@ function DashboardInner() {
                   <Plus size={13} />
                 </button>
               </div>
-              <button
-                onClick={cycleTheme}
-                title={`Switch to ${nextMeta.label}`}
-                style={{
-                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                  height:44, borderRadius:9999, padding:"0 12px",
-                  minWidth: 160,
-                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
-                  cursor:"pointer",
-                  transition:"background 0.2s",
-                }}
-                aria-label="Cycle theme"
-              >
-                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
-                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
-                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
-                  {curMeta.label}
-                </span>
-              </button>
             </div>
           </div>
         </header>
 
+        {/* ── TT sticky banner ──────────────────────────────────── */}
+        {tt.isActive && tt.simulatedNow && (
+          <div style={{
+            position:"sticky", top: 0, zIndex: 499,
+            background: themeKey === "colour"
+              ? "linear-gradient(135deg, #1E1533, #1A1030)"
+              : themeKey === "pastel"
+                ? "linear-gradient(135deg, #FDF6E3, #FEF3C7)"
+                : "linear-gradient(135deg, #E8E8E8, #D8D8D8)",
+            borderBottom: `1px solid ${themeKey === "colour" ? "rgba(139,92,246,0.3)" : themeKey === "pastel" ? "#D4A574" : "#bbb" }`,
+            padding: "8px 1.5rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            flexWrap: "wrap", gap: 8,
+            animation: "fade-in 0.4s ease",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>⏳</span>
+              <span style={{
+                fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13,
+                color: themeKey === "colour" ? "#E9D5FF" : themeKey === "pastel" ? "#78350F" : "#333",
+              }}>
+                Time Travel active — {selectedCity} as of {ttFormat(tt.simulatedNow)}
+              </span>
+              <span style={{
+                fontSize: 11,
+                color: themeKey === "colour" ? "rgba(233,213,255,0.5)" : themeKey === "pastel" ? "rgba(120,53,15,0.5)" : "rgba(0,0,0,0.4)",
+              }}>
+                Showing historical traffic playback
+              </span>
+            </div>
+            <button
+              onClick={() => tt.deactivate()}
+              style={{
+                fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 11,
+                padding: "5px 14px", borderRadius: 9999, border: "none",
+                background: themeKey === "colour"
+                  ? "rgba(139,92,246,0.3)" : themeKey === "pastel"
+                    ? "#FDE68A" : "#ccc",
+                color: themeKey === "colour" ? "#E9D5FF" : themeKey === "pastel" ? "#78350F" : "#333",
+                cursor: "pointer",
+                transition: "background 0.2s",
+                whiteSpace: "nowrap",
+              }}
+              title="Return to live dashboard"
+            >
+              ← Return to Present
+            </button>
+          </div>
+        )}
+
         {/* ── Below-header area: main content + route pane ─────────── */}
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div style={{
+          display: "flex", flex: 1, minHeight: 0,
+          position: "relative",
+          backgroundImage: tt.isActive ? ttBg.gradients.join(", ") : undefined,
+          backgroundRepeat: tt.isActive ? ttBg.gradients.map(() => "no-repeat").join(", ") : undefined,
+          backgroundSize: tt.isActive ? ttBg.gradients.map(() => "100% 100%").join(", ") : undefined,
+        }}>
 
           {/* ── Question pane (independent scroll + footer) ─────── */}
           <div style={{
@@ -1843,7 +2438,7 @@ function DashboardInner() {
                   boxShadow: showIntro ? "none" : thm.cardShadow,
                   borderRadius:"1.5rem",
                   padding: "1.25rem 1.5rem 2rem",
-                  position:"relative", overflow:"hidden",
+                  position:"relative", zIndex: 1, overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}
 
@@ -2143,7 +2738,7 @@ function DashboardInner() {
                   </div>
                 </div>
               ) : (
-                <div style={{ background: thm.sectionBg, border: thm.cardBorder, boxShadow: thm.cardShadow,
+                <div style={{ position: "relative", zIndex: 1, background: thm.sectionBg, border: thm.cardBorder, boxShadow: thm.cardShadow,
                   borderRadius:16, padding:"2.5rem", textAlign:"center" }}>
                   <p style={{ fontSize:36, marginBottom:8 }}>🔍</p>
                   <p style={{ fontWeight:700, color: thm.textPrimary }}>No data for these filters</p>
@@ -2159,7 +2754,7 @@ function DashboardInner() {
                   <div style={{ display:"grid", gap:16 }}>
                     {/* Merged Speed / Duration chart with toggle */}
                     <div className="chart-card animate-fade-in"
-                      style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
+                      style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
@@ -2384,8 +2979,8 @@ function DashboardInner() {
                   {trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
-                        ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
-                        : { padding: "1.25rem 1.5rem" }}>
+                        ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
+                        : { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", padding: "1.25rem 1.5rem" }}>
                       {/* Header row: toggle + optional compare badge */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: tnOpen ? 4 : 0 }}>
                         <button onClick={() => setTnOpen(o => !o)} style={{
@@ -2393,7 +2988,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            📡 TrafficNOW! — Speed Forecast Bands
+                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2417,7 +3012,7 @@ function DashboardInner() {
                       {tnOpen && (
                         <>
                           <p style={{ fontSize: 12, color: thm.textMuted, marginTop: 2, marginBottom: 4 }}>
-                            Weekly speed distribution · {routeEndpoints}
+                            {tt.isActive ? "Historical snapshot · " : ""}Weekly speed distribution · {routeEndpoints}
                             {trafficNowCompare.length > 0 ? ` — with baseline comparison` : ""}
                           </p>
                           <UncertaintyBandChart
@@ -2441,6 +3036,7 @@ function DashboardInner() {
                     style={{
                       padding:"1.25rem 1.5rem",
                       position: "relative",
+                      zIndex: 1,
                       ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
                     }}>
                     {/* Info icon — top-right corner */}
@@ -2496,7 +3092,11 @@ function DashboardInner() {
           })()}
           {" · "}
           {rowCount > 0 && dataTimestamp && (
-            <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+            tt.isActive && tt.simulatedNow ? (
+              <span>{effectiveRowCount.toLocaleString()} of {rowCount.toLocaleString()} rows · as of {ttFormat(tt.simulatedNow)}{effectiveRowCount < 100 && <span style={{ color: themeKey === "colour" ? "#FBBF24" : themeKey === "pastel" ? "#D97706" : "#B45309", fontWeight: 600, marginLeft: 4 }}>⚠ sparse data</span>}</span>
+            ) : (
+              <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+            )
           )}
           <span style={{ marginLeft:"auto" }}>© 2026 <a href="https://thecontrarian.in/" target="_blank" rel="noopener noreferrer" style={{ color: thm.chart.line4 }}>Mahesh Shantaram</a></span>
         </footer>
@@ -2512,12 +3112,14 @@ function DashboardInner() {
                 cards={allRouteCards}
                 selectedRoute={selectedRoute}
                 onRouteSelect={handleRouteSelectFromPane}
-                dataTimestamp={dataTimestamp}
+                dataTimestamp={effectiveDataTimestamp}
                 lastUpdated={lastUpdated}
                 mobile={false}
                 isOpen={paneOpen}
-                onToggle={() => setPaneOpen(o => !o)}
+                onToggle={() => setPaneOpen(o => { const next = !o; try { localStorage.setItem("to:paneOpen", next ? "1" : "0"); } catch {} return next; })}
                 paneWidth={cfg.route_pane.width}
+                ttActive={tt.isActive}
+                ttSimulatedNow={tt.simulatedNow}
               />
             </div>
           )}
@@ -2531,9 +3133,11 @@ function DashboardInner() {
             cards={allRouteCards}
             selectedRoute={selectedRoute}
             onRouteSelect={handleRouteSelectFromPane}
-            dataTimestamp={dataTimestamp}
+            dataTimestamp={effectiveDataTimestamp}
             lastUpdated={lastUpdated}
             mobile={true}
+            ttActive={tt.isActive}
+            ttSimulatedNow={tt.simulatedNow}
           />
         </div>
       )}
@@ -2546,8 +3150,10 @@ function DashboardInner() {
 /* ── Public export — wraps inner component with ThemeProvider ─── */
 export default function Dashboard() {
   return (
-    <ThemeProvider initialTheme={URL_PARAMS.theme as any}>
-      <DashboardInner />
-    </ThemeProvider>
+    <TimeTravelProvider>
+      <ThemeProvider initialTheme={URL_PARAMS.theme as any}>
+        <DashboardInner />
+      </ThemeProvider>
+    </TimeTravelProvider>
   );
 }

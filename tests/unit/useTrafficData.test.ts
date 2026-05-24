@@ -250,7 +250,7 @@ describe("Phase 1 — Data Integrity", () => {
             text: () => Promise.resolve(routesCsv),
           } as Response);
         }
-        if (url.includes("csv-bangalore_traffic.csv")) {
+        if (url.includes("csv-traffic-bangalore.csv")) {
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(trafficCsv),
@@ -293,7 +293,7 @@ describe("Phase 1 — Data Integrity", () => {
             text: () => Promise.resolve(routesCsv),
           } as Response);
         }
-        if (url.includes("csv-bangalore_traffic.csv")) {
+        if (url.includes("csv-traffic-bangalore.csv")) {
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(badCsv),
@@ -331,7 +331,7 @@ describe("Phase 1 — Data Integrity", () => {
             text: () => Promise.resolve(routesCsv),
           } as Response);
         }
-        if (url.includes("csv-bangalore_traffic.csv")) {
+        if (url.includes("csv-traffic-bangalore.csv")) {
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(trafficCsv),

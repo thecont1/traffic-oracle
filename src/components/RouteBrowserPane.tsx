@@ -652,6 +652,13 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+  const paneBorderColor = ttActive
+    ? thm.key === "colour" ? "rgba(167,139,250,0.35)" : thm.key === "pastel" ? "rgba(138,126,104,0.55)" : "rgba(17,17,17,0.45)"
+    : thm.paneBorder;
+  const railBorderColor = ttActive
+    ? thm.key === "colour" ? "rgba(167,139,250,0.16)" : thm.key === "pastel" ? "rgba(138,126,104,0.22)" : "rgba(17,17,17,0.18)"
+    : thm.key === "colour" ? "#2A3545" : thm.key === "pastel" ? "#DCCFB8" : "#e0e0e0";
+  const railHoverBg = thm.key === "colour" ? "rgba(255,255,255,0.04)" : thm.key === "pastel" ? "rgba(138,126,104,0.08)" : "rgba(0,0,0,0.04)";
 
   /* Tick every 60 s so the "Live · updated X min ago" label stays fresh */
   const [, setTick] = useState(0);
@@ -689,8 +696,10 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       overflow: "hidden",
       display: "flex",
       background: thm.paneBg,
-      border: `1px solid ${thm.paneBorder}`,
+      border: `1px solid ${paneBorderColor}`,
       borderRadius: 16,
+      backgroundClip: "padding-box",
+      boxShadow: ttActive ? "0 10px 28px rgba(0,0,0,0.08)" : undefined,
       margin: "8px 0 8px 8px",
       position: "relative",
     }}>
@@ -715,15 +724,15 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       <div style={{
         width: paneWidth, flexShrink: 0,
         display: "flex", flexDirection: "column", overflow: "hidden",
+        background: thm.paneBg,
         opacity: isOpen ? 1 : 0,
         transition: "opacity 0.2s ease",
         pointerEvents: isOpen ? "auto" : "none",
-        marginLeft: isOpen ? 8 : 0,
       }}>
         {/* Header */}
         <div style={{
           padding: "10px 12px 7px",
-          borderBottom: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
+          borderBottom: `1px solid ${railBorderColor}`,
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -799,22 +808,26 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           width: RAIL_WIDTH,
           display: "flex", flexDirection: "column", alignItems: "center",
           paddingTop: 14, cursor: "pointer",
-          background: thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f0f0f0",
-          borderLeft: `1px solid ${thm.key === "colour" ? "#2A3545" : thm.key === "pastel" ? "#DCCFB8" : "#e0e0e0"}`,
+          background: thm.paneBg,
+          borderLeft: `1px solid ${railBorderColor}`,
           transition: "background 0.2s", zIndex: 2,
+          boxShadow: "none",
+          outline: "none",
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#1A2030" : thm.key === "pastel" ? "#EDE5D5" : "#e8e8e8";
+            railHoverBg;
         }}
         onMouseLeave={e => {
           (e.currentTarget as HTMLElement).style.background =
-            thm.key === "colour" ? "#0F1218" : thm.key === "pastel" ? "#F3EDE0" : "#f0f0f0";
+            thm.paneBg;
         }}
       >
-        <span className="live-dot" aria-hidden="true" style={{
-          width: 5, height: 5, marginBottom: 6,
-        }} />
+        {!ttActive && (
+          <span className="live-dot" aria-hidden="true" style={{
+            width: 5, height: 5, marginBottom: 6,
+          }} />
+        )}
         <span style={{
           fontSize: 12, fontWeight: 700, letterSpacing: "0.15em",
           textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",

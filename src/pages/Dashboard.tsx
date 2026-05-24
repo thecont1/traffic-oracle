@@ -2223,7 +2223,7 @@ function DashboardInner() {
           <div style={{
             position: "fixed", inset: 0,
             pointerEvents: "none", zIndex: 496,
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui,sans-serif' font-size='11' font-weight='800' letter-spacing='0.15em' fill='${encodeURIComponent(themeKey === "colour" ? "rgba(139,92,246,0.04)" : themeKey === "pastel" ? "rgba(180,130,50,0.04)" : "rgba(100,100,100,0.04)")}' transform='rotate(-25 140 100)'%3ETIME TRAVEL MODE%3C/text%3E%3C/svg%3E")`,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1000'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui,sans-serif' font-size='55' font-weight='800' letter-spacing='0.15em' fill='${encodeURIComponent(themeKey === "colour" ? "rgba(139,92,246,0.15)" : themeKey === "pastel" ? "rgba(180,130,50,0.15)" : "rgba(100,100,100,0.15)")}' transform='rotate(-25 700 500)'%3ETIME TRAVEL MODE%3C/text%3E%3C/svg%3E")`,
             backgroundRepeat: "repeat",
           }} />
         </>, document.body)}

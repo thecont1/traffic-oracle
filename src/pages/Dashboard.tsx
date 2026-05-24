@@ -1142,7 +1142,10 @@ function DashboardInner() {
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
   const [settledCity, setSettledCity] = useState<string | null>(null);
-  const [paneOpen,  setPaneOpen]  = useState(cfg.route_pane.open ?? true);
+  const [paneOpen,  setPaneOpen]  = useState(() => {
+    try { const s = localStorage.getItem("to:paneOpen"); if (s !== null) return s === "1"; } catch {}
+    return cfg.route_pane.open ?? true;
+  });
   const willReopenPane = useRef(false);
 
   /* Sync reset before paint — prevents one-frame card flash on city switch */
@@ -1171,7 +1174,7 @@ function DashboardInner() {
     raf = requestAnimationFrame(tick);
 
     /* Retract pane invisibly, remember whether to reopen */
-    willReopenPane.current = paneOpen || (cfg.route_pane.open ?? true);
+    try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
     setPaneOpen(false);
 
     /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */

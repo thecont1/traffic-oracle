@@ -1020,9 +1020,9 @@ function DashboardInner() {
     pastel: "linear-gradient(135deg, #FDE68A, #F5E6C8)",
   };
   const ttBorderActiveMap: Record<string, string> = {
-    colour: "rgba(139,92,246,0.6)",
-    gray:   "#aaa",
-    pastel: "rgba(212,165,116,0.8)",
+    colour: "rgba(139,92,246,0.8)",
+    gray:   "#777",
+    pastel: "#B8860B",
   };
   const ttTextActiveMap: Record<string, string> = {
     colour: "#E9D5FF",
@@ -1107,8 +1107,6 @@ function DashboardInner() {
   /* slider */
   const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
   const [sliderManuallySet, setSliderManuallySet] = useState(false);
-  const preTtSliderRef = useRef<[number, number] | null>(null);
-  const preTtPeriodRef = useRef<number | null>(null);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [overlapWarning, setOverlapWarning] = useState(false);
@@ -1407,22 +1405,40 @@ function DashboardInner() {
   }, [tod, allRouteWeeks.length, sliderManuallySet]);
 
   // Time Travel: save pre-TT state on activate, restore on cancel
-  const [prevSliderInitDone, setPrevSliderInitDone] = useState(false);
+  // We snapshot the CLAMPED slider values (safeLeft/safeRight) since raw
+  // sliderVals may not reflect the user-visible position yet.
+  const preTtStateRef = useRef<{
+    slider: [number, number];
+    period: number;
+    tod: number;
+    questionMode: "worsened" | "improved";
+    chartView: "speed" | "duration";
+    chartGranularity: "daily" | "weekly";
+  } | null>(null);
+
   useEffect(() => {
-    if (tt.isActive && !prevSliderInitDone) {
-      // Save current state
-      preTtSliderRef.current = [...sliderVals];
-      preTtPeriodRef.current = periodIdx;
+    if (tt.isActive && !preTtStateRef.current) {
+      // Save current state BEFORE TT overwrites it
+      preTtStateRef.current = {
+        slider: [safeLeft, safeRight],
+        period: periodIdx,
+        tod: todIdx,
+        questionMode,
+        chartView,
+        chartGranularity,
+      };
       setSliderManuallySet(false); // allow auto-setting for TT defaults
-      setPrevSliderInitDone(true);
-    } else if (!tt.isActive && prevSliderInitDone) {
-      // restore pre-TT state
-      if (preTtSliderRef.current) setSliderVals(preTtSliderRef.current);
-      if (preTtPeriodRef.current !== null) setPeriodIdx(preTtPeriodRef.current);
-      preTtSliderRef.current = null;
-      preTtPeriodRef.current = null;
-      setSliderManuallySet(false);
-      setPrevSliderInitDone(false);
+    } else if (!tt.isActive && preTtStateRef.current) {
+      // Restore pre-TT state
+      const saved = preTtStateRef.current;
+      setSliderVals(saved.slider);
+      setPeriodIdx(saved.period);
+      setTodIdx(saved.tod);
+      setQuestionMode(saved.questionMode);
+      setChartView(saved.chartView);
+      setChartGranularity(saved.chartGranularity);
+      setSliderManuallySet(true); // prevent auto-set from overwriting restored state
+      preTtStateRef.current = null;
     }
   }, [tt.isActive]);
 
@@ -1854,7 +1870,7 @@ function DashboardInner() {
                   position: "relative",
                   overflow: "hidden",
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,
-                  border:`1.5px solid ${tt.isActive
+                  border:`${tt.isActive ? 2 : 1}px solid ${tt.isActive
                     ? ttBorderActiveMap[themeKey] ?? ttBorderActiveMap.colour
                     : thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, height:44, padding:"0 16px",
@@ -1887,7 +1903,7 @@ function DashboardInner() {
                   fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1,
                   whiteSpace:"nowrap", position:"relative", zIndex:1,
                 }}>
-                  {tt.isActive && tt.simulatedNow ? ttFormat(tt.simulatedNow) : "Time Travel"}
+                  Time Travel
                 </span>
               </button>
 
@@ -2181,43 +2197,36 @@ function DashboardInner() {
           </div>
         )}
 
-        {/* ── TT viewport aura (corner glow overlay) ──────────────── */}
-        {tt.isActive && (
+        {/* ── TT viewport aura + repeating watermark (portaled to body to escape overflow:hidden) */}
+        {tt.isActive && createPortal(<>
           <div className="tt-aura-overlay" style={{
             position: "fixed", inset: 0,
             pointerEvents: "none",
             zIndex: 498,
             background: themeKey === "colour"
-              ? "radial-gradient(ellipse at 0% 0%, rgba(139,92,246,0.18) 0%, transparent 50%),"
-              + "radial-gradient(ellipse at 100% 0%, rgba(99,102,241,0.14) 0%, transparent 50%),"
-              + "radial-gradient(ellipse at 0% 100%, rgba(139,92,246,0.12) 0%, transparent 45%),"
-              + "radial-gradient(ellipse at 100% 100%, rgba(99,102,241,0.10) 0%, transparent 45%)"
+              ? "radial-gradient(ellipse at 0% 0%, rgba(139,92,246,0.25) 0%, transparent 50%),"
+              + "radial-gradient(ellipse at 100% 0%, rgba(99,102,241,0.20) 0%, transparent 50%),"
+              + "radial-gradient(ellipse at 0% 100%, rgba(139,92,246,0.18) 0%, transparent 45%),"
+              + "radial-gradient(ellipse at 100% 100%, rgba(99,102,241,0.15) 0%, transparent 45%)"
               : themeKey === "pastel"
-                ? "radial-gradient(ellipse at 0% 0%, rgba(251,191,36,0.15) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 100% 0%, rgba(245,158,11,0.12) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 0% 100%, rgba(251,191,36,0.10) 0%, transparent 45%),"
-                + "radial-gradient(ellipse at 100% 100%, rgba(245,158,11,0.08) 0%, transparent 45%)"
-                : "radial-gradient(ellipse at 0% 0%, rgba(160,160,160,0.15) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 100% 0%, rgba(180,180,180,0.12) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 0% 100%, rgba(160,160,160,0.10) 0%, transparent 45%),"
-                + "radial-gradient(ellipse at 100% 100%, rgba(180,180,180,0.08) 0%, transparent 45%)",
+                ? "radial-gradient(ellipse at 0% 0%, rgba(251,191,36,0.22) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 100% 0%, rgba(245,158,11,0.18) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 0% 100%, rgba(251,191,36,0.15) 0%, transparent 45%),"
+                + "radial-gradient(ellipse at 100% 100%, rgba(245,158,11,0.12) 0%, transparent 45%)"
+                : "radial-gradient(ellipse at 0% 0%, rgba(160,160,160,0.22) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 100% 0%, rgba(180,180,180,0.18) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 0% 100%, rgba(160,160,160,0.15) 0%, transparent 45%),"
+                + "radial-gradient(ellipse at 100% 100%, rgba(180,180,180,0.12) 0%, transparent 45%)",
             animation: "tt-aura-breath 6s ease-in-out infinite",
             transition: "opacity 0.5s ease",
           }} />
-        )}
-
-        {/* ── TT watermark (bottom-right, very low priority) ─────── */}
-        {tt.isActive && (
           <div style={{
-            position: "fixed", bottom: 12, right: 16,
-            zIndex: 497, pointerEvents: "none",
-            fontFamily: "var(--app-font-display)", fontWeight: 800,
-            fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase",
-            color: thm.textPrimary, opacity: 0.08,
-          }}>
-            TIME TRAVEL MODE
-          </div>
-        )}
+            position: "fixed", inset: 0,
+            pointerEvents: "none", zIndex: 496,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui,sans-serif' font-size='11' font-weight='800' letter-spacing='0.15em' fill='${encodeURIComponent(themeKey === "colour" ? "rgba(139,92,246,0.04)" : themeKey === "pastel" ? "rgba(180,130,50,0.04)" : "rgba(100,100,100,0.04)")}' transform='rotate(-25 140 100)'%3ETIME TRAVEL MODE%3C/text%3E%3C/svg%3E")`,
+            backgroundRepeat: "repeat",
+          }} />
+        </>, document.body)}
 
         {/* ── Below-header area: main content + route pane ─────────── */}
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>

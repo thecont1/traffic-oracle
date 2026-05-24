@@ -1107,6 +1107,8 @@ function DashboardInner() {
   /* slider */
   const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
   const [sliderManuallySet, setSliderManuallySet] = useState(false);
+  const preTtSliderRef = useRef<[number, number] | null>(null);
+  const preTtPeriodRef = useRef<number | null>(null);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [overlapWarning, setOverlapWarning] = useState(false);
@@ -1219,6 +1221,38 @@ function DashboardInner() {
     return allRows.filter(r => r.timestamp.getTime() <= cutoff);
   }, [allRows, tt.isActive, tt.simulatedNow]);
 
+  // TT weather: derive from last eligible row per route when TT is active
+  const effectiveWeatherMap = useMemo(() => {
+    if (!tt.isActive || !tt.simulatedNow) return weatherMap;
+    // Build weather from the last eligible row per route_code
+    const lastByRoute = new Map<string, TrafficRow>();
+    for (const row of ttAllRows) {
+      const existing = lastByRoute.get(row.route_code);
+      if (!existing || row.timestamp.getTime() > existing.timestamp.getTime()) {
+        lastByRoute.set(row.route_code, row);
+      }
+    }
+    const map = new Map<string, WeatherRow>();
+    for (const [rc, row] of lastByRoute) {
+      // Only include if at least one weather field is populated
+      if (row.temp_c === null && row.realfeel_c === null && row.humidity_pct === null && row.aqi === null) continue;
+      map.set(rc, {
+        route_code: rc,
+        aqi: row.aqi,
+        aqi_category: "",       // not available from traffic CSV
+        condition: "",           // not available from traffic CSV
+        temp_c: row.temp_c,
+        temp_flag: "",           // not available from traffic CSV
+        realfeel_c: row.realfeel_c,
+        realfeel_word: "",       // not available from traffic CSV
+        humidity_pct: row.humidity_pct,
+        wind_gust_kmh: null,     // not available from traffic CSV
+        uv_index: null,          // not available from traffic CSV
+      });
+    }
+    return map;
+  }, [tt.isActive, tt.simulatedNow, ttAllRows, weatherMap]);
+
   const effectiveRowCount = ttAllRows.length;
   const effectiveDataTimestamp = useMemo(() => {
     if (tt.isActive && tt.simulatedNow) return tt.simulatedNow;
@@ -1237,6 +1271,14 @@ function DashboardInner() {
     }
     ttHydrated.current = true;
   }, []);
+
+  // Update URL during TT playback (replaceState to avoid flooding history)
+  useEffect(() => {
+    if (!tt.isActive || !tt.simulatedNow) return;
+    const p = new URLSearchParams(window.location.search);
+    p.set("tt", tt.simulatedNow.toISOString());
+    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
+  }, [tt.isActive, tt.simulatedNow]);
 
   // Calendar data availability (uses full allRows, not TT-filtered)
   const dataDays = useMemo(() => {
@@ -1334,6 +1376,51 @@ function DashboardInner() {
     setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
   }, [tod, allRouteWeeks.length, sliderManuallySet]);
 
+  // Time Travel: save pre-TT state on activate, restore on cancel
+  const [prevSliderInitDone, setPrevSliderInitDone] = useState(false);
+  useEffect(() => {
+    if (tt.isActive && !prevSliderInitDone) {
+      // Save current state
+      preTtSliderRef.current = [...sliderVals];
+      preTtPeriodRef.current = periodIdx;
+      setSliderManuallySet(false); // allow auto-setting for TT defaults
+      setPrevSliderInitDone(true);
+    } else if (!tt.isActive && prevSliderInitDone) {
+      // restore pre-TT state
+      if (preTtSliderRef.current) setSliderVals(preTtSliderRef.current);
+      if (preTtPeriodRef.current !== null) setPeriodIdx(preTtPeriodRef.current);
+      preTtSliderRef.current = null;
+      preTtPeriodRef.current = null;
+      setSliderManuallySet(false);
+      setPrevSliderInitDone(false);
+    }
+  }, [tt.isActive]);
+
+  // When TT is active and allRouteWeeks are ready, set TT default comparison windows
+  useEffect(() => {
+    if (!tt.isActive || !tt.simulatedNow || allRouteWeeks.length === 0 || sliderManuallySet) return;
+
+    const simMs = tt.simulatedNow.getTime();
+    const recentStart = simMs - 45 * 86400000; // D - 45 days
+    const baselineStart = simMs - 120 * 86400000; // D - 4 months
+    const baselineEnd = simMs - 75 * 86400000; // D - 2.5 months
+
+    // Find week indices
+    let blIdx = allRouteWeeks.findIndex(w => w.weekStart.getTime() >= baselineStart);
+    if (blIdx < 0) blIdx = 0;
+    let brIdx = -1;
+    for (let i = allRouteWeeks.length - 1; i >= 0; i--) {
+      if (allRouteWeeks[i].weekStart.getTime() <= baselineEnd) { brIdx = i; break; }
+    }
+    if (brIdx < 0) brIdx = Math.min(blIdx + 4, allRouteWeeks.length - 1);
+
+    // Set period to 1.5m
+    const pIdx = PERIOD_LIST.findIndex(p => p.value === "1.5m");
+    if (pIdx >= 0) setPeriodIdx(pIdx);
+
+    setSliderVals([Math.min(blIdx, brIdx), Math.max(blIdx, brIdx)]);
+  }, [tt.isActive, tt.simulatedNow, allRouteWeeks.length]);
+
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
@@ -1366,13 +1453,16 @@ function DashboardInner() {
       aggregation: chartGranularity,
       metric: chartView,
     });
+    if (tt.isActive && tt.simulatedNow) {
+      p.set("tt", tt.simulatedNow.toISOString());
+    }
     const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     });
-  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx, chartGranularity, chartView]);
+  }, [selectedCity, selectedRoute, tod, period, questionMode, themeKey, safeLeft, safeRight, zoomIdx, chartGranularity, chartView, tt.isActive, tt.simulatedNow]);
 
   const lastDataMs = useMemo(
     () => ttAllRows.reduce((max, r) => Math.max(max, r.timestamp.getTime()), 0),
@@ -1426,13 +1516,13 @@ function DashboardInner() {
   useEffect(() => {
     if (ttAllRows.length === 0) return;
     const key = `${baselineStartDate}|${baselineEndDate}`;
-    const weatherChanged = weatherMap.size > 0;
+    const weatherChanged = effectiveWeatherMap.size > 0;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
-    const computed = computeAllRouteCards(ttAllRows, routeOptions, routes, weatherMap);
+    const computed = computeAllRouteCards(ttAllRows, routeOptions, routes, effectiveWeatherMap);
     allRouteCardsRef.current = computed;
     setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
-  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, weatherMap]);
+  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, effectiveWeatherMap]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
   const routeOrder = useMemo(() => {
@@ -2709,7 +2799,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            📡 TrafficNOW! — Speed Forecast Bands
+                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · Time Travel` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2812,7 +2902,11 @@ function DashboardInner() {
           })()}
           {" · "}
           {rowCount > 0 && dataTimestamp && (
-            <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+            tt.isActive && tt.simulatedNow ? (
+              <span>{effectiveRowCount.toLocaleString()} of {rowCount.toLocaleString()} rows · as of {ttFormat(tt.simulatedNow)}{effectiveRowCount < 100 && <span style={{ color: themeKey === "colour" ? "#FBBF24" : themeKey === "pastel" ? "#D97706" : "#B45309", fontWeight: 600, marginLeft: 4 }}>⚠ sparse data</span>}</span>
+            ) : (
+              <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+            )
           )}
           <span style={{ marginLeft:"auto" }}>© 2026 <a href="https://thecontrarian.in/" target="_blank" rel="noopener noreferrer" style={{ color: thm.chart.line4 }}>Mahesh Shantaram</a></span>
         </footer>
@@ -2828,12 +2922,14 @@ function DashboardInner() {
                 cards={allRouteCards}
                 selectedRoute={selectedRoute}
                 onRouteSelect={handleRouteSelectFromPane}
-                dataTimestamp={dataTimestamp}
+                dataTimestamp={effectiveDataTimestamp}
                 lastUpdated={lastUpdated}
                 mobile={false}
                 isOpen={paneOpen}
                 onToggle={() => setPaneOpen(o => !o)}
                 paneWidth={cfg.route_pane.width}
+                ttActive={tt.isActive}
+                ttSimulatedNow={tt.simulatedNow}
               />
             </div>
           )}
@@ -2847,9 +2943,11 @@ function DashboardInner() {
             cards={allRouteCards}
             selectedRoute={selectedRoute}
             onRouteSelect={handleRouteSelectFromPane}
-            dataTimestamp={dataTimestamp}
+            dataTimestamp={effectiveDataTimestamp}
             lastUpdated={lastUpdated}
             mobile={true}
+            ttActive={tt.isActive}
+            ttSimulatedNow={tt.simulatedNow}
           />
         </div>
       )}

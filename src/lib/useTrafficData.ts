@@ -43,6 +43,11 @@ export interface TrafficRow {
   hour: number;
   dayOfWeek: number;
   weekKey: string;
+  /* Optional weather columns (recent additions to the CSV; null when blank) */
+  temp_c: number | null;
+  realfeel_c: number | null;
+  humidity_pct: number | null;
+  aqi: number | null;
 }
 
 export interface WeeklyAggregate {
@@ -94,6 +99,14 @@ export function getCol(row: Record<string, string>, ...keys: string[]): string {
 export function parseNum(s: string): number {
   const n = parseFloat(s.replace(/,/g, "").trim());
   return isNaN(n) ? 0 : n;
+}
+
+/** Parse a numeric field that may be blank — returns null for empty/missing. */
+function parseNumOpt(s: string): number | null {
+  const t = s.replace(/,/g, "").trim();
+  if (!t) return null;
+  const n = parseFloat(t);
+  return isNaN(n) ? null : n;
 }
 
 export function toWeekKey(d: Date): string {
@@ -256,6 +269,10 @@ export function fetchTrafficData(
           hour: ts.getHours(),
           dayOfWeek: ts.getDay(),
           weekKey: toWeekKey(ts),
+          temp_c:     parseNumOpt(getCol(r, "temp")),
+          realfeel_c: parseNumOpt(getCol(r, "realfeel")),
+          humidity_pct: parseNumOpt(getCol(r, "humidity")),
+          aqi:        parseNumOpt(getCol(r, "aqi")),
         });
       }
 
@@ -338,6 +355,10 @@ export async function refreshTrafficData(
       hour: ts.getHours(),
       dayOfWeek: ts.getDay(),
       weekKey: toWeekKey(ts),
+      temp_c:     parseNumOpt(getCol(r, "temp")),
+      realfeel_c: parseNumOpt(getCol(r, "realfeel")),
+      humidity_pct: parseNumOpt(getCol(r, "humidity")),
+      aqi:        parseNumOpt(getCol(r, "aqi")),
     });
   }
 

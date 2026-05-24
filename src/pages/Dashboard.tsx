@@ -1162,12 +1162,32 @@ function DashboardInner() {
     }
   }, [selectedCity]);
 
+  const timersStartedRef = useRef(false);
+
   useEffect(() => {
     if (!citySource) return; /* no animation for no-data cities */
 
+    /* Reset timer guard so timers can start fresh for this city */
+    timersStartedRef.current = false;
+
+    /* Retract pane invisibly, remember whether to reopen */
+    try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
+    setPaneOpen(false);
+
+    /* loadPct counter and reveal timers start ONLY once the car actually renders
+       (trackW > 0 means the slider track is in the DOM). Previously these timers
+       started on mount but the car couldn't render until after data loaded,
+       causing content to appear before the car even started. */
+  }, [selectedCity]); /* re-run on every city switch */
+
+  useEffect(() => {
+    if (!showCar || !citySource) return;
+    if (timersStartedRef.current) return; /* already running — don't restart */
+    timersStartedRef.current = true;
+
     setLoadPct(0);
     const start = performance.now();
-    const DURATION = 2500;
+    const DURATION = 1500;
     let raf: number;
     const tick = (now: number) => {
       const pct = Math.min(100, Math.round(((now - start) / DURATION) * 10) * 10);
@@ -1176,19 +1196,15 @@ function DashboardInner() {
     };
     raf = requestAnimationFrame(tick);
 
-    /* Retract pane invisibly, remember whether to reopen */
-    try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
-    setPaneOpen(false);
-
-    /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */
-    const t1 = setTimeout(() => setShowIntro(false), 2500);
+    /* Reveal cards at 1.5s, finish animation at 1.9s, then reopen pane if needed */
+    const t1 = setTimeout(() => setShowIntro(false), 1500);
     const t2 = setTimeout(() => {
       setShowCar(false);
       setSettledCity(selectedCity);
       if (willReopenPane.current) setPaneOpen(true);
-    }, 2500 + 650);
+    }, 1500 + 400);
     return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); };
-  }, [selectedCity]); /* re-run on every city switch */
+  }, [showCar, citySource, selectedCity]);
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
   const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
@@ -1538,8 +1554,8 @@ function DashboardInner() {
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
-  const leftPct   = (safeLeft / maxIdx) * 100;
-  const rightPct  = (safeRight / maxIdx) * 100;
+  const leftPct   = allRouteWeeks.length > 1 ? (safeLeft / maxIdx) * 100 : 5;
+  const rightPct  = allRouteWeeks.length > 1 ? (safeRight / maxIdx) * 100 : 95;
   const THUMB_W = 22;
   const adjPct = (idx: number) =>
     trackW > 0
@@ -2433,6 +2449,7 @@ function DashboardInner() {
             </div>
           )}
 
+
           {/* ── Intro car races along the slider track ── */}
           {showCar && (
             <div style={{ padding:"28px 0 4px", position:"relative" }}>
@@ -2447,7 +2464,8 @@ function DashboardInner() {
                 fontSize: "clamp(2rem,6vw,3.5rem)",
                 letterSpacing: "-0.04em",
                 color: thm.textPrimary,
-                opacity: 0.15,
+                opacity: showCar ? 0.15 : 0,
+                transition: "opacity 0.3s ease-out",
                 pointerEvents: "none",
                 userSelect: "none",
                 lineHeight: 1,
@@ -2465,16 +2483,12 @@ function DashboardInner() {
                   strokeLinejoin="round"
                   style={{
                     position: "absolute",
-                    /* Wrapper is 28px top-pad + 40px slider + 4px bottom = 72px.
-                       Track centreline is at 48px. Float car just above it. */
                     top: "-20px",
                     zIndex: 50,
                     pointerEvents: "none",
-                    /* Start: right edge of left thumb (thumb=22px, centre at leftPct%) */
                     "--car-from": `calc(${leftPct}% + 11px + 4px)`,
-                    /* Stop: left edge of right thumb minus car width and gap */
                     "--car-to": `calc(${rightPct}% - 11px - 72px - 0px)`,
-                    animation: "track-run 2.5s ease-in-out forwards",
+                    animation: "track-run 1.5s ease-in-out forwards",
                   } as React.CSSProperties}
                 >
                   <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
@@ -2484,7 +2498,6 @@ function DashboardInner() {
               </svg>
             </div>
           )}
-
 
           {/* Error — 404-style full-page */}
           {!loading && error && (
@@ -2999,8 +3012,8 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── TrafficNOW! uncertainty band chart ───────── */}
-                  {trafficNowData.length > 0 && (
+                  {/* ── HIDDEN: TrafficNOW! Speed Forecast Bands (hidden 2026-05-25) ── */}
+                  {false && trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
@@ -3055,25 +3068,27 @@ function DashboardInner() {
                     </div>
                   )}
 
-                  {/* ── Daily calendar ────────────────────────── */}
-                  <div className="chart-card animate-fade-in"
-                    style={{
-                      padding:"1.25rem 1.5rem",
-                      position: "relative",
-                      zIndex: 1,
-                      ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
-                    }}>
-                    {/* Info icon — top-right corner */}
-                    <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
-                      <InfoTip thm={thm}>
-                        {TOOLTIP_CONTENT.dailyCalendar.body}
-                      </InfoTip>
+                  {/* ── HIDDEN: Daily Speeds by Month calendar (hidden 2026-05-25) ── */}
+                  {false && (
+                    <div className="chart-card animate-fade-in"
+                      style={{
+                        padding:"1.25rem 1.5rem",
+                        position: "relative",
+                        zIndex: 1,
+                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
+                      }}>
+                      {/* Info icon — top-right corner */}
+                      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                        <InfoTip thm={thm}>
+                          {TOOLTIP_CONTENT.dailyCalendar.body}
+                        </InfoTip>
+                      </div>
+                      <CalendarWidget
+                        dailyStats={dailyStats}
+                        fmtDur={fmtDuration}
+                      />
                     </div>
-                    <CalendarWidget
-                      dailyStats={dailyStats}
-                      fmtDur={fmtDuration}
-                    />
-                  </div>
+                  )}
                 </>
               )}
 

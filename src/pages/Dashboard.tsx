@@ -1108,7 +1108,7 @@ function DashboardInner() {
   }, []);
 
   /* slider */
-  const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
+  const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,1]);
   const [sliderManuallySet, setSliderManuallySet] = useState(false);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -1144,51 +1144,99 @@ function DashboardInner() {
   const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
+  const [carReady,  setCarReady]  = useState(false); /* true once trackW measured & timer started */
+  const [carFading, setCarFading] = useState(false); /* true during 400ms fade-out after reveal */
   const [settledCity, setSettledCity] = useState<string | null>(null);
   const [paneOpen,  setPaneOpen]  = useState(() => {
     try { const s = localStorage.getItem("to:paneOpen"); if (s !== null) return s === "1"; } catch {}
     return cfg.route_pane.open ?? true;
   });
   const willReopenPane = useRef(false);
+  const animStarted = useRef(false); /* guard: start timers exactly once per city switch */
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   /* Sync reset before paint — prevents one-frame card flash on city switch */
   useLayoutEffect(() => {
     setShowIntro(true);
     setShowCar(!!citySource);
+    setLoadPct(0);
+    setCarReady(false);
+    setCarFading(false);
     setSettledCity(citySource ? null : selectedCity);
+    animStarted.current = false; /* allow animation to start for this city */
     if (!citySource) {
       setPaneOpen(false);
       willReopenPane.current = false;
     }
   }, [selectedCity]);
 
+  /* ── Car animation timer — fires once trackW is measured (slider DOM exists) ──
+     trackW becomes > 0 only after data loads and the slider renders.
+     The car then starts from the left thumb and races to the right thumb.
+     Sequence:
+       0 ms  : car appears at left thumb, counter at 0%
+       2500ms: counter hits 100%, cards begin revealing (showIntro → false)
+       3150ms: car fades out, pane reopens, settledCity set
+  ── */
+  /* trackWReadyRef: mirrors trackW so the animation effect can read the latest
+     value without adding trackW to deps (which would cancel timers on resize). */
+  const trackWReadyRef = useRef(0);
+  trackWReadyRef.current = trackW;
+
   useEffect(() => {
-    if (!citySource) return; /* no animation for no-data cities */
+    if (!citySource) return;
 
-    setLoadPct(0);
-    const start = performance.now();
-    const DURATION = 2500;
-    let raf: number;
-    const tick = (now: number) => {
-      const pct = Math.min(100, Math.round(((now - start) / DURATION) * 10) * 10);
-      setLoadPct(pct);
-      if (pct < 100) { raf = requestAnimationFrame(tick); }
+    /* Poll until the slider DOM is measured AND real data is loaded,
+       then start exactly once. */
+    let pollRaf: number;
+    const waitForTrack = () => {
+      if (animStarted.current) return; /* already started */
+      if (trackWReadyRef.current <= 0 || loadingRef.current || rowCountRef.current === 0 || routeWeeksRef.current <= 1) {
+        pollRaf = requestAnimationFrame(waitForTrack);
+        return;
+      }
+      /* Track is measured and data is loaded — kick off the animation. */
+      animStarted.current = true;
+      setCarReady(true);
+
+      const DURATION = 1200;
+      const start = performance.now();
+      let raf: number;
+      const tick = (now: number) => {
+        /* Step counter in multiples of 5 */
+        const raw = Math.min(100, ((now - start) / DURATION) * 100);
+        const pct = Math.min(100, Math.ceil(raw / 5) * 5);
+        setLoadPct(pct);
+        if (raw < 100) { raf = requestAnimationFrame(tick); }
+      };
+      raf = requestAnimationFrame(tick);
+
+      /* Retract pane invisibly, remember whether to reopen */
+      try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
+      setPaneOpen(false);
+
+      /* 1.2s: reveal cards (car still visible, parked at right thumb)
+         1.6s: fade car out (CSS transition on opacity)
+         1.9s: React removes car node, reopen pane */
+      const t1 = setTimeout(() => setShowIntro(false), 1200);
+      const t2 = setTimeout(() => setCarFading(true), 1600);
+      const t3 = setTimeout(() => {
+        setShowCar(false);
+        setCarFading(false);
+        setSettledCity(selectedCity);
+        if (willReopenPane.current) setPaneOpen(true);
+      }, 1900);
+
+      /* Store cleanup refs on the outer scope so the effect cleanup can reach them */
+      cleanupRef.current = () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     };
-    raf = requestAnimationFrame(tick);
-
-    /* Retract pane invisibly, remember whether to reopen */
-    try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
-    setPaneOpen(false);
-
-    /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */
-    const t1 = setTimeout(() => setShowIntro(false), 2500);
-    const t2 = setTimeout(() => {
-      setShowCar(false);
-      setSettledCity(selectedCity);
-      if (willReopenPane.current) setPaneOpen(true);
-    }, 2500 + 650);
-    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); };
-  }, [selectedCity]); /* re-run on every city switch */
+    pollRaf = requestAnimationFrame(waitForTrack);
+    return () => {
+      cancelAnimationFrame(pollRaf);
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+  }, [citySource, selectedCity]); /* stable deps — trackW read via ref */
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
   const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
@@ -1409,6 +1457,15 @@ function DashboardInner() {
 
   /* ── Slider ─────────────────────────────────────────────────── */
   const allRouteWeeks = useAllRouteWeeks(ttAllRows, selectedRoute, tod);
+
+  /* refs that mirror data state so the animation effect can read them
+     without adding them to deps (which would cancel timers). */
+  const loadingRef = useRef(false);
+  loadingRef.current = loading;
+  const rowCountRef = useRef(0);
+  rowCountRef.current = rowCount;
+  const routeWeeksRef = useRef(0);
+  routeWeeksRef.current = allRouteWeeks.length;
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
@@ -2319,7 +2376,7 @@ function DashboardInner() {
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "2rem",
               background: thm.paneBg,
-              animation: "cards-reveal 0.5s ease both",
+              animation: "cards-reveal 0.4s ease both",
             }}>
               <div style={{
                 maxWidth: 480,
@@ -2398,7 +2455,7 @@ function DashboardInner() {
           {/* ── Hero question ────────────────────────────────── */}
           <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem",
             opacity: showIntro ? 0 : 1,
-            animation: showIntro ? "none" : "cards-reveal 0.5s ease both",
+            animation: showIntro ? "none" : "cards-reveal 0.4s ease both",
           }}>
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
@@ -2448,11 +2505,9 @@ function DashboardInner() {
             </div>
           )}
 
-          {!loading && !error && rowCount > 0 && (
-            <>
-              {/* ── Baseline slider ──────────────────────────── */}
-              {allRouteWeeks.length > 1 && (
-                <div className="animate-fade-in" style={{
+          {/* ── Baseline slider ─ rendered immediately ──── */}
+          {citySource && (
+            <div className="animate-fade-in" style={{
                   background: showIntro ? "transparent" : thm.sectionBg,
                   border: showIntro ? "none" : thm.cardBorder,
                   boxShadow: showIntro ? "none" : thm.cardShadow,
@@ -2474,7 +2529,12 @@ function DashboardInner() {
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* ── Intro car races along the slider track ── */}
-                    {showCar && trackW > 0 && <>
+                    {showCar && carReady && <div style={{
+                      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                      opacity: carFading ? 0 : 1,
+                      transition: carFading ? "opacity 0.3s ease-out" : "none",
+                      pointerEvents: "none",
+                    }}>
                     {/* 0→100% loading counter */}
                     <div style={{
                       position: "absolute",
@@ -2486,42 +2546,42 @@ function DashboardInner() {
                       fontSize: "clamp(2rem,6vw,3.5rem)",
                       letterSpacing: "-0.04em",
                       color: thm.textPrimary,
-                      opacity: 0.15,
-                      pointerEvents: "none",
                       userSelect: "none",
                       lineHeight: 1,
                     }}>
-                      {loadPct}%
+                      {loadPct}
                     </div>
                     <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="80" height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={thm.textPrimary}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{
-                          position: "absolute",
-                          /* Wrapper is 28px top-pad + 40px slider + 4px bottom = 72px.
-                             Track centreline is at 48px. Float car just above it. */
-                          top: "-20px",
-                          zIndex: 50,
-                          pointerEvents: "none",
-                          /* Start: right edge of left thumb (thumb=22px, centre at leftPct%) */
-                          "--car-from": `calc(${leftPct}% + 11px + 4px)`,
-                          /* Stop: left edge of right thumb minus car width and gap */
-                          "--car-to": `calc(${rightPct}% - 11px - 72px - 0px)`,
-                          animation: "track-run 2.5s ease-in-out forwards",
-                        } as React.CSSProperties}
-                      >
-                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                        <circle cx="7" cy="17" r="2" />
-                        <path d="M9 17h6" />
-                        <circle cx="17" cy="17" r="2" />
-                      </svg>
-                    </> /* end showCar && trackW>0 */}
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="80" height="80"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={thm.textPrimary}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        position: "absolute",
+                        top: "-20px",
+                        zIndex: 50,
+                        /* Start: right edge of left thumb; Stop: left edge of right thumb minus car width */
+                        "--car-from": `calc(${leftTrackPct}% + 11px + 4px)`,
+                        "--car-to":   `calc(${rightTrackPct}% - 11px - 80px + 6px)`,
+                        animation: `track-run 1.2s ease-in-out forwards`,
+                      } as React.CSSProperties}
+                    >
+                      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                      <circle cx="7" cy="17" r="2" />
+                      <path d="M9 17h6" />
+                      <circle cx="17" cy="17" r="2" />
+                    </svg>
+                    </div> /* end shared fade wrapper */}
+                    {/* Slider interior — hidden until real data loads so placeholder
+                        [0,1] thumb positions are never visible */}
+                    <div style={{
+                      opacity: carReady ? 1 : 0,
+                      transition: "opacity 0.3s ease",
+                    }}>
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}
@@ -2620,6 +2680,7 @@ function DashboardInner() {
                         }} />
                       </SliderPrimitive.Thumb>
                     </SliderPrimitive.Root>
+                    </div>{/* end slider interior opacity wrapper */}
                   </div>
 
                   {/* Boundary dates */}
@@ -2642,7 +2703,10 @@ function DashboardInner() {
                     </p>
                   )}
                 </div>
-              )}
+          )}
+
+          {!loading && !error && rowCount > 0 && (
+            <>
 
               {/* ── Cards reveal wrapper (hidden during intro) ── */}
               <div style={{
@@ -2650,7 +2714,7 @@ function DashboardInner() {
                 flexDirection: "column",
                 gap: "1.5rem",
                 opacity: showIntro ? 0 : 1,
-                animation: showIntro ? "none" : "cards-reveal 0.55s ease 0.05s both",
+                animation: showIntro ? "none" : "cards-reveal 0.4s ease 0.05s both",
               }}>
 
               {/* ── Verdict ──────────────────────────────────── */}

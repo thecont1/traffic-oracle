@@ -246,7 +246,7 @@ function NestedScaleChart({
 
   const ariaLabel = !hasData
     ? 'No data available.'
-    : `Current speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h. City-wide range ${fmt(cityMin)} to ${fmt(cityMax)} km/h.`;
+    : `Speed ${fmt(liveSpeed)} km/h. Usual range ${fmt(typical!.p15)} to ${fmt(typical!.p85)} km/h. City-wide range ${fmt(cityMin)} to ${fmt(cityMax)} km/h.`;
 
   // Layout: top labels (14px) + gap (2px) + bar row (28px) + gap (4px) + bottom labels (14px) = 62px
   const BAR_ROW_H = 28;
@@ -732,7 +732,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 fontFamily: "var(--app-font-display)", fontWeight: 900, fontSize: 18,
                 color: thm.textPrimary, letterSpacing: "-0.02em", lineHeight: 1,
               }}>
-                Traffic NOW!
+                {ttActive ? "Traffic THEN!" : "Traffic NOW!"}
               </span>
               {/* Info tooltip — click to toggle animated callout */}
               <InfoTip thm={thm}>{TOOLTIP_CONTENT.routeBrowserPane.body}</InfoTip>
@@ -862,7 +862,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
             <span style={{ fontSize: 13 }}>🗺️</span>
             <span style={{
               fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
-            }}>Traffic NOW!</span>
+            }}>{ttActive ? "Traffic THEN!" : "Traffic NOW!"}</span>
           </div>
           {dataTimestamp && (
             <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0",

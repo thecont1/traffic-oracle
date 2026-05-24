@@ -1301,11 +1301,23 @@ function DashboardInner() {
   }, [tt.isActive]);
 
   // Update URL during TT playback (replaceState to avoid flooding history)
+  const wasTtActiveRef = useRef(false);
   useEffect(() => {
-    if (!tt.isActive || !tt.simulatedNow) return;
+    if (!tt.isActive) {
+      if (wasTtActiveRef.current) {
+        const p = new URLSearchParams(window.location.search);
+        p.delete("tt");
+        const qs = p.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+        wasTtActiveRef.current = false;
+      }
+      return;
+    }
+    if (!tt.simulatedNow) return;
+    wasTtActiveRef.current = true;
     const p = new URLSearchParams(window.location.search);
     p.set("tt", tt.simulatedNow.toISOString());
-    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
+    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}${window.location.hash}`);
   }, [tt.isActive, tt.simulatedNow]);
 
   // Calendar data availability (uses full allRows, not TT-filtered)
@@ -1808,6 +1820,8 @@ function DashboardInner() {
     fontSize:11, color: thm.textSecondary,
   };
   const kpiCardBase: React.CSSProperties = {
+    position: "relative",
+    zIndex: 1,
     border: thm.cardBorder,
     boxShadow: thm.cardShadow,
     borderRadius:18,
@@ -1818,12 +1832,26 @@ function DashboardInner() {
   /* ── Theme toggle button style ──────────────────────────────── */
   const nextMeta = THEME_META[nextThemeKey];
   const curMeta  = THEME_META[themeKey];
+  const ttBg = themeKey === "colour"
+    ? {
+      glowA: "rgba(168,85,247,0.12)",
+      glowB: "rgba(34,211,238,0.08)",
+    }
+    : themeKey === "pastel"
+      ? {
+        glowA: "rgba(245,158,11,0.10)",
+        glowB: "rgba(58,134,200,0.07)",
+      }
+      : {
+        glowA: "rgba(0,0,0,0.045)",
+        glowB: "rgba(0,0,0,0.035)",
+      };
 
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className={thm.isDark ? "dark" : ""}>
       <div aria-live="polite" aria-atomic="true" ref={liveRef} className="sr-only" />
-      <div className="transition-colors" style={{ background: thm.bodyBg, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div className="transition-colors" style={{ position: "relative", zIndex: 1, background: thm.bodyBg, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
 
         {/* ── Skip link ─────────────────────────────────────── */}
         <a href="#main-content" className="sr-only focusable">
@@ -2197,37 +2225,6 @@ function DashboardInner() {
           </div>
         )}
 
-        {/* ── TT viewport aura + repeating watermark (portaled to body to escape overflow:hidden) */}
-        {tt.isActive && createPortal(<>
-          <div className="tt-aura-overlay" style={{
-            position: "fixed", inset: 0,
-            pointerEvents: "none",
-            zIndex: 498,
-            background: themeKey === "colour"
-              ? "radial-gradient(ellipse at 0% 0%, rgba(139,92,246,0.25) 0%, transparent 50%),"
-              + "radial-gradient(ellipse at 100% 0%, rgba(99,102,241,0.20) 0%, transparent 50%),"
-              + "radial-gradient(ellipse at 0% 100%, rgba(139,92,246,0.18) 0%, transparent 45%),"
-              + "radial-gradient(ellipse at 100% 100%, rgba(99,102,241,0.15) 0%, transparent 45%)"
-              : themeKey === "pastel"
-                ? "radial-gradient(ellipse at 0% 0%, rgba(251,191,36,0.22) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 100% 0%, rgba(245,158,11,0.18) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 0% 100%, rgba(251,191,36,0.15) 0%, transparent 45%),"
-                + "radial-gradient(ellipse at 100% 100%, rgba(245,158,11,0.12) 0%, transparent 45%)"
-                : "radial-gradient(ellipse at 0% 0%, rgba(160,160,160,0.22) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 100% 0%, rgba(180,180,180,0.18) 0%, transparent 50%),"
-                + "radial-gradient(ellipse at 0% 100%, rgba(160,160,160,0.15) 0%, transparent 45%),"
-                + "radial-gradient(ellipse at 100% 100%, rgba(180,180,180,0.12) 0%, transparent 45%)",
-            animation: "tt-aura-breath 6s ease-in-out infinite",
-            transition: "opacity 0.5s ease",
-          }} />
-          <div style={{
-            position: "fixed", inset: 0,
-            pointerEvents: "none", zIndex: 496,
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1000'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui,sans-serif' font-size='55' font-weight='800' letter-spacing='0.15em' fill='${encodeURIComponent(themeKey === "colour" ? "rgba(139,92,246,0.15)" : themeKey === "pastel" ? "rgba(180,130,50,0.15)" : "rgba(100,100,100,0.15)")}' transform='rotate(-25 700 500)'%3ETIME TRAVEL MODE%3C/text%3E%3C/svg%3E")`,
-            backgroundRepeat: "repeat",
-          }} />
-        </>, document.body)}
-
         {/* ── Below-header area: main content + route pane ─────────── */}
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
@@ -2243,6 +2240,12 @@ function DashboardInner() {
             flex: 1,
             overflowY: "auto",
             position: "relative",
+            backgroundImage: tt.isActive
+              ? `radial-gradient(ellipse at 14% 10%, ${ttBg.glowA}, transparent 52%), radial-gradient(ellipse at 90% 12%, ${ttBg.glowB}, transparent 48%)`
+              : undefined,
+            backgroundRepeat: tt.isActive ? "no-repeat, no-repeat" : undefined,
+            backgroundPosition: tt.isActive ? "center, center" : undefined,
+            backgroundSize: tt.isActive ? "100% 100%, 100% 100%" : undefined,
           }}>
 
           {/* ── City 404 overlay — only after animation settles on this city ── */}
@@ -2391,7 +2394,7 @@ function DashboardInner() {
                   boxShadow: showIntro ? "none" : thm.cardShadow,
                   borderRadius:"1.5rem",
                   padding: "1.25rem 1.5rem 2rem",
-                  position:"relative", overflow:"hidden",
+                  position:"relative", zIndex: 1, overflow:"hidden",
                 }}>
                   {showSparkle && <Sparkles />}
 
@@ -2691,7 +2694,7 @@ function DashboardInner() {
                   </div>
                 </div>
               ) : (
-                <div style={{ background: thm.sectionBg, border: thm.cardBorder, boxShadow: thm.cardShadow,
+                <div style={{ position: "relative", zIndex: 1, background: thm.sectionBg, border: thm.cardBorder, boxShadow: thm.cardShadow,
                   borderRadius:16, padding:"2.5rem", textAlign:"center" }}>
                   <p style={{ fontSize:36, marginBottom:8 }}>🔍</p>
                   <p style={{ fontWeight:700, color: thm.textPrimary }}>No data for these filters</p>
@@ -2707,7 +2710,7 @@ function DashboardInner() {
                   <div style={{ display:"grid", gap:16 }}>
                     {/* Merged Speed / Duration chart with toggle */}
                     <div className="chart-card animate-fade-in"
-                      style={thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}}>
+                      style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
@@ -2932,8 +2935,8 @@ function DashboardInner() {
                   {trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
-                        ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
-                        : { padding: "1.25rem 1.5rem" }}>
+                        ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
+                        : { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", padding: "1.25rem 1.5rem" }}>
                       {/* Header row: toggle + optional compare badge */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: tnOpen ? 4 : 0 }}>
                         <button onClick={() => setTnOpen(o => !o)} style={{
@@ -2989,6 +2992,7 @@ function DashboardInner() {
                     style={{
                       padding:"1.25rem 1.5rem",
                       position: "relative",
+                      zIndex: 1,
                       ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
                     }}>
                     {/* Info icon — top-right corner */}

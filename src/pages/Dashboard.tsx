@@ -2995,8 +2995,8 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── TrafficNOW! uncertainty band chart ───────── */}
-                  {trafficNowData.length > 0 && (
+                  {/* ── HIDDEN: TrafficNOW! Speed Forecast Bands (hidden 2026-05-25) ── */}
+                  {false && trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
@@ -3051,25 +3051,27 @@ function DashboardInner() {
                     </div>
                   )}
 
-                  {/* ── Daily calendar ────────────────────────── */}
-                  <div className="chart-card animate-fade-in"
-                    style={{
-                      padding:"1.25rem 1.5rem",
-                      position: "relative",
-                      zIndex: 1,
-                      ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
-                    }}>
-                    {/* Info icon — top-right corner */}
-                    <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
-                      <InfoTip thm={thm}>
-                        {TOOLTIP_CONTENT.dailyCalendar.body}
-                      </InfoTip>
+                  {/* ── HIDDEN: Daily Speeds by Month calendar (hidden 2026-05-25) ── */}
+                  {false && (
+                    <div className="chart-card animate-fade-in"
+                      style={{
+                        padding:"1.25rem 1.5rem",
+                        position: "relative",
+                        zIndex: 1,
+                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
+                      }}>
+                      {/* Info icon — top-right corner */}
+                      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                        <InfoTip thm={thm}>
+                          {TOOLTIP_CONTENT.dailyCalendar.body}
+                        </InfoTip>
+                      </div>
+                      <CalendarWidget
+                        dailyStats={dailyStats}
+                        fmtDur={fmtDuration}
+                      />
                     </div>
-                    <CalendarWidget
-                      dailyStats={dailyStats}
-                      fmtDur={fmtDuration}
-                    />
-                  </div>
+                  )}
                 </>
               )}
 

@@ -52,6 +52,8 @@ interface PaneProps {
   paneWidth: number;
   dataTimestamp: Date | null;
   lastUpdated: Date | null;
+  ttActive?: boolean;
+  ttSimulatedNow?: Date | null;
 }
 
 /* ── Relative time label ─────────────────────────────────────── */
@@ -64,6 +66,16 @@ function relativeTime(date: Date): string {
   const hrs = Math.floor(mins / 60);
   if (hrs === 1) return "1 hr ago";
   return `${hrs} hr ago`;
+}
+
+/* ── TT date format for pane labels ─────────────────────────── */
+function ttFormatPane(dt: Date): string {
+  const d = dt.getDate();
+  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+  const yr = String(dt.getFullYear()).slice(2);
+  const hh = String(dt.getHours()).padStart(2, "0");
+  const mm = String(dt.getMinutes()).padStart(2, "0");
+  return `${d} ${mon} '${yr} · ${hh}:${mm}`;
 }
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
@@ -633,7 +645,7 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
   const RAIL_WIDTH = 36;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
@@ -735,9 +747,11 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           {dataTimestamp && (
             <p style={{ fontSize: 11, color: thm.textMuted, margin: "4px 0 0",
               display: "flex", alignItems: "center", gap: 5, opacity: 0.8 }}>
-              <span className="live-dot" aria-hidden="true" />
+              {!ttActive && <span className="live-dot" aria-hidden="true" />}
               <span>
-                Live · updated {relativeTime(dataTimestamp)}
+                {ttActive && ttSimulatedNow
+                  ? `Time Travel · as of ${ttFormatPane(ttSimulatedNow)}`
+                  : `Live · updated ${relativeTime(dataTimestamp)}`}
               </span>
             </p>
           )}
@@ -819,7 +833,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 }
 
 /* ── Mobile bottom sheet ───────────────────────────────────────── */
-function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated }: PaneProps) {
+function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
   return (
     <>
       {isOpen && (
@@ -853,8 +867,8 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           {dataTimestamp && (
             <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0",
               display: "flex", alignItems: "center", gap: 4 }}>
-              <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />
-              <span>Live · {relativeTime(dataTimestamp)}</span>
+              {!ttActive && <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />}
+              <span>{ttActive && ttSimulatedNow ? `Time Travel · ${ttFormatPane(ttSimulatedNow)}` : `Live · ${relativeTime(dataTimestamp)}`}</span>
             </p>
           )}
         </div>
@@ -910,6 +924,8 @@ interface Props {
   isOpen?: boolean;
   onToggle?: () => void;
   paneWidth?: number;
+  ttActive?: boolean;
+  ttSimulatedNow?: Date | null;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -941,6 +957,7 @@ export default function RouteBrowserPane(props: Props) {
     cards: props.cards, selectedRoute: props.selectedRoute,
     onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle, paneWidth,
     dataTimestamp: props.dataTimestamp, lastUpdated: props.lastUpdated,
+    ttActive: props.ttActive, ttSimulatedNow: props.ttSimulatedNow,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

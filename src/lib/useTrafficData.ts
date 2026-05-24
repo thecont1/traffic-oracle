@@ -48,6 +48,7 @@ export interface TrafficRow {
   realfeel_c: number | null;
   humidity_pct: number | null;
   aqi: number | null;
+  rsi_flag: string | null;
 }
 
 export interface WeeklyAggregate {
@@ -273,6 +274,7 @@ export function fetchTrafficData(
           realfeel_c: parseNumOpt(getCol(r, "realfeel")),
           humidity_pct: parseNumOpt(getCol(r, "humidity")),
           aqi:        parseNumOpt(getCol(r, "aqi")),
+          rsi_flag:   (() => { const v = getCol(r, "rsi_flag").trim(); return v && v !== "No precipitation" ? v : null; })(),
         });
       }
 
@@ -359,6 +361,7 @@ export async function refreshTrafficData(
       realfeel_c: parseNumOpt(getCol(r, "realfeel")),
       humidity_pct: parseNumOpt(getCol(r, "humidity")),
       aqi:        parseNumOpt(getCol(r, "aqi")),
+      rsi_flag:   (() => { const v = getCol(r, "rsi_flag").trim(); return v && v !== "No precipitation" ? v : null; })(),
     });
   }
 
@@ -561,8 +564,12 @@ async function fetchWeatherData(signal?: AbortSignal): Promise<Map<string, Weath
   const resp = await fetch(bust(WEATHER_URL), { cache: "no-store", signal });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching weather CSV`);
   const text = await resp.text();
+  // Normalize Windows line endings (\r\n → \n) so Papa.parse doesn't
+  // embed \r into the last field of each row, which corrupts parsing
+  // of trailing rows. Same fix as fetchTrafficData / refreshTrafficData.
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const raw: Record<string, string>[] = await new Promise((resolve, reject) => {
-    Papa.parse(text, {
+    Papa.parse(normalized, {
       header: true,
       skipEmptyLines: true,
       complete: (r) => resolve(r.data as Record<string, string>[]),

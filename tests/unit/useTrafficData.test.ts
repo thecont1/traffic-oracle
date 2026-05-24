@@ -37,6 +37,7 @@ function makeRow(overrides: Partial<TrafficRow>): TrafficRow {
     hour: ts.getHours(),
     dayOfWeek: ts.getDay(),
     weekKey: toWeekKey(ts),
+    rsi_flag: null,
     ...overrides,
   };
 }
@@ -867,6 +868,138 @@ describe("Phase 4 — Regression", () => {
       for (let i = 1; i < keys.length; i++) {
         expect(keys[i] > keys[i - 1]).toBe(true);
       }
+    });
+  });
+
+  /* ── 4.4 CRLF normalization prevents row corruption ───────────────── */
+  describe("4.4 — CRLF normalization", () => {
+    /** Replicate the normalization pattern used in useTrafficData.ts */
+    function normalize(text: string): string {
+      return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    }
+
+    it("normalizes \\r\\n to \\n before parsing", () => {
+      const csvCRLF = [
+        "date,time,route_code,label_full,label_short,duration,distance",
+        "2026-05-10,08:30,R-100,Hosur Road,Hosur Road,35,18",
+        "2026-05-10,09:15,R-100,Hosur Road,Hosur Road,42,18",
+      ].join("\r\n");
+
+      const result = Papa.parse(normalize(csvCRLF), {
+        header: true,
+        skipEmptyLines: true,
+      });
+      expect(result.data.length).toBe(2);
+      // Without normalization, the last field of each row would contain \r
+      // which causes FieldMismatch or truncated row counts
+    });
+
+    it("preserves all rows when \\r\\n is present (the corruption scenario)", () => {
+      // Simulate a larger CSV where Windows line endings would corrupt
+      // the last ~N rows by embedding \r in the final field
+      const lines = [
+        "date,time,route_code,label_full,label_short,duration,distance",
+      ];
+      for (let i = 0; i < 50; i++) {
+        lines.push(
+          `2026-05-${String(10).padStart(2, "0")},08:${String(i).padStart(2, "0")},R-100,Hosur Road,Hosur Road,35,18`
+        );
+      }
+      const csvCRLF = lines.join("\r\n");
+
+      const normalized = normalize(csvCRLF);
+      const result = Papa.parse(normalized, {
+        header: true,
+        skipEmptyLines: true,
+      });
+      expect(result.data.length).toBe(50);
+      // Verify no field contains \r
+      for (const row of result.data) {
+        for (const val of Object.values(row)) {
+          expect(val).not.toContain("\r");
+        }
+      }
+    });
+
+    it("handles bare \\r (old Mac line endings)", () => {
+      const csvCR = [
+        "date,time,route_code,label_full,label_short,duration,distance",
+        "2026-05-10,08:30,R-100,Hosur Road,Hosur Road,35,18",
+      ].join("\r");
+
+      const result = Papa.parse(normalize(csvCR), {
+        header: true,
+        skipEmptyLines: true,
+      });
+      expect(result.data.length).toBe(1);
+    });
+  });
+
+  /* ── 4.5 rsi_flag "No precipitation" → null ─────────────────────── */
+  describe("4.5 — rsi_flag parsing", () => {
+    let originalFetch: typeof globalThis.fetch;
+
+    const routesCsv = [
+      "route_code,label_full,label_short",
+      "R-100,Hosur Road,Hosur Road",
+    ].join("\n");
+
+    function makeTrafficCsv(rsiValues: string[]): string {
+      const header = "date,time,route_code,label_full,label_short,duration,distance,temp,realfeel,humidity,aqi,rsi_flag";
+      const rows = rsiValues.map((rsi, i) =>
+        `2026-05-10,08:${String(i).padStart(2, "0")},R-100,Hosur Road,Hosur Road,35,18,30,32,65,50,${rsi}`
+      );
+      return [header, ...rows].join("\n");
+    }
+
+    beforeAll(() => {
+      originalFetch = globalThis.fetch;
+    });
+
+    afterAll(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it("maps 'No precipitation' to null", async () => {
+      const csv = makeTrafficCsv(["No precipitation"]);
+      globalThis.fetch = ((url: string) => {
+        if (url.includes("csv-routes")) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve(routesCsv) } as Response);
+        }
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(csv) } as Response);
+      }) as typeof globalThis.fetch;
+
+      const { allRows } = await fetchTrafficData(undefined);
+      expect(allRows).toHaveLength(1);
+      expect(allRows[0].rsi_flag).toBeNull();
+    });
+
+    it("preserves meaningful rsi_flag values", async () => {
+      const csv = makeTrafficCsv(["Rain starting in 10 min"]);
+      globalThis.fetch = ((url: string) => {
+        if (url.includes("csv-routes")) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve(routesCsv) } as Response);
+        }
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(csv) } as Response);
+      }) as typeof globalThis.fetch;
+
+      const { allRows } = await fetchTrafficData(undefined);
+      expect(allRows).toHaveLength(1);
+      expect(allRows[0].rsi_flag).toBe("Rain starting in 10 min");
+    });
+
+    it("maps empty rsi_flag to null", async () => {
+      const csv = makeTrafficCsv([""]);
+      globalThis.fetch = ((url: string) => {
+        if (url.includes("csv-routes")) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve(routesCsv) } as Response);
+        }
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(csv) } as Response);
+      }) as typeof globalThis.fetch;
+
+      const { allRows } = await fetchTrafficData(undefined);
+      expect(allRows).toHaveLength(1);
+      expect(allRows[0].rsi_flag).toBeNull();
     });
   });
 });

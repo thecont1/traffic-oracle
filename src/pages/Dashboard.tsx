@@ -1008,26 +1008,26 @@ function DashboardInner() {
     return `${d} ${mon} '${yr} · ${hh}:${mm}`;
   }
 
-  // TT glow colours per theme
+  // TT glow colours per theme — blazing tier
   const ttGlowMap: Record<string, string> = {
-    colour: "0 0 12px rgba(139,92,246,0.35), 0 0 4px rgba(139,92,246,0.2)",
-    gray:   "0 0 10px rgba(120,120,120,0.25)",
-    pastel: "0 0 12px rgba(251,191,36,0.3), 0 0 4px rgba(251,191,36,0.15)",
+    colour: "0 0 18px rgba(139,92,246,0.55), 0 0 6px rgba(139,92,246,0.4), 0 0 40px rgba(139,92,246,0.15)",
+    gray:   "0 0 14px rgba(160,160,160,0.4), 0 0 4px rgba(200,200,200,0.3), 0 0 32px rgba(160,160,160,0.1)",
+    pastel: "0 0 18px rgba(251,191,36,0.5), 0 0 6px rgba(251,191,36,0.35), 0 0 40px rgba(251,191,36,0.12)",
   };
   const ttBgActiveMap: Record<string, string> = {
-    colour: "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.1))",
-    gray:   "#e8e8e8",
-    pastel: "#F5F0E8",
+    colour: "linear-gradient(135deg, rgba(139,92,246,0.25), rgba(99,102,241,0.15), rgba(139,92,246,0.2))",
+    gray:   "linear-gradient(135deg, #e0e0e0, #d0d0d0)",
+    pastel: "linear-gradient(135deg, #FDE68A, #F5E6C8)",
   };
   const ttBorderActiveMap: Record<string, string> = {
-    colour: "rgba(139,92,246,0.4)",
-    gray:   "#999",
-    pastel: "#D4A574",
+    colour: "rgba(139,92,246,0.6)",
+    gray:   "#aaa",
+    pastel: "rgba(212,165,116,0.8)",
   };
   const ttTextActiveMap: Record<string, string> = {
-    colour: "#C4B5FD",
-    gray:   "#555",
-    pastel: "#92400E",
+    colour: "#E9D5FF",
+    gray:   "#333",
+    pastel: "#78350F",
   };
 
   // Build month grid for calendar (Monday-start)
@@ -1271,6 +1271,36 @@ function DashboardInner() {
     }
     ttHydrated.current = true;
   }, []);
+
+  // Inject TT animation keyframes when TT is active; remove when off
+  useEffect(() => {
+    if (!tt.isActive) {
+      const el = document.getElementById("tt-animations");
+      if (el) el.remove();
+      return;
+    }
+    if (document.getElementById("tt-animations")) return;
+    const style = document.createElement("style");
+    style.id = "tt-animations";
+    style.textContent = `
+      @keyframes tt-glow-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.65; }
+      }
+      @keyframes tt-ember-sweep {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+      }
+      @keyframes tt-aura-breath {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 0.9; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .tt-pill-blaze, .tt-aura-overlay, .tt-shimmer { animation: none !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  }, [tt.isActive]);
 
   // Update URL during TT playback (replaceState to avoid flooding history)
   useEffect(() => {
@@ -1809,7 +1839,7 @@ function DashboardInner() {
 
             {/* Right: Time Travel + Theme + Share + Zoom */}
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>
-              {/* Time Travel pill */}
+              {/* Time Travel pill — blazing when active */}
               <button
                 ref={ttButtonRef}
                 onClick={() => {
@@ -1819,12 +1849,15 @@ function DashboardInner() {
                     setTtPopoverOpen(o => !o);
                   }
                 }}
+                className={tt.isActive ? "tt-pill-blaze" : undefined}
                 style={{
+                  position: "relative",
+                  overflow: "hidden",
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,
-                  border:`1px solid ${tt.isActive
+                  border:`1.5px solid ${tt.isActive
                     ? ttBorderActiveMap[themeKey] ?? ttBorderActiveMap.colour
                     : thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  borderRadius:9999, height:44, padding:"0 14px",
+                  borderRadius:9999, height:44, padding:"0 16px",
                   color: tt.isActive
                     ? (ttTextActiveMap[themeKey] ?? ttTextActiveMap.colour)
                     : thm.textMuted,
@@ -1833,14 +1866,26 @@ function DashboardInner() {
                     : themeKey==="colour" ? "#141A24" : "transparent",
                   boxShadow: tt.isActive ? (ttGlowMap[themeKey] ?? ttGlowMap.colour) : "none",
                   cursor:"pointer",
-                  transition:"color 0.2s, background 0.2s, box-shadow 0.3s, border-color 0.2s",
+                  transition:"color 0.2s, background 0.2s, box-shadow 0.4s, border-color 0.2s",
+                  animation: tt.isActive ? "tt-glow-pulse 3s ease-in-out infinite" : "none",
                 }}
                 title={tt.isActive ? "Click to cancel Time Travel" : "Open Time Travel"}
               >
-                <span style={{ fontSize:14 }}>⏳</span>
+                {/* Shimmer sweep overlay */}
+                {tt.isActive && (
+                  <span className="tt-shimmer" style={{
+                    position:"absolute", inset:0,
+                    background:"linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%)",
+                    backgroundSize:"200% 100%",
+                    animation:"tt-ember-sweep 4s ease-in-out infinite",
+                    pointerEvents:"none",
+                    borderRadius:9999,
+                  }} />
+                )}
+                <span style={{ fontSize:14, position:"relative", zIndex:1 }}>{tt.isActive ? "★" : "⏳"}</span>
                 <span style={{
                   fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1,
-                  whiteSpace:"nowrap",
+                  whiteSpace:"nowrap", position:"relative", zIndex:1,
                 }}>
                   {tt.isActive && tt.simulatedNow ? ttFormat(tt.simulatedNow) : "Time Travel"}
                 </span>
@@ -2085,6 +2130,94 @@ function DashboardInner() {
             </div>
           </div>
         </header>
+
+        {/* ── TT sticky banner ──────────────────────────────────── */}
+        {tt.isActive && tt.simulatedNow && (
+          <div style={{
+            position:"sticky", top: 0, zIndex: 499,
+            background: themeKey === "colour"
+              ? "linear-gradient(135deg, #1E1533, #1A1030)"
+              : themeKey === "pastel"
+                ? "linear-gradient(135deg, #FDF6E3, #FEF3C7)"
+                : "linear-gradient(135deg, #E8E8E8, #D8D8D8)",
+            borderBottom: `1px solid ${themeKey === "colour" ? "rgba(139,92,246,0.3)" : themeKey === "pastel" ? "#D4A574" : "#bbb" }`,
+            padding: "8px 1.5rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            flexWrap: "wrap", gap: 8,
+            animation: "fade-in 0.4s ease",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>⏳</span>
+              <span style={{
+                fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13,
+                color: themeKey === "colour" ? "#E9D5FF" : themeKey === "pastel" ? "#78350F" : "#333",
+              }}>
+                Time Travel active — {selectedCity} as of {ttFormat(tt.simulatedNow)}
+              </span>
+              <span style={{
+                fontSize: 11,
+                color: themeKey === "colour" ? "rgba(233,213,255,0.5)" : themeKey === "pastel" ? "rgba(120,53,15,0.5)" : "rgba(0,0,0,0.4)",
+              }}>
+                Showing historical traffic playback
+              </span>
+            </div>
+            <button
+              onClick={() => tt.deactivate()}
+              style={{
+                fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 11,
+                padding: "5px 14px", borderRadius: 9999, border: "none",
+                background: themeKey === "colour"
+                  ? "rgba(139,92,246,0.3)" : themeKey === "pastel"
+                    ? "#FDE68A" : "#ccc",
+                color: themeKey === "colour" ? "#E9D5FF" : themeKey === "pastel" ? "#78350F" : "#333",
+                cursor: "pointer",
+                transition: "background 0.2s",
+                whiteSpace: "nowrap",
+              }}
+              title="Return to live dashboard"
+            >
+              ← Return to Present
+            </button>
+          </div>
+        )}
+
+        {/* ── TT viewport aura (corner glow overlay) ──────────────── */}
+        {tt.isActive && (
+          <div className="tt-aura-overlay" style={{
+            position: "fixed", inset: 0,
+            pointerEvents: "none",
+            zIndex: 498,
+            background: themeKey === "colour"
+              ? "radial-gradient(ellipse at 0% 0%, rgba(139,92,246,0.18) 0%, transparent 50%),"
+              + "radial-gradient(ellipse at 100% 0%, rgba(99,102,241,0.14) 0%, transparent 50%),"
+              + "radial-gradient(ellipse at 0% 100%, rgba(139,92,246,0.12) 0%, transparent 45%),"
+              + "radial-gradient(ellipse at 100% 100%, rgba(99,102,241,0.10) 0%, transparent 45%)"
+              : themeKey === "pastel"
+                ? "radial-gradient(ellipse at 0% 0%, rgba(251,191,36,0.15) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 100% 0%, rgba(245,158,11,0.12) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 0% 100%, rgba(251,191,36,0.10) 0%, transparent 45%),"
+                + "radial-gradient(ellipse at 100% 100%, rgba(245,158,11,0.08) 0%, transparent 45%)"
+                : "radial-gradient(ellipse at 0% 0%, rgba(160,160,160,0.15) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 100% 0%, rgba(180,180,180,0.12) 0%, transparent 50%),"
+                + "radial-gradient(ellipse at 0% 100%, rgba(160,160,160,0.10) 0%, transparent 45%),"
+                + "radial-gradient(ellipse at 100% 100%, rgba(180,180,180,0.08) 0%, transparent 45%)",
+            animation: "tt-aura-breath 6s ease-in-out infinite",
+            transition: "opacity 0.5s ease",
+          }} />
+        )}
+
+        {/* ── TT watermark (bottom-right, very low priority) ─────── */}
+        {tt.isActive && (
+          <div style={{
+            position: "fixed", bottom: 12, right: 16,
+            zIndex: 497, pointerEvents: "none",
+            fontFamily: "var(--app-font-display)", fontWeight: 800,
+            fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase",
+            color: thm.textPrimary, opacity: 0.08,
+          }}>
+            TIME TRAVEL MODE
+          </div>
+        )}
 
         {/* ── Below-header area: main content + route pane ─────────── */}
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
@@ -2799,7 +2932,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · Time Travel` : ""}
+                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2823,7 +2956,7 @@ function DashboardInner() {
                       {tnOpen && (
                         <>
                           <p style={{ fontSize: 12, color: thm.textMuted, marginTop: 2, marginBottom: 4 }}>
-                            Weekly speed distribution · {routeEndpoints}
+                            {tt.isActive ? "Historical snapshot · " : ""}Weekly speed distribution · {routeEndpoints}
                             {trafficNowCompare.length > 0 ? ` — with baseline comparison` : ""}
                           </p>
                           <UncertaintyBandChart

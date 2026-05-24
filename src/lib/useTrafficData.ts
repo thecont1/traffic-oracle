@@ -392,6 +392,9 @@ export function useTrafficData(citySource?: CitySource, paused?: boolean) {
   const routeByCodeRef = useRef<Map<string, Route>>(new Map());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingActiveRef = useRef(false);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const pollAbortRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(
     (signal?: AbortSignal) => {
@@ -437,14 +440,24 @@ export function useTrafficData(citySource?: CitySource, paused?: boolean) {
     if (routeByCodeRef.current.size === 0) return;
     // Don't poll if the tab is hidden (Page Visibility API)
     if (typeof document !== "undefined" && document.hidden) return;
+    // Don't poll if paused (Time Travel active)
+    if (pausedRef.current) return;
 
+    // Abort any in-flight poll before starting a new one
+    if (pollAbortRef.current) {
+      pollAbortRef.current.abort();
+    }
     const ctrl = new AbortController();
+    pollAbortRef.current = ctrl;
+
     refreshTrafficData(
       routeByCodeRef.current,
       ctrl.signal,
       citySource,
     )
       .then((result) => {
+        // Don't update state if we were paused during the fetch
+        if (pausedRef.current || ctrl.signal.aborted) return;
         setAllRows(result.allRows);
         setRowCount(result.rowCount);
         setDataTimestamp(result.dataTimestamp);
@@ -494,16 +507,22 @@ export function useTrafficData(citySource?: CitySource, paused?: boolean) {
 
   /* Start polling interval after initial data load completes */
   useEffect(() => {
-    // If paused (TT active), clear any running interval and don't start a new one
+    // If paused (TT active), clear any running interval and abort in-flight poll
     if (paused) {
       if (intervalRef.current !== null) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      if (pollAbortRef.current) {
+        pollAbortRef.current.abort();
+        pollAbortRef.current = null;
+      }
       return;
     }
-    // Only start polling if initial load is done and we have route data
+    // Resuming from pause: trigger an immediate poll before starting the interval
+    // so the user doesn't wait the full polling_interval_min for fresh data.
     if (!loading && routeByCodeRef.current.size > 0 && intervalRef.current === null) {
+      doPoll();
       const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
       intervalRef.current = setInterval(doPoll, intervalMs);
     }

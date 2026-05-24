@@ -2247,7 +2247,13 @@ function DashboardInner() {
         )}
 
         {/* ── Below-header area: main content + route pane ─────────── */}
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div style={{
+          display: "flex", flex: 1, minHeight: 0,
+          position: "relative",
+          backgroundImage: tt.isActive ? ttBg.gradients.join(", ") : undefined,
+          backgroundRepeat: tt.isActive ? ttBg.gradients.map(() => "no-repeat").join(", ") : undefined,
+          backgroundSize: tt.isActive ? ttBg.gradients.map(() => "100% 100%").join(", ") : undefined,
+        }}>
 
           {/* ── Question pane (independent scroll + footer) ─────── */}
           <div style={{
@@ -2261,12 +2267,6 @@ function DashboardInner() {
             flex: 1,
             overflowY: "auto",
             position: "relative",
-            backgroundImage: tt.isActive
-              ? `radial-gradient(ellipse at 14% 10%, ${ttBg.glowA}, transparent 52%), radial-gradient(ellipse at 90% 12%, ${ttBg.glowB}, transparent 48%)`
-              : undefined,
-            backgroundRepeat: tt.isActive ? "no-repeat, no-repeat" : undefined,
-            backgroundPosition: tt.isActive ? "center, center" : undefined,
-            backgroundSize: tt.isActive ? "100% 100%, 100% 100%" : undefined,
           }}>
 
           {/* ── City 404 overlay — only after animation settles on this city ── */}
@@ -3093,7 +3093,7 @@ function DashboardInner() {
                 lastUpdated={lastUpdated}
                 mobile={false}
                 isOpen={paneOpen}
-                onToggle={() => setPaneOpen(o => !o)}
+                onToggle={() => setPaneOpen(o => { const next = !o; try { localStorage.setItem("to:paneOpen", next ? "1" : "0"); } catch {} return next; })}
                 paneWidth={cfg.route_pane.width}
                 ttActive={tt.isActive}
                 ttSimulatedNow={tt.simulatedNow}

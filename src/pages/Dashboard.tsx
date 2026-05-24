@@ -987,6 +987,77 @@ function DashboardInner() {
   const isMobile = useIsMobile();
   const liveRef = useRef<HTMLDivElement>(null);
 
+  // Time Travel pill state and helpers
+  const [ttPopoverOpen, setTtPopoverOpen] = useState(false);
+  const ttButtonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedTime, setSelectedTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
+  function ttFormat(dt: Date): string {
+    const d = dt.getDate();
+    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+    const yr = String(dt.getFullYear()).slice(2);
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mm = String(dt.getMinutes()).padStart(2, "0");
+    return `${d} ${mon} '${yr} · ${hh}:${mm}`;
+  }
+
+  // TT glow colours per theme
+  const ttGlowMap: Record<string, string> = {
+    colour: "0 0 12px rgba(139,92,246,0.35), 0 0 4px rgba(139,92,246,0.2)",
+    gray:   "0 0 10px rgba(120,120,120,0.25)",
+    pastel: "0 0 12px rgba(251,191,36,0.3), 0 0 4px rgba(251,191,36,0.15)",
+  };
+  const ttBgActiveMap: Record<string, string> = {
+    colour: "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.1))",
+    gray:   "#e8e8e8",
+    pastel: "#F5F0E8",
+  };
+  const ttBorderActiveMap: Record<string, string> = {
+    colour: "rgba(139,92,246,0.4)",
+    gray:   "#999",
+    pastel: "#D4A574",
+  };
+  const ttTextActiveMap: Record<string, string> = {
+    colour: "#C4B5FD",
+    gray:   "#555",
+    pastel: "#92400E",
+  };
+
+  // Build month grid for calendar (Monday-start)
+  function buildMonthGrid(year: number, month: number): (number | null)[][] {
+    const firstDay = new Date(year, month, 1);
+    let startDow = firstDay.getDay() - 1;
+    if (startDow < 0) startDow = 6;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length < 42) cells.push(null);
+    const rows: (number | null)[][] = [];
+    for (let i = 0; i < 42; i += 7) rows.push(cells.slice(i, i + 7));
+    return rows;
+  }
+
+  // Click-outside dismiss for TT popover
+  useEffect(() => {
+    if (!ttPopoverOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
+          ttButtonRef.current && !ttButtonRef.current.contains(e.target as Node)) {
+        setTtPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ttPopoverOpen]);
+
   // Announce dynamic changes to screen readers
   const announce = useCallback((msg: string) => {
     if (liveRef.current) liveRef.current.textContent = msg;
@@ -1166,6 +1237,19 @@ function DashboardInner() {
     }
     ttHydrated.current = true;
   }, []);
+
+  // Calendar data availability (uses full allRows, not TT-filtered)
+  const dataDays = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRows) {
+      const d = r.timestamp;
+      set.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+    }
+    return set;
+  }, [allRows]);
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -1633,9 +1717,231 @@ function DashboardInner() {
               <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} />
             </div>
 
-            {/* Right: Share + Refresh + Theme */}
-            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-              {!loading && rowCount > 0 && (
+            {/* Right: Time Travel + Theme + Share + Zoom */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>
+              {/* Time Travel pill */}
+              <button
+                ref={ttButtonRef}
+                onClick={() => {
+                  if (tt.isActive) {
+                    tt.deactivate();
+                  } else {
+                    setTtPopoverOpen(o => !o);
+                  }
+                }}
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:5,
+                  border:`1px solid ${tt.isActive
+                    ? ttBorderActiveMap[themeKey] ?? ttBorderActiveMap.colour
+                    : thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  borderRadius:9999, height:44, padding:"0 14px",
+                  color: tt.isActive
+                    ? (ttTextActiveMap[themeKey] ?? ttTextActiveMap.colour)
+                    : thm.textMuted,
+                  background: tt.isActive
+                    ? (ttBgActiveMap[themeKey] ?? ttBgActiveMap.colour)
+                    : themeKey==="colour" ? "#141A24" : "transparent",
+                  boxShadow: tt.isActive ? (ttGlowMap[themeKey] ?? ttGlowMap.colour) : "none",
+                  cursor:"pointer",
+                  transition:"color 0.2s, background 0.2s, box-shadow 0.3s, border-color 0.2s",
+                }}
+                title={tt.isActive ? "Click to cancel Time Travel" : "Open Time Travel"}
+              >
+                <span style={{ fontSize:14 }}>⏳</span>
+                <span style={{
+                  fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1,
+                  whiteSpace:"nowrap",
+                }}>
+                  {tt.isActive && tt.simulatedNow ? ttFormat(tt.simulatedNow) : "Time Travel"}
+                </span>
+              </button>
+
+              {/* Time Travel calendar popover */}
+              {ttPopoverOpen && !tt.isActive && createPortal(
+                <div ref={popoverRef} style={{
+                  position:"fixed",
+                  top: (ttButtonRef.current?.getBoundingClientRect().bottom ?? 60) + 6,
+                  right: Math.max(8, window.innerWidth - (ttButtonRef.current?.getBoundingClientRect().right ?? window.innerWidth) + 20),
+                  zIndex: 9999,
+                  background: thm.key==="colour" ? "#1A2030" : thm.key==="pastel" ? "#FFF8F0" : "#fff",
+                  border:`1px solid ${thm.key==="gray"?"#ccc":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
+                  borderRadius:12,
+                  boxShadow: thm.key==="colour"
+                    ? "0 8px 32px rgba(0,0,0,0.5)"
+                    : "0 8px 24px rgba(0,0,0,0.12)",
+                  padding:16,
+                  minWidth:280,
+                  animation:"fade-in 0.15s ease",
+                }}>
+                  {/* Month navigation */}
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                    <button onClick={() => {
+                      if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1); }
+                      else setCalMonth(m => m-1);
+                    }} style={{
+                      background:"none", border:"none", cursor:"pointer", color:thm.textMuted,
+                      fontSize:18, padding:"4px 8px", borderRadius:4,
+                    }}>‹</button>
+                    <span style={{
+                      fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:14,
+                      color:thm.textPrimary,
+                    }}>
+                      {["January","February","March","April","May","June","July","August","September","October","November","December"][calMonth]} {calYear}
+                    </span>
+                    <button onClick={() => {
+                      const nowM = new Date().getMonth();
+                      const nowY = new Date().getFullYear();
+                      if (calYear > nowY || (calYear === nowY && calMonth >= nowM)) return;
+                      if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); }
+                      else setCalMonth(m => m+1);
+                    }} style={{
+                      background:"none", border:"none", cursor:"pointer", color:thm.textMuted,
+                      fontSize:18, padding:"4px 8px", borderRadius:4,
+                      opacity: (calYear > today.getFullYear() || (calYear === today.getFullYear() && calMonth >= today.getMonth())) ? 0.3 : 1,
+                    }}>›</button>
+                  </div>
+
+                  {/* Weekday labels */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:2, marginBottom:4 }}>
+                    {["Mo","Tu","We","Th","Fr","Sa","Su"].map(d => (
+                      <div key={d} style={{
+                        textAlign:"center", fontSize:10, fontWeight:600,
+                        color:thm.textMuted, padding:"4px 0",
+                      }}>{d}</div>
+                    ))}
+                  </div>
+
+                  {/* Calendar grid */}
+                  {buildMonthGrid(calYear, calMonth).map((row, ri) => (
+                    <div key={ri} style={{ display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:2, marginBottom:2 }}>
+                      {row.map((day, ci) => {
+                        if (day === null) return <div key={ci} />;
+                        const dateStr = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                        const isFuture = dateStr > todayStr;
+                        const hasData = dataDays.has(dateStr);
+                        const isToday = dateStr === todayStr;
+                        const isSelected = selectedDate &&
+                          selectedDate.getFullYear() === calYear &&
+                          selectedDate.getMonth() === calMonth &&
+                          selectedDate.getDate() === day;
+                        const canClick = !isFuture && hasData;
+
+                        const cellBg = isSelected
+                          ? (themeKey==="colour" ? "rgba(139,92,246,0.3)" : themeKey==="pastel" ? "#FDE68A" : "#111")
+                          : "transparent";
+                        const cellColor = isSelected
+                          ? (themeKey==="colour" ? "#E9D5FF" : themeKey==="pastel" ? "#92400E" : "#fff")
+                          : isFuture
+                            ? thm.textMuted
+                            : hasData ? thm.textPrimary : thm.textMuted;
+
+                        return (
+                          <div
+                            key={ci}
+                            onClick={() => canClick && setSelectedDate(new Date(calYear, calMonth, day))}
+                            style={{
+                              textAlign:"center", fontSize:12, padding:"6px 0",
+                              borderRadius:6,
+                              background: cellBg,
+                              color: cellColor,
+                              cursor: canClick ? "pointer" : "default",
+                              opacity: isFuture ? 0.3 : hasData ? 1 : 0.4,
+                              border: isToday
+                                ? `1px dashed ${themeKey==="colour"?"rgba(139,92,246,0.5)":themeKey==="pastel"?"#D4A574":"#999"}`
+                                : !hasData && !isFuture ? "1px dashed rgba(128,128,128,0.3)" : "1px solid transparent",
+                              transition:"background 0.15s, color 0.15s",
+                            }}
+                            onMouseEnter={e => {
+                              if (canClick && !isSelected) (e.currentTarget as HTMLElement).style.background = thm.key==="colour" ? "rgba(139,92,246,0.1)" : thm.key==="pastel" ? "#FEF3C7" : "#f0f0f0";
+                            }}
+                            onMouseLeave={e => {
+                              if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
+                            }}
+                          >{day}</div>
+                        );
+                      })}
+                    </div>
+                  ))}
+
+                  {/* Time picker */}
+                  <div style={{
+                    display:"flex", alignItems:"center", justifyContent:"space-between",
+                    marginTop:12, paddingTop:12,
+                    borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
+                  }}>
+                    <span style={{ fontSize:11, fontWeight:600, color:thm.textSecondary }}>
+                      Time
+                    </span>
+                    <input
+                      type="time"
+                      value={selectedTime}
+                      onChange={e => setSelectedTime(e.target.value)}
+                      style={{
+                        background: thm.key==="colour" ? "#0F1218" : thm.key==="pastel" ? "#fff" : "#f5f5f5",
+                        border:`1px solid ${thm.key==="gray"?"#ccc":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
+                        borderRadius:6, padding:"4px 8px",
+                        fontSize:13, fontWeight:600,
+                        color: thm.textPrimary,
+                        fontFamily:"var(--app-font-display)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Activate button */}
+                  <button
+                    onClick={() => {
+                      if (!selectedDate) return;
+                      const [hh, mm] = selectedTime.split(":").map(Number);
+                      const dt = new Date(selectedDate);
+                      dt.setHours(hh, mm, 0, 0);
+                      tt.activate(dt);
+                      setTtPopoverOpen(false);
+                    }}
+                    disabled={!selectedDate}
+                    style={{
+                      width:"100%", marginTop:10, padding:"8px 0",
+                      borderRadius:8, border:"none",
+                      background: selectedDate
+                        ? (themeKey==="colour" ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(99,102,241,0.2))" : themeKey==="pastel" ? "#FDE68A" : "#111")
+                        : (thm.key==="colour" ? "#2A3545" : "#e0e0e0"),
+                      color: selectedDate
+                        ? (themeKey==="colour" ? "#E9D5FF" : themeKey==="pastel" ? "#92400E" : "#fff")
+                        : thm.textMuted,
+                      fontFamily:"var(--app-font-display)", fontSize:12, fontWeight:700,
+                      cursor: selectedDate ? "pointer" : "default",
+                      transition:"background 0.2s, color 0.2s",
+                    }}
+                  >
+                    {selectedDate ? `Travel to ${selectedDate.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][selectedDate.getMonth()]} at ${selectedTime}` : "Select a date above"}
+                  </button>
+                </div>,
+                document.body
+              )}
+
+              {/* Theme pill */}
+              <button
+                onClick={cycleTheme}
+                title={`Switch to ${nextMeta.label}`}
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                  height:44, borderRadius:9999, padding:"0 12px",
+                  minWidth: 160,
+                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
+                  cursor:"pointer",
+                  transition:"background 0.2s",
+                }}
+                aria-label="Cycle theme"
+              >
+                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
+                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
+                  {curMeta.label}
+                </span>
+              </button>
+
+              {/* Share pill */}
+              {!loading && effectiveRowCount > 0 && (
                 <button onClick={handleShare} style={{
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
@@ -1650,7 +1956,8 @@ function DashboardInner() {
                   </span>
                 </button>
               )}
-              {/* Size +/- */}
+
+              {/* Zoom +/- */}
               <div style={{
                 display:"flex", alignItems:"center",
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
@@ -1685,26 +1992,6 @@ function DashboardInner() {
                   <Plus size={13} />
                 </button>
               </div>
-              <button
-                onClick={cycleTheme}
-                title={`Switch to ${nextMeta.label}`}
-                style={{
-                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                  height:44, borderRadius:9999, padding:"0 12px",
-                  minWidth: 160,
-                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
-                  cursor:"pointer",
-                  transition:"background 0.2s",
-                }}
-                aria-label="Cycle theme"
-              >
-                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
-                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
-                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
-                  {curMeta.label}
-                </span>
-              </button>
             </div>
           </div>
         </header>

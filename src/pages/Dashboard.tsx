@@ -18,6 +18,8 @@ import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
 import { TimeTravelProvider, useTimeTravel } from "@/lib/TimeTravelContext";
+import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "@/lib/ttStateHelpers";
+import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
 import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandChart";
@@ -1366,6 +1368,18 @@ function DashboardInner() {
   const periodLabel   = PERIOD_LIST[periodIdx].label;
   const todLabel      = TOD_LIST[todIdx].label;
 
+  // Always-current snapshot of user-facing state for TT save/restore.
+  // Updated every render so the save effect captures correct values
+  // without stale-closure risk.
+  const stateSnapshotRef = useRef<Omit<DashboardSnapshot, "sliderWeekKeys">>({
+    periodIdx, todIdx, questionMode, chartView, chartGranularity,
+    routeName: selectedRoute,
+  });
+  stateSnapshotRef.current = {
+    periodIdx, todIdx, questionMode, chartView, chartGranularity,
+    routeName: selectedRoute,
+  };
+
   const selectedRouteInfo = useMemo(
     () => routes.find(r => r.label_short === selectedRoute),
     [routes, selectedRoute],
@@ -1420,49 +1434,58 @@ function DashboardInner() {
   }, [tod, allRouteWeeks.length, sliderManuallySet]);
 
   // Time Travel: save pre-TT state on activate, restore on cancel.
-  // Store slider as weekKeys (stable strings) so they re-resolve correctly
-  // even if allRouteWeeks changes length between entering and exiting TT.
-  const preTtStateRef = useRef<{
-    sliderKeys: [string, string] | null; // weekKey of left/right thumb
-    period: number;
-    tod: number;
-    questionMode: "worsened" | "improved";
-    chartView: "speed" | "duration";
-    chartGranularity: "daily" | "weekly";
-  } | null>(null);
+  // Uses stateSnapshotRef for closure-safe capture and ttStateHelpers
+  // for validated restore logic.
+  const preTtStateRef = useRef<DashboardSnapshot | null>(null);
 
   useEffect(() => {
     if (tt.isActive && !preTtStateRef.current) {
-      // Save current state BEFORE TT overwrites it
+      // Save current state — read from stateSnapshotRef to avoid stale closures
+      const snap = stateSnapshotRef.current;
       const lKey = allRouteWeeks[safeLeft]?.weekKey ?? null;
       const rKey = allRouteWeeks[safeRight]?.weekKey ?? null;
       preTtStateRef.current = {
-        sliderKeys: lKey && rKey ? [lKey, rKey] : null,
-        period: periodIdx,
-        tod: todIdx,
-        questionMode,
-        chartView,
-        chartGranularity,
+        sliderWeekKeys: lKey && rKey ? [lKey, rKey] : null,
+        periodIdx: snap.periodIdx,
+        todIdx: snap.todIdx,
+        questionMode: snap.questionMode,
+        chartView: snap.chartView,
+        chartGranularity: snap.chartGranularity,
+        routeName: snap.routeName,
       };
       setSliderManuallySet(false); // allow auto-setting for TT defaults
     } else if (!tt.isActive && preTtStateRef.current) {
-      // Restore pre-TT state
       const saved = preTtStateRef.current;
-      setPeriodIdx(saved.period);
-      setTodIdx(saved.tod);
+      if (!validateSnapshot(saved)) {
+        // Corrupted snapshot — bail out cleanly
+        preTtStateRef.current = null;
+        return;
+      }
+
+      // Restore filter/chart state
+      setPeriodIdx(saved.periodIdx);
+      setTodIdx(saved.todIdx);
       setQuestionMode(saved.questionMode);
       setChartView(saved.chartView);
       setChartGranularity(saved.chartGranularity);
-      if (saved.sliderKeys) {
-        // Re-resolve week keys to current indices (live allRouteWeeks may differ from TT window)
-        const [lKey, rKey] = saved.sliderKeys;
-        const lIdx = allRouteWeeks.findIndex(w => w.weekKey === lKey);
-        const rIdx = allRouteWeeks.findIndex(w => w.weekKey === rKey);
-        if (lIdx >= 0 && rIdx >= 0) {
-          setSliderVals([Math.min(lIdx, rIdx), Math.max(lIdx, rIdx)]);
-        }
+
+      // Restore route — validate it still exists in Live data
+      const liveRouteLabels = Array.from(new Set(allRows.map(r => r.label_short))).sort();
+      const restoredRouteIdx = resolveRouteIndex(saved.routeName, liveRouteLabels);
+      if (restoredRouteIdx >= 0) {
+        setRouteIdx(restoredRouteIdx);
       }
-      setSliderManuallySet(true); // prevent auto-set from overwriting restored state
+      // If route not found, keep current routeIdx — modulo handles bounds
+
+      // Restore slider using validated weekKey resolution
+      const sliderResult = resolveSliderFromWeekKeys(saved.sliderWeekKeys, allRouteWeeks);
+      if (sliderResult) {
+        setSliderVals(sliderResult);
+        setSliderManuallySet(true); // prevent auto-set from overwriting restored state
+      } else {
+        setSliderManuallySet(false); // weekKeys missing — let auto-set handle it
+      }
+
       preTtStateRef.current = null;
     }
   }, [tt.isActive]); // eslint-disable-line react-hooks/exhaustive-deps

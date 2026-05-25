@@ -59,7 +59,7 @@ export default function NestedScaleChart({
   const railCapColor =
     thm.key === "colour" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
   const labelColor =
-    thm.key === "gray" ? "#767676" : thm.key === "pastel" ? "#6E675B" : "#64748B";
+    thm.key === "gray" ? "#767676" : thm.key === "pastel" ? "#6E675B" : "#94A3B8";
 
   const animKey = useMemo(() => Math.random(), [liveSpeed]);
 

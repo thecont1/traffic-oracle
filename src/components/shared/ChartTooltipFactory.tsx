@@ -31,7 +31,7 @@ export function useChartTooltip(thm: ThmColors, view: "speed" | "duration" = "sp
     try {
       const d = new Date(label);
       if (!isNaN(d.getTime())) {
-        dateLabel = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+        dateLabel = `${d.toLocaleDateString("en-GB", { weekday: "short" })} ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
       }
     } catch { /* keep original */ }
 

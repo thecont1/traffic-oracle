@@ -187,7 +187,8 @@ function MobileInner() {
   const chartDataKey = chartGranularity === "daily" ? "dateKey" : "weekKey";
 
   const colors = thm.chart;
-  const chartTooltip = useChartTooltip(thm, "speed");
+  const speedTooltip = useChartTooltip(thm, "speed");
+  const durationTooltip = useChartTooltip(thm, "duration");
 
   // X-axis ticks
   const xAxisTicks = useMemo(() => {
@@ -217,11 +218,7 @@ function MobileInner() {
     if (idx >= 0) setRouteIdx(idx);
   }, [routeOptions]);
 
-  // Loading state
-  if (showLoader && citySource) {
-    return <MobileCarLoader thm={thm} onComplete={() => setShowLoader(false)} />;
-  }
-
+  // Chart domains — must be above any early return
   const speedDomain = useMemo(() => {
     const vals = (chartData as any[]).flatMap((d: any) => [d.avgSpeed, d.p05Speed, d.p95Speed]).filter((v: number) => v > 0);
     if (!vals.length) return { min: 0, max: 1 };
@@ -235,6 +232,11 @@ function MobileInner() {
     const pad = (Math.max(...vals) - Math.min(...vals)) * 0.08 || 1;
     return { min: Math.round(Math.max(0, Math.min(...vals) - pad) * 10) / 10, max: Math.round((Math.max(...vals) + pad) * 10) / 10 };
   }, [chartData]);
+
+  // Loading state — after all hooks
+  if (showLoader && citySource) {
+    return <MobileCarLoader thm={thm} onComplete={() => setShowLoader(false)} />;
+  }
 
   return (
     <div style={{
@@ -432,7 +434,7 @@ function MobileInner() {
                       domain={[Math.floor(speedDomain.min), Math.ceil(speedDomain.max)]}
                       allowDecimals={false}
                     />
-                    <RCTooltip content={chartTooltip} />
+                    <RCTooltip content={speedTooltip} />
                     <Area type="monotone" dataKey="avgSpeed" name="Avg Speed"
                       stroke={colors.line1} strokeWidth={2} fill="url(#m_sg)" dot={false} connectNulls />
                     <Line type="monotone" dataKey="p95Speed" name="Best"
@@ -490,7 +492,7 @@ function MobileInner() {
                       domain={[Math.floor(durationDomain.min), Math.ceil(durationDomain.max)]}
                       allowDecimals={false}
                     />
-                    <RCTooltip content={useChartTooltip(thm, "duration")} />
+                    <RCTooltip content={durationTooltip} />
                     <Area type="monotone" dataKey="avgDuration" name="Avg Duration"
                       stroke={colors.line1} strokeWidth={2} fill="url(#m_dur)" dot={false} connectNulls />
                     <Line type="monotone" dataKey="p05Duration" name="Best"

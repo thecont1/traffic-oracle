@@ -3,8 +3,8 @@
     {
       "name": "Bangalore",
       "data_source": {
-        "routes_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/data/csv-routes-bangalore.csv",
-        "traffic_csv": "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/data/csv-traffic-bangalore.csv"
+        "routes_csv": "https://raw.githubusercontent.com/thecont1/traffic-monitor-lizard/main/data/csv-routes-bangalore.csv",
+        "traffic_csv": "https://raw.githubusercontent.com/thecont1/traffic-monitor-lizard/main/data/csv-traffic-bangalore.csv"
       }
     },
     { "name": "Chennai" },

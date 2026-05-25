@@ -546,7 +546,7 @@ describe("Phase 2 — Aggregation", () => {
     });
 
     it("preserves the base path of the URL", () => {
-      const base = "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main/data/csv-traffic-bangalore.csv";
+      const base = "https://raw.githubusercontent.com/thecont1/traffic-monitor-lizard/main/data/csv-traffic-bangalore.csv";
       const busted = bust(base);
       expect(busted.startsWith(base)).toBe(true);
       expect(busted).toMatch(/\?t=\d+$/);

@@ -27,7 +27,7 @@ export default defineConfig({
     },
     proxy: {
       "/api/traffic-csv": {
-        target: "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main",
+        target: "https://raw.githubusercontent.com/thecont1/traffic-monitor-lizard/main",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/traffic-csv/, "/data"),
         configure: (proxy) => {

@@ -10,7 +10,7 @@
  */
 
 const GITHUB_RAW_BASE =
-  "https://raw.githubusercontent.com/thecont1/blr-traffic-monitor/main";
+  "https://raw.githubusercontent.com/thecont1/traffic-monitor-lizard/main";
 
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",

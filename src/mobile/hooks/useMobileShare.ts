@@ -18,6 +18,12 @@ export function useMobileShare() {
   }, []);
 
   const share = useCallback(async (data: ShareData) => {
+    // Clear any pending dismiss so rapid shares don't flicker
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
     // Try native Web Share API first
     if (navigator.share) {
       try {

@@ -10,6 +10,7 @@ interface ThemeContextValue {
   themeKey:     ThemeKey;
   nextThemeKey: ThemeKey;
   cycleTheme:   () => void;
+  setTheme:     (key: ThemeKey) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -32,10 +33,15 @@ export function ThemeProvider({ children, initialTheme }: { children: ReactNode;
     });
   };
 
+  const setTheme = (key: ThemeKey) => {
+    setThemeKey(key);
+    try { localStorage.setItem(STORAGE_KEY, key); } catch { /* ignore */ }
+  };
+
   const nextThemeKey = THEME_CYCLE[(THEME_CYCLE.indexOf(themeKey) + 1) % THEME_CYCLE.length];
 
   return (
-    <ThemeContext.Provider value={{ theme: THEMES[themeKey], themeKey, nextThemeKey, cycleTheme }}>
+    <ThemeContext.Provider value={{ theme: THEMES[themeKey], themeKey, nextThemeKey, cycleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

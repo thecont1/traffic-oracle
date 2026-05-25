@@ -39,18 +39,24 @@ function MobileCarLoader({ thm, onComplete }: { thm: any; onComplete: () => void
     const start = performance.now();
     const DURATION = 1400;
     let raf: number;
+    let t1: ReturnType<typeof setTimeout>;
+    let t2: ReturnType<typeof setTimeout>;
     const tick = (now: number) => {
       const raw = Math.min(100, ((now - start) / DURATION) * 100);
       const step = Math.min(100, Math.ceil(raw / 5) * 5);
       setPct(step);
       if (raw < 100) { raf = requestAnimationFrame(tick); }
       else {
-        setTimeout(() => setFading(true), 200);
-        setTimeout(() => onCompleteRef.current(), 600);
+        t1 = setTimeout(() => setFading(true), 200);
+        t2 = setTimeout(() => onCompleteRef.current(), 600);
       }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, []); // stable — reads onComplete via ref
 
   return (

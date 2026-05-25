@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 
 interface ShareData {
   title: string;
@@ -9,6 +9,13 @@ interface ShareData {
 /** Web Share API with graceful fallback to clipboard copy. */
 export function useMobileShare() {
   const [shared, setShared] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const share = useCallback(async (data: ShareData) => {
     // Try native Web Share API first
@@ -16,7 +23,7 @@ export function useMobileShare() {
       try {
         await navigator.share(data);
         setShared(true);
-        setTimeout(() => setShared(false), 2000);
+        timeoutRef.current = setTimeout(() => setShared(false), 2000);
         return;
       } catch (e: any) {
         // User cancelled or API failed — fall through to clipboard
@@ -28,7 +35,7 @@ export function useMobileShare() {
     try {
       await navigator.clipboard.writeText(data.url);
       setShared(true);
-      setTimeout(() => setShared(false), 2000);
+      timeoutRef.current = setTimeout(() => setShared(false), 2000);
     } catch {
       // Last resort: do nothing
     }

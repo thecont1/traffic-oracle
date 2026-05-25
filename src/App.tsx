@@ -41,14 +41,13 @@ function Shell() {
         Loading…
       </div>
     }>
-      {isMobile ? (
-        <MobileApp />
-      ) : (
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route component={NotFound} />
-        </Switch>
-      )}
+      <Switch>
+        <Route
+          path="/"
+          component={isMobile ? MobileApp : Dashboard}
+        />
+        <Route component={NotFound} />
+      </Switch>
     </Suspense>
   );
 }

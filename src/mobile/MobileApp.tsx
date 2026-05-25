@@ -15,14 +15,13 @@ import { readUrlParams } from "@/core/urlState";
 import { useMobileShare } from "@/mobile/hooks/useMobileShare";
 import SwipeableRouteCards from "@/mobile/components/SwipeableRouteCards";
 import NapkinChart from "@/components/shared/NapkinChart";
-import LocationDropdown from "@/components/shared/LocationDropdown";
 import Route404 from "@/components/shared/Route404";
 import {
   AreaChart, Area, ComposedChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, ResponsiveContainer,
 } from "recharts";
 import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
-import { Share2, Menu } from "lucide-react";
+import { Share2, EllipsisVertical } from "lucide-react";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -287,9 +286,38 @@ function MobileInner() {
         padding: "12px 16px", display: "flex", alignItems: "center",
         justifyContent: "space-between", flexShrink: 0, zIndex: 100,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <img src="/trafficoracle-light.png" alt="TraffiCOracle" style={{ height: 28, width: "auto" }} />
-          <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <img src="/trafficoracle-light.png" alt="TraffiCOracle" style={{ height: 28, width: "auto", display: "block" }} />
+          <svg
+            height={18}
+            viewBox="0 0 120 12"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ position: "absolute", bottom: -11, right: -15, overflow: "visible" }}
+          >
+            <rect
+              x={58}
+              y={3}
+              width={74}
+              height={12}
+              rx={0}
+              fill={thm.sectionBg}
+              stroke={thm.cardBorder}
+              strokeWidth={0.5}
+            />
+            <text
+              x={50}
+              y={10}
+              textAnchor="start"
+              fill={thm.textMuted}
+              fontSize={9}
+              fontFamily="var(--app-font-display), Inter, system-ui, sans-serif"
+              fontWeight={900}
+              letterSpacing="0.14em"
+            >
+              {selectedCity.toUpperCase()}
+            </text>
+          </svg>
         </div>
         <button
           onClick={() => setMenuOpen(o => !o)}
@@ -299,18 +327,48 @@ function MobileInner() {
           }}
           aria-label="Menu"
         >
-          <Menu size={20} />
+          <EllipsisVertical size={20} />
         </button>
       </header>
 
       {/* ── Simple menu overlay ─────────────────────────────── */}
       {menuOpen && (
         <div style={{
-          position: "absolute", top: 56, right: 8, zIndex: 200,
+          position: "absolute", top: 64, right: 8, zIndex: 200,
           background: thm.sectionBg, border: thm.cardBorder,
           borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
           padding: 8, minWidth: 200,
         }}>
+
+          {/* ── City selector ───────────────────────────────── */}
+          <p style={{ fontSize: 10, fontWeight: 600, color: thm.textMuted, margin: "6px 12px 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            City
+          </p>
+          {CITIES.map((city) => {
+            const hasData = !!city.data_source;
+            return (
+              <button
+                key={city.name}
+                onClick={() => { setSelectedCity(city.name); setMenuOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                  padding: "8px 12px", border: "none",
+                  background: selectedCity === city.name ? "rgba(128,128,128,0.15)" : "transparent",
+                  cursor: "pointer", fontSize: 13, color: thm.textPrimary, borderRadius: 8,
+                  fontWeight: selectedCity === city.name ? 600 : 400,
+                  opacity: hasData ? 1 : 0.55,
+                }}
+              >
+                <span style={{ fontSize: 10 }}>
+                  {selectedCity === city.name ? "●" : hasData ? "○" : "◌"}
+                </span>
+                <span>{city.name}</span>
+              </button>
+            );
+          })}
+
+          <div style={{ height: 1, background: thm.cardBorder, margin: "4px 8px" }} />
+
           <button onClick={handleShare} style={{
             display: "flex", alignItems: "center", gap: 8, width: "100%",
             padding: "10px 12px", border: "none", background: "transparent",

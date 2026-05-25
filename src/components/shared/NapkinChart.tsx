@@ -102,12 +102,7 @@ export default function NapkinChart({
           fill="none" stroke={RC} strokeWidth={recentW}
           strokeLinejoin="round" strokeLinecap="round" />
       )}
-      {hasGap && bLen > 0 && (
-        <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill={BL} />
-      )}
-      {hasGap && rLen > 0 && (
-        <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill={RC} />
-      )}
+
       {dateLabels && bLen > 0 && (<>
         <line x1={bXS} y1={toY(baselineWeeks[0].avgSpeed)} x2={bXS} y2={H}
           stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />

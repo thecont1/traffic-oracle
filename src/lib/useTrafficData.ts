@@ -598,10 +598,12 @@ async function fetchWeatherData(signal?: AbortSignal): Promise<Map<string, Weath
   return map;
 }
 
-export function useWeatherData(): Map<string, WeatherRow> {
+export function useWeatherData(paused?: boolean): Map<string, WeatherRow> {
   const [weatherMap, setWeatherMap] = useState<Map<string, WeatherRow>>(new Map());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inflightRef = useRef<AbortController | null>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   const load = useCallback((signal?: AbortSignal) => {
     fetchWeatherData(signal)
@@ -614,6 +616,7 @@ export function useWeatherData(): Map<string, WeatherRow> {
 
   const doPoll = useCallback(() => {
     if (typeof document !== "undefined" && document.hidden) return;
+    if (pausedRef.current) return;
     // Abort any in-flight request before starting a new one
     if (inflightRef.current) inflightRef.current.abort();
     const ctrl = new AbortController();
@@ -627,6 +630,14 @@ export function useWeatherData(): Map<string, WeatherRow> {
     inflightRef.current = ctrl;
     load(ctrl.signal);
 
+    // Don't start interval if paused
+    if (paused) {
+      return () => {
+        if (inflightRef.current) inflightRef.current.abort();
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      };
+    }
+
     const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
     intervalRef.current = setInterval(doPoll, intervalMs);
 
@@ -638,6 +649,7 @@ export function useWeatherData(): Map<string, WeatherRow> {
           intervalRef.current = null;
         }
       } else {
+        if (pausedRef.current) return;
         doPoll();
         intervalRef.current = setInterval(doPoll, intervalMs);
       }
@@ -649,7 +661,7 @@ export function useWeatherData(): Map<string, WeatherRow> {
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [load, doPoll]);
+  }, [load, doPoll, paused]);
 
   return weatherMap;
 }

@@ -336,7 +336,7 @@ function RouteCard({
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
 function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
-  const RAIL_WIDTH = 36;
+  const RAIL_WIDTH = 44;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);

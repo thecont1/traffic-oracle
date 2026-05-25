@@ -579,7 +579,7 @@ function MobileInner() {
                       <button key={g}
                         onClick={() => setChartGranularity(g)}
                         style={{
-                          padding: "4px 10px",
+                          padding: "10px 10px",
                           borderRadius: 6,
                           border: "none",
                           background: chartGranularity === g ? thm.cardBg : "transparent",

@@ -630,18 +630,8 @@ export function useWeatherData(paused?: boolean): Map<string, WeatherRow> {
     inflightRef.current = ctrl;
     load(ctrl.signal);
 
-    // Don't start interval if paused
-    if (paused) {
-      return () => {
-        if (inflightRef.current) inflightRef.current.abort();
-        document.removeEventListener("visibilitychange", onVisibilityChange);
-      };
-    }
-
     const intervalMs = (cfg.route_pane.polling_interval_min ?? 10) * 60 * 1000;
-    intervalRef.current = setInterval(doPoll, intervalMs);
 
-    // Page Visibility: pause when hidden, immediately poll when visible again
     const onVisibilityChange = () => {
       if (document.hidden) {
         if (intervalRef.current !== null) {
@@ -654,6 +644,15 @@ export function useWeatherData(paused?: boolean): Map<string, WeatherRow> {
         intervalRef.current = setInterval(doPoll, intervalMs);
       }
     };
+
+    // Don't start interval or listener if paused
+    if (paused) {
+      return () => {
+        if (inflightRef.current) inflightRef.current.abort();
+      };
+    }
+
+    intervalRef.current = setInterval(doPoll, intervalMs);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {

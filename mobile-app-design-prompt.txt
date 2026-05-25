@@ -1,0 +1,335 @@
+Execution rules:
+- Do not start coding immediately.
+- First inspect the codebase and summarize.
+- Then propose a stepwise plan.
+- Then wait for confirmation unless the path is obviously low-risk.
+- Prefer small commits/patches.
+- Preserve current behavior unless a requirement explicitly changes it.
+
+Assume you have access to the full repository. Use the real files and imports you find; do not invent placeholder filenames unless proposing a plan. Consult WARP.md in the repo root to quickly get onboard with the Architecture Overview, Project Structure, Common Commands and Rules.
+
+You are Xiaomi MiMo V2.5 Pro acting as a senior refactoring engineer and product-minded frontend architect.
+
+Your job is to refactor an existing web app called TraffiCOracle into:
+1. shared computation modules,
+2. a desktop UI shell,
+3. a separate mobile UI shell.
+
+You must preserve the app’s core simplicity.
+
+==================================================
+PROJECT REALITY — DO NOT VIOLATE THESE FACTS
+==================================================
+
+This app is intentionally lightweight.
+
+- There is NO backend.
+- There are NO API endpoints.
+- There is NO auth, database server, or cloud function.
+- The app downloads a single CSV file from GitHub.
+- All analytics happen on-device in the browser.
+- The app currently reports: "Traffic data loaded for Bangalore. 68,974 rows.".
+- The current UI includes:
+  - top app bar/header controls,
+  - route-specific interactive Question,
+  - comparative verdict,
+  - summary metrics,
+  - trend charts,
+  - Traffic NOW! live route explorer,
+  - helper/explanatory text,
+  - Time Travel / baseline-selection controls.
+
+You must respect the fact that this is a static, browser-based analytics app built around one CSV and local computation.
+
+Do NOT invent a backend.
+Do NOT add a server.
+Do NOT introduce unnecessary service/repository patterns.
+Do NOT recommend Flutter or native mobile frameworks.
+Do NOT overengineer.
+
+==================================================
+PRIMARY GOAL
+==================================================
+
+Refactor the app into a clean architecture with:
+
+A. SHARED CORE
+- CSV download/loading
+- schema normalization
+- city and route metadata extraction
+- question-state derivation
+- fixed/mobile and flexible/desktop period logic
+- analytics calculations
+- verdict generation
+- chart series generation
+- TrafficNOW! card data generation
+- formatting utilities
+- share capability helpers
+- refresh/loading state helpers
+
+B. DESKTOP UI SHELL
+- Preserve the current richer dashboard experience.
+- Keep existing analytical density and controls where feasible.
+- Avoid unnecessary UX changes during refactor.
+- Rewire desktop to consume shared core modules.
+
+C. MOBILE UI SHELL
+- This is NOT a responsive clone of desktop.
+- It is a deliberately reduced, route-led companion experience.
+
+==================================================
+MOBILE PRODUCT DECISIONS — TREAT AS REQUIREMENTS
+==================================================
+
+Mobile IA must be:
+
+1. Top app bar
+- logo
+- city selector
+- hamburger menu
+- no dedicated refresh button in the bar; refresh uses standard pull-to-refresh/browser refresh behavior
+
+2. Fixed top TrafficNOW! area
+- swipeable route cards
+- this is the main control in mobile
+- keep full route details visible at all times:
+  - route name
+  - origin
+  - destination
+  - qualitative traffic status
+  - current speed
+  - usual range
+  - weather
+  - AQI / air quality
+- adjacent cards may peek to indicate swiping
+- each swipe changes the selected route
+
+3. Main content below the fixed route cards
+- route-bound Question
+- verdict chart
+- speed/trip duration chart
+
+4. Mobile simplifications
+- NO Time Travel
+- NO baseline selector
+- NO auto-refresh
+- NO full desktop control density
+- baseline and recent periods are predetermined in mobile
+- swiping routes updates the Question, verdict, and charts
+- mobile analytics remain route-specific but simplified
+
+5. Loading behavior
+- use branded full-screen car animation on:
+  - initial page load
+  - manual refresh/page refresh
+- avoid background auto-refresh churn
+
+6. Sharing
+- support native share behavior on mobile using browser capabilities where available
+- use Web Share API with graceful fallback
+
+7. Chart presentation
+- verdict chart should feel visually open
+- remove unnecessary card border if present
+- use maximum horizontal space
+- allow the line plot to extend close to screen edges
+- supporting values can appear as compact legend/labels below
+
+==================================================
+DESKTOP PRODUCT DECISIONS — TREAT AS STABLE
+==================================================
+
+Desktop remains the fuller product.
+
+Keep or preserve as much as reasonably possible:
+- richer controls
+- Time Travel / baseline-selection workflow
+- route explorer richness
+- analytical detail
+- existing chart richness
+- existing main dashboard flow
+
+Desktop should consume the same shared analytics core as mobile.
+
+==================================================
+ENGINEERING APPROACH
+==================================================
+
+Your approach must be incremental, low-risk, and architecture-led.
+
+Perform work in this order:
+
+PHASE 1 — INSPECT
+- Inspect the repository structure first.
+- Identify:
+  - which code is pure computation,
+  - which code is CSV loading/parsing,
+  - which code is formatting/presentation shaping,
+  - which code is desktop-specific UI coupling,
+  - which code can be extracted without behavior change.
+- Summarize findings before major edits.
+
+PHASE 2 — PLAN
+- Propose the minimum safe refactor path.
+- Explain how shared modules will be organized.
+- Explain how desktop and mobile shells will consume shared view models.
+- Prefer a plan that keeps the app runnable at each step.
+
+PHASE 3 — EXTRACT SHARED CORE
+- Extract pure logic first.
+- Move business logic out of components.
+- Create reusable module boundaries around:
+  - CSV data loading
+  - row normalization
+  - filtering by city/route/time window
+  - period comparison logic
+  - verdict calculations
+  - chart data preparation
+  - TrafficNOW! card shaping
+  - formatting / labels / copy helpers
+
+PHASE 4 — DESKTOP REWIRE
+- Reconnect current desktop UI to shared modules.
+- Preserve current behavior as closely as possible.
+- Reduce coupling, but do not redesign desktop unnecessarily.
+
+PHASE 5 — MOBILE SHELL
+- Build a separate mobile shell or mobile-specific entry path.
+- Do NOT just crush desktop into breakpoints.
+- Mobile should have its own component structure and layout.
+- It must still use the same shared core.
+
+PHASE 6 — DOCUMENT
+- Add a short architecture note/README that explains:
+  - shared core
+  - desktop shell
+  - mobile shell
+  - how data flows from CSV to derived models to UI
+
+==================================================
+DESIGN / STATE PRINCIPLES
+==================================================
+
+- Prefer pure functions.
+- Prefer derived view models over raw row access inside components.
+- Prefer minimal and explicit state.
+- If TypeScript is already present, use strong typing/interfaces.
+- If the app is JS-only, keep functions small, named, and documented.
+- Avoid introducing heavyweight state management unless absolutely necessary.
+- No duplicate analytics logic between desktop and mobile.
+- No duplicated route interpretation logic.
+- No duplicated chart derivation logic.
+
+==================================================
+SUGGESTED TARGET STRUCTURE
+==================================================
+
+Use this only if it fits the actual repo; adapt if needed.
+
+src/
+  core/
+    data/
+      loadCsv.*
+      normalizeRows.*
+      schema.*
+    domain/
+      routes.*
+      cities.*
+      questionModel.*
+      periodLogic.*
+      analytics.*
+      verdicts.*
+      trafficNow.*
+      charts.*
+    utils/
+      format.*
+      share.*
+      loading.*
+  desktop/
+    components/
+    pages/
+    hooks/
+    desktopApp.*
+  mobile/
+    components/
+    pages/
+    hooks/
+    mobileApp.*
+  app/
+    bootstrap.*
+    environment.*
+    shellSelection.*
+  docs/
+    architecture.md
+
+If the real project structure suggests a better equivalent, use that instead.
+
+==================================================
+EXPECTED DELIVERABLES
+==================================================
+
+You must produce:
+
+1. An architecture assessment of the current codebase.
+2. A refactor plan with sequencing.
+3. The actual code changes.
+4. A clear separation of shared computation from UI code.
+5. A preserved desktop shell.
+6. A dedicated mobile shell.
+7. A short architecture document.
+8. A final summary of:
+   - what was extracted,
+   - what remains desktop-specific,
+   - how mobile consumes shared logic,
+   - any risks or deferred improvements.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+The refactor is successful if:
+
+- the app remains static and browser-based,
+- there is still no backend,
+- desktop still works,
+- mobile is not a cramped desktop clone,
+- one shared analytics engine powers both UIs,
+- route swipe in mobile drives Question + verdict + charts,
+- Time Travel and baseline selection are absent from mobile,
+- loading and sharing behaviors are appropriate for mobile,
+- the new codebase is easier to reason about than before.
+
+==================================================
+IMPORTANT FAILURE MODES TO AVOID
+==================================================
+
+Do NOT:
+- invent backend abstractions,
+- add unnecessary global stores,
+- create duplicate logic for mobile vs desktop analytics,
+- convert the project into a framework migration unless absolutely necessary,
+- rebuild everything from scratch without first extracting what already works,
+- optimize for theoretical scalability over present simplicity,
+- turn mobile into a feature-parity copy of desktop.
+
+==================================================
+WORKING STYLE
+==================================================
+
+Before editing:
+1. inspect the repo,
+2. describe the existing structure,
+3. propose the minimum safe refactor path.
+
+Then proceed incrementally.
+Keep the app runnable after each major step.
+When uncertain, choose the simpler design.
+Respect the product constraints.
+Respect the current working app.
+
+Now begin by inspecting the repository and summarizing:
+- current structure,
+- major logic boundaries,
+- likely extraction points,
+- safest implementation sequence.
+

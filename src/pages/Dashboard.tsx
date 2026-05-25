@@ -27,25 +27,25 @@ import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandCha
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
+// ── Shared core modules ──────────────────────────────────────────
+import { fmtWeek, fmtDate, fmtDuration, weeklyAvg } from "@/core/format";
+import { PERIOD_LIST, TOD_LIST, VERDICT, deriveVerdict } from "@/core/constants";
+import type { VerdictKey, DataTrend } from "@/core/constants";
+import { computeAllRouteCards } from "@/core/trafficNow";
+import type { RouteCardData } from "@/core/trafficNow";
+import { readUrlParams } from "@/core/urlState";
+import { computeCutoffDate, computeBaselineAndRecent, computeSpeedDiff } from "@/core/periodLogic";
+
+// ── Shared UI components ────────────────────────────────────────
+import LocationDropdown from "@/components/shared/LocationDropdown";
+import Chip from "@/components/shared/Chip";
+import NapkinChart from "@/components/shared/NapkinChart";
+import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
+import Route404 from "@/components/shared/Route404";
+
 const cfg = appConfig as AppConfig;
+const CITIES = cfg.cities;
 
-/* ── Filter options ───────────────────────────────────────────── */
-const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
-  { value:"1m",   label:"1 month" },
-  { value:"1.5m", label:"1½ months" },
-  { value:"2m",   label:"2 months" },
-  { value:"3m",   label:"3 months" },
-  { value:"6m",   label:"6 months" },
-];
-const TOD_LIST: { value: TimeOfDay; label: string }[] = [
-  { value:"weekday_morning",   label:"weekday mornings (8–12)" },
-  { value:"weekday_afternoon", label:"weekday afternoons (12–18)" },
-  { value:"weekday_evening",   label:"weekday evenings (18–22)" },
-  { value:"weekends",          label:"weekends (all day)" },
-  { value:"all",               label:"any time of day" },
-];
-
-/* ── Mobile detection ─────────────────────────────────────────── */
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -58,247 +58,10 @@ function useIsMobile() {
   return isMobile;
 }
 
-/* ── URL param helpers ────────────────────────────────────────── */
-function readUrlParams() {
-  if (typeof window === "undefined") return {} as Record<string, string | number>;
-  const p = new URLSearchParams(window.location.search);
-  const out: Record<string, string | number> = {};
-  if (p.has("city"))   out.city   = p.get("city")!;
-  if (p.has("route"))  out.route  = p.get("route")!;
-  if (p.has("tod"))    out.tod    = p.get("tod")!;
-  if (p.has("period")) out.period = p.get("period")!;
-  if (p.has("mode"))   out.mode   = p.get("mode")!;
-  if (p.has("theme"))  out.theme  = p.get("theme")!;
-  if (p.has("bl"))     out.bl     = Number(p.get("bl"));
-  if (p.has("br"))     out.br     = Number(p.get("br"));
-  if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));
-  if (p.has("aggregation")) out.aggregation = p.get("aggregation")!;
-  if (p.has("metric")) out.metric = p.get("metric")!;
-  if (p.has("tt"))     out.tt     = p.get("tt")!;
-  return out;
-}
 const URL_PARAMS = readUrlParams();
 
-/* ── Helpers ──────────────────────────────────────────────────── */
-function fmtWeek(s: string) {
-  try { return new Date(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"}); } catch { return s; }
-}
-function fmtDate(s?: string) {
-  if (!s) return "—";
-  try {
-    const d = new Date(s);
-    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-    return `${d.getDate()} ${mon} '${String(d.getFullYear()).slice(2)}`;
-  } catch { return s; }
-}
 const fmtSliderDate = fmtDate;
 const fmtShortDate  = fmtDate;
-function fmtDuration(min: number) {
-  if (!min) return "—";
-  if (min < 60) return `${min.toFixed(0)} min`;
-  const h = Math.floor(min/60), m = Math.round(min%60);
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-function weeklyAvg(weeks: {avgSpeed:number}[], key:"avgSpeed") : number;
-function weeklyAvg(weeks: {avgDuration:number}[], key:"avgDuration") : number;
-function weeklyAvg(weeks: Record<string,number>[], key: string): number {
-  if (!weeks.length) return 0;
-  return Math.round((weeks.reduce((a,b) => a + (b[key] as number), 0) / weeks.length) * 10) / 10;
-}
-
-/* ── Recharts tooltip ─────────────────────────────────────────── */
-function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMuted:string; cardBg:string; cardBorder:string }, view: 'speed' | 'duration' = 'speed') {
-  // Desired order: Best → Avg → Worst
-  const SPEED_ORDER = ["Best", "Avg Speed", "Worst"];
-  const DURATION_ORDER = ["Best", "Avg Duration", "Worst"];
-  const order = view === 'speed' ? SPEED_ORDER : DURATION_ORDER;
-
-  // Technical labels for the tooltip
-  const techLabel: Record<string, string> = {
-    "Best": view === 'speed' ? "Best" : "Best",
-    "Worst": view === 'speed' ? "Worst" : "Worst",
-    "Avg Speed": "Avg Speed",
-    "Avg Duration": "Avg Duration",
-  };
-
-  return (props: any) => {
-    const { active, payload, label } = props ?? {};
-    if (!active || !payload?.length) return null;
-    // Tooltip always has white/light background, so use dark text colors
-    const tp = "#2B2924"; // dark primary
-    const ts = "#6E675B"; // dark secondary
-
-    // Format weekKey (ISO date string) as "20 May 2026"
-    let dateLabel = label;
-    try {
-      const d = new Date(label);
-      if (!isNaN(d.getTime())) {
-        dateLabel = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-      }
-    } catch { /* keep original */ }
-
-    // Sort payload by desired order
-    const sorted = [...payload].sort((a: any, b: any) => {
-      const ai = order.indexOf(a.name);
-      const bi = order.indexOf(b.name);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    });
-
-    const unit = view === 'speed' ? 'km/h' : 'min';
-    return (
-      <div style={{ background:"rgba(255,255,255,0.97)", border:`1px solid ${thm?.cardBorder ?? "hsl(var(--border))"}`,
-        borderRadius:12, padding:"10px 14px", fontSize:13, boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
-        <p style={{ fontWeight:700, marginBottom:6, color:tp }}>{dateLabel}</p>
-        {sorted.map((p: any) => (
-          <div key={p.name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
-            <span style={{ width:8, height:8, borderRadius:"50%", background:p.color, flexShrink:0 }} />
-            <span style={{ color:ts }}>{techLabel[p.name] ?? p.name}:</span>
-            <span style={{ fontWeight:600, color:tp }}>
-              {view === 'speed' ? `${p.value} ${unit}` : fmtDuration(p.value)}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-}
-
-/* ── Chips ─────────────────────────────────────────────────────── */
-function Chip({ children, icon, variant, onClick, animate, inert }: {
-  children:React.ReactNode; icon:string; variant:ChipVariant;
-  onClick:()=>void; animate?:boolean; inert?:boolean;
-}) {
-  const { theme: thm } = useTheme();
-  const tok = thm.chips[variant];
-  const styleOverride: React.CSSProperties | undefined = thm.key !== "colour" ? {
-    background: tok.bg,
-    color:      tok.color,
-    border:     `1.5px solid ${tok.border}`,
-    boxShadow:  tok.shadow,
-  } : undefined;
-
-  return (
-    <button
-      className={`chip chip-${variant} ${animate?"animate-pop":""}`}
-      onClick={inert ? undefined : onClick}
-      title={inert ? "Multi-city support coming soon" : "Tap to explore differently"}
-      style={inert ? { cursor:"default", opacity:0.9, display:"flex", alignItems:"center", gap:6, padding:"6px 44px", ...styleOverride } : { display:"flex", alignItems:"center", gap:6, padding:"4px 34px", ...styleOverride }}
-    >
-      <span>{icon}</span>{children}
-    </button>
-  );
-}
-
-/* ── Location Dropdown ─────────────────────────────────────────── */
-const CITIES = cfg.cities;
-
-function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; selectedCity: string; onCityChange: (name: string) => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Close when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-    return undefined;
-  }, [isOpen]);
-  
-  const tok = thm.chips.city;
-  const styleOverride: React.CSSProperties = thm.key !== "colour" ? {
-    background: tok.bg,
-    color: tok.color,
-    border: `1.5px solid ${tok.border}`,
-    boxShadow: tok.shadow,
-  } : {
-    background: "rgba(255,255,255,0.15)",
-    color: thm.textPrimary,
-    border: "1.5px solid rgba(255,255,255,0.3)",
-  };
-  
-  return (
-    <div ref={dropdownRef} style={{ position: "relative" }}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-        style={{
-          height: 44,
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "0 12px",
-          borderRadius: 9999,
-          cursor: "pointer",
-          fontSize: 12,
-          fontWeight: 600,
-          fontFamily: "var(--app-font-display)",
-          ...styleOverride,
-        }}
-      >
-        <span>📍</span>
-        <span>{selectedCity}</span>
-        <span style={{ 
-          marginLeft: 2, 
-          fontSize: 10,
-          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-          transition: "transform 0.2s",
-        }}>▼</span>
-      </button>
-      
-      {isOpen && (
-        <div style={{
-          position: "absolute",
-          top: "calc(100% + 4px)",
-          left: 0,
-          minWidth: 140,
-          background: thm.sectionBg,
-          border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
-          borderRadius: 8,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          padding: "4px 0",
-          zIndex: 1000,
-        }}>
-          {CITIES.map((city) => {
-            const hasData = !!city.data_source;
-            return (
-              <button
-                key={city.name}
-                onClick={() => { onCityChange(city.name); setIsOpen(false); }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  width: "100%",
-                  padding: "8px 12px",
-                  minHeight: 44,
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: city.name === selectedCity ? 700 : 400,
-                  color: hasData ? thm.textPrimary : thm.textMuted,
-                  opacity: hasData ? 1 : 0.55,
-                  textAlign: "left",
-                }}
-              >
-                <span style={{ fontSize: 10 }}>
-                  {city.name === selectedCity ? "●" : hasData ? "○" : "◌"}
-                </span>
-                <span>{city.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ── Sparkles ─────────────────────────────────────────────────── */
 function Sparkles() {
@@ -312,153 +75,6 @@ function Sparkles() {
         }}>{e}</span>
       ))}
     </div>
-  );
-}
-
-/* ── Napkin chart — baseline / gap / recent ───────────────────── */
-function NapkinChart({
-  baselineWeeks, recentWeeks, height = 120, dateLabels,
-}: {
-  baselineWeeks: WeeklyAggregate[];
-  recentWeeks:   WeeklyAggregate[];
-  height?: number;
-  dateLabels?: { bStart: string; bEnd: string; rStart: string; rEnd: string };
-}) {
-  const { theme: thm } = useTheme();
-
-  /* measure actual rendered width so coordinates scale to fit exactly */
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [W, setW] = useState(500);
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width;
-      if (w && w > 0) setW(Math.round(w));
-    });
-    obs.observe(el);
-    const init = el.getBoundingClientRect().width;
-    if (init > 0) setW(Math.round(init));
-    return () => obs.disconnect();
-  }, []);
-
-  const bLen = baselineWeeks.length;
-  const rLen = recentWeeks.length;
-  if (bLen + rLen < 2) return null;
-
-  const allSpeeds = [
-    ...baselineWeeks.map(w => w.avgSpeed),
-    ...recentWeeks.map(w => w.avgSpeed),
-  ].filter(s => s > 0);
-  if (allSpeeds.length < 2) return null;
-
-  const minS = Math.min(...allSpeeds);
-  const maxS = Math.max(...allSpeeds);
-  const range = maxS - minS || 1;
-
-  const H = height;
-  const PX = 0, PY = 8;
-  const chartW = W - PX * 2;
-  const chartH = H - PY * 2;
-  const LABEL_H = dateLabels ? 18 : 0;
-  const totalH  = H + LABEL_H;
-
-  const hasGap = bLen > 0 && rLen > 0;
-
-  const allWeeks = [...baselineWeeks, ...recentWeeks];
-  const t0 = new Date(allWeeks[0].weekKey).getTime();
-  const t1 = new Date(allWeeks[allWeeks.length - 1].weekKey).getTime();
-  const tSpan = t1 - t0 || 1;
-  const toX = (wk: string) => PX + ((new Date(wk).getTime() - t0) / tSpan) * chartW;
-
-  const bXS = toX(baselineWeeks[0].weekKey);
-  const bXE = toX(baselineWeeks[bLen - 1].weekKey);
-  const rXS = hasGap ? toX(recentWeeks[0].weekKey) : PX;
-  const rXE = W - PX;
-
-  const toY = (s: number) => PY + chartH - ((s - minS) / range) * chartH;
-
-  // Calculate averages for horizontal reference lines
-  const baselineAvg = bLen > 0
-    ? baselineWeeks.reduce((sum, w) => sum + w.avgSpeed, 0) / bLen
-    : 0;
-  const recentAvg = rLen > 0
-    ? recentWeeks.reduce((sum, w) => sum + w.avgSpeed, 0) / rLen
-    : 0;
-
-  const pts = (weeks: WeeklyAggregate[]) =>
-    weeks.length === 1
-      ? `${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)} ${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)}`
-      : weeks.map(w => `${toX(w.weekKey).toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`).join(" ");
-
-  const { baseline: BL, recent: RC, gap: GAP } = thm.napkin;
-  const labelY = H + 13;
-
-  /* stroke weight: gray theme uses weight to distinguish avg vs baseline */
-  const baselineW = thm.key === "gray" ? 2 : 3.5;
-  const recentW   = thm.key === "gray" ? 3.5 : 3.5;
-
-  return (
-    <svg ref={svgRef}
-      role="img"
-      viewBox={`0 0 ${W} ${totalH}`}
-      style={{ width:"100%", height:totalH, display:"block", overflow: "visible" }}
-      overflow="visible"
-      preserveAspectRatio="xMidYMid meet">
-      <title>Traffic speed trend chart</title>
-      <desc>Line chart comparing baseline period speeds with recent speeds for the selected route.</desc>
-      {bLen > 0 && (
-        <polyline points={pts(baselineWeeks)}
-          fill="none" stroke={BL} strokeWidth={baselineW}
-          strokeLinejoin="round" strokeLinecap="round" />
-      )}
-      {rLen > 0 && (
-        <polyline points={pts(recentWeeks)}
-          fill="none" stroke={RC} strokeWidth={recentW}
-          strokeLinejoin="round" strokeLinecap="round" />
-      )}
-      {hasGap && bLen > 0 && (
-        <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill={BL} />
-      )}
-      {hasGap && rLen > 0 && (
-        <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill={RC} />
-      )}
-      {dateLabels && bLen > 0 && (<>
-        <line x1={bXS} y1={toY(baselineWeeks[0].avgSpeed)} x2={bXS} y2={H}
-          stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={bXS} y={labelY} fontSize={9} fill={BL} opacity={0.8}
-          textAnchor="start">{dateLabels.bStart}</text>
-        <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)} x2={bXE} y2={H}
-          stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={bXE} y={labelY} fontSize={9} fill={BL} opacity={0.8}
-          textAnchor="end">{dateLabels.bEnd}</text>
-      </>)}
-      {dateLabels && rLen > 0 && (<>
-        <line x1={rXS} y1={toY(recentWeeks[0].avgSpeed)} x2={rXS} y2={H}
-          stroke={RC} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={rXS} y={labelY} fontSize={9} fill={RC} opacity={0.8}
-          textAnchor="start">{dateLabels.rStart}</text>
-        <line x1={rXE} y1={toY(recentWeeks[rLen - 1].avgSpeed)} x2={rXE} y2={H}
-          stroke={RC} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={rXE} y={labelY} fontSize={9} fill={RC} opacity={0.8}
-          textAnchor="end">{dateLabels.rEnd}</text>
-      </>)}
-
-      {/* Horizontal average reference lines */}
-      {bLen > 0 && baselineAvg > 0 && (
-        <line x1={bXS} y1={toY(baselineAvg)} x2={bXE} y2={toY(baselineAvg)}
-          stroke={BL} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.7} />
-      )}
-      {rLen > 0 && recentAvg > 0 && (
-        <line x1={rXS} y1={toY(recentAvg)} x2={rXE} y2={toY(recentAvg)}
-          stroke={RC} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.7} />
-      )}
-      {/* Connector between average lines */}
-      {hasGap && bLen > 0 && rLen > 0 && baselineAvg > 0 && recentAvg > 0 && (
-        <line x1={bXE} y1={toY(baselineAvg)} x2={rXS} y2={toY(recentAvg)}
-          stroke={GAP} strokeWidth={2} strokeDasharray="6 4" />
-      )}
-    </svg>
   );
 }
 
@@ -798,191 +414,6 @@ function CalendarWidget({
   );
 }
 
-/* ── Traffic NOW! live overview panel ──────────────────────────── */
-type LiveStatus = 'unusually-fast' | 'faster' | 'as-expected' | 'slower' | 'unusually-slower' | 'no-data';
-
-// Statistics for a route's typical behavior at a given time-of-day
-// Uses percentiles (industry standard) instead of std dev because traffic data is skewed
-interface RouteTODStats {
-  p05: number;
-  p10: number;
-  p15: number;
-  p50: number;
-  p85: number;
-  p90: number;
-  p95: number;
-  count: number;
-}
-
-interface RouteCardData {
-  label: string;
-  origin: string;
-  destination: string;
-  // Live current reading
-  liveSpeed: number | null;
-  prevSpeed: number | null; // Second-most-recent reading, for trend animation
-  liveTimestamp: Date | null;
-  // Typical stats for this time-of-day (±90 min window over 90 days)
-  typical: RouteTODStats | null;
-  // Where this route falls on the city-wide range (for positioning)
-  cityMin: number; // Slowest route in the city right now
-  cityMax: number; // Fastest route in the city right now
-  // Verdict
-  status: LiveStatus;
-  statusText: string; // "much faster", "faster", "as expected", "slower", "much slower", "no data"
-  // Stable sorting
-  sortKey: string;
-  // Weather snapshot
-  weather?: WeatherRow;
-}
-
-/** Compute live status based on percentiles - industry standard for traffic */
-function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | null): { status: LiveStatus; statusText: string } {
-  if (liveSpeed === null || typical === null) {
-    return { status: 'no-data', statusText: 'no data' };
-  }
-  if (liveSpeed >= typical.p95) return { status: 'unusually-fast', statusText: 'unusually fast' };
-  if (liveSpeed >= typical.p85) return { status: 'faster', statusText: 'faster than typical' };
-  if (liveSpeed > typical.p15)  return { status: 'as-expected', statusText: 'typical' };
-  if (liveSpeed >= typical.p05) return { status: 'slower', statusText: 'slower than typical' };
-  return { status: 'unusually-slower', statusText: 'unusually slow' };
-}
-
-/** Compute TOD statistics from historical data within ±90 min window over 90 days */
-function computeTODStats(
-  routeRows: TrafficRow[],
-  referenceTime: Date,
-  daysBack: number = 90,
-  windowMinutes: number = 90,
-): RouteTODStats | null {
-  const cutoff = new Date(referenceTime.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  const refHour = referenceTime.getHours();
-  const refMin = referenceTime.getMinutes();
-  const refTimeVal = refHour * 60 + refMin;
-  
-  // Filter to rows within ±windowMinutes of the reference time
-  const relevantRows = routeRows.filter(r => {
-    if (r.timestamp < cutoff) return false;
-    const rowHour = r.timestamp.getHours();
-    const rowMin = r.timestamp.getMinutes();
-    const rowTimeVal = rowHour * 60 + rowMin;
-    // Handle wraparound at midnight
-    let diff = Math.abs(rowTimeVal - refTimeVal);
-    if (diff > 720) diff = 1440 - diff; // Adjust for crossing midnight
-    return diff <= windowMinutes;
-  });
-  
-  if (relevantRows.length < 3) return null;
-  
-  // Sort speeds for percentile calculation
-  const speeds = relevantRows.map(r => r.speed_kmh).sort((a, b) => a - b);
-  const n = speeds.length;
-  
-  // Percentile calculation using linear interpolation
-  const percentile = (p: number) => {
-    const idx = (p / 100) * (n - 1);
-    const lower = Math.floor(idx);
-    const upper = Math.ceil(idx);
-    const weight = idx - lower;
-    if (upper >= n) return speeds[n - 1];
-    return speeds[lower] * (1 - weight) + speeds[upper] * weight;
-  };
-  
-  return {
-    p05: percentile(5),
-    p10: percentile(10),
-    p15: percentile(15),
-    p50: percentile(50),  // Median
-    p85: percentile(85),
-    p90: percentile(90),
-    p95: percentile(95),
-    count: n,
-  };
-}
-
-function computeAllRouteCards(
-  allRows: TrafficRow[],
-  routeOptions: string[],
-  routes: { label_short: string; label_full: string; route_code?: string }[],
-  weatherMap?: Map<string, WeatherRow>,
-): RouteCardData[] {
-  // Find the most recent data timestamp across all routes
-  const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
-  const lastDataDate = lastTs ? new Date(lastTs) : new Date();
-  const ninetyDaysAgo = new Date(lastDataDate.getTime() - 90 * 24 * 60 * 60 * 1000);
-  
-  // First pass: compute all route data
-  const preliminaryCards = routeOptions.map((label) => {
-    const routeRows = allRows.filter(r => r.label_short === label);
-    
-    // Extract origin/destination
-    const labelFull = routes.find(r => r.label_short === label)?.label_full ?? label;
-    const arrowIdx = labelFull.indexOf("→");
-    const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
-    const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
-    
-    // Get most recent reading (live speed) and the one before it (for trend)
-    const recentRows = routeRows.filter(r => r.timestamp >= ninetyDaysAgo);
-    const sorted = recentRows.slice().sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    const mostRecent = sorted[0] ?? null;
-    const prevReading = sorted[1] ?? null;
-    const liveSpeed = mostRecent ? mostRecent.speed_kmh : null;
-    const prevSpeed = prevReading ? prevReading.speed_kmh : null;
-    const liveTimestamp = mostRecent ? mostRecent.timestamp : null;
-    
-    // Compute typical stats for this TOD (±90 min over 90 days)
-    const typical = computeTODStats(routeRows, lastDataDate, 90, 90);
-    
-    return {
-      label, origin, destination,
-      liveSpeed, prevSpeed, liveTimestamp, typical,
-      sortKey: label.toLowerCase(),
-    };
-  });
-  
-  // Second pass: compute city-wide min/max from live speeds AND typical ranges
-  const liveSpeeds = preliminaryCards
-    .map(c => c.liveSpeed)
-    .filter((s): s is number => s !== null);
-  const cityMin = liveSpeeds.length > 0 ? Math.min(...liveSpeeds) : 0;
-  const cityMax = liveSpeeds.length > 0 ? Math.max(...liveSpeeds) : 80;
-  
-  // Also consider p05/p95 from all routes' typical data so bars never overflow
-  const allP05 = preliminaryCards.map(c => c.typical?.p05).filter((v): v is number => v != null);
-  const allP95 = preliminaryCards.map(c => c.typical?.p95).filter((v): v is number => v != null);
-  const typicalMin = allP05.length > 0 ? Math.min(...allP05) : cityMin;
-  const typicalMax = allP95.length > 0 ? Math.max(...allP95) : cityMax;
-  
-  // Scale encompasses live speeds + typical ranges, with 1 km/h padding
-  const effectiveMin = Math.min(cityMin, typicalMin) - 1;
-  const effectiveMax = Math.max(cityMax, typicalMax) + 1;
-  
-  // Final pass: compute status and build final cards
-  const cards: RouteCardData[] = preliminaryCards.map(card => {
-    const { status, statusText } = computeLiveStatus(card.liveSpeed, card.typical);
-    const routeObj = routes.find(r => r.label_short === card.label);
-    const weather = routeObj?.route_code ? weatherMap?.get(routeObj.route_code) : undefined;
-    
-    return {
-      label: card.label,
-      origin: card.origin,
-      destination: card.destination,
-      liveSpeed: card.liveSpeed,
-      prevSpeed: card.prevSpeed,
-      liveTimestamp: card.liveTimestamp,
-      typical: card.typical,
-      cityMin: effectiveMin,
-      cityMax: effectiveMax,
-      status,
-      statusText,
-      sortKey: card.sortKey,
-      weather,
-    };
-  });
-  
-  return cards;
-}
-
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
 function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
@@ -1078,6 +509,13 @@ function DashboardInner() {
   );
   const citySource = selectedCityConfig.data_source;
 
+  // Sync selectedCity to URL so shell switch (mobile ↔ desktop) preserves the city
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    p.set("city", selectedCity);
+    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
+  }, [selectedCity]);
+
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {
     const i = PERIOD_LIST.findIndex(p => p.value === URL_PARAMS.period);
@@ -1108,7 +546,7 @@ function DashboardInner() {
   }, []);
 
   /* slider */
-  const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,0]);
+  const [sliderVals,  setSliderVals]  = useState<[number,number]>([0,1]);
   const [sliderManuallySet, setSliderManuallySet] = useState(false);
   const [showSparkle, setShowSparkle] = useState(false);
   const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -1144,51 +582,99 @@ function DashboardInner() {
   const [showIntro, setShowIntro] = useState(true); /* hides cards until car finishes */
   const [showCar,   setShowCar]   = useState(true); /* keeps car visible until cards are in */
   const [loadPct,   setLoadPct]   = useState(0);    /* 0-100 counter shown during car */
+  const [carReady,  setCarReady]  = useState(false); /* true once trackW measured & timer started */
+  const [carFading, setCarFading] = useState(false); /* true during 400ms fade-out after reveal */
   const [settledCity, setSettledCity] = useState<string | null>(null);
   const [paneOpen,  setPaneOpen]  = useState(() => {
     try { const s = localStorage.getItem("to:paneOpen"); if (s !== null) return s === "1"; } catch {}
     return cfg.route_pane.open ?? true;
   });
   const willReopenPane = useRef(false);
+  const animStarted = useRef(false); /* guard: start timers exactly once per city switch */
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   /* Sync reset before paint — prevents one-frame card flash on city switch */
   useLayoutEffect(() => {
     setShowIntro(true);
     setShowCar(!!citySource);
+    setLoadPct(0);
+    setCarReady(false);
+    setCarFading(false);
     setSettledCity(citySource ? null : selectedCity);
+    animStarted.current = false; /* allow animation to start for this city */
     if (!citySource) {
       setPaneOpen(false);
       willReopenPane.current = false;
     }
   }, [selectedCity]);
 
+  /* ── Car animation timer — fires once trackW is measured (slider DOM exists) ──
+     trackW becomes > 0 only after data loads and the slider renders.
+     The car then starts from the left thumb and races to the right thumb.
+     Sequence:
+       0 ms  : car appears at left thumb, counter at 0%
+       2500ms: counter hits 100%, cards begin revealing (showIntro → false)
+       3150ms: car fades out, pane reopens, settledCity set
+  ── */
+  /* trackWReadyRef: mirrors trackW so the animation effect can read the latest
+     value without adding trackW to deps (which would cancel timers on resize). */
+  const trackWReadyRef = useRef(0);
+  trackWReadyRef.current = trackW;
+
   useEffect(() => {
-    if (!citySource) return; /* no animation for no-data cities */
+    if (!citySource) return;
 
-    setLoadPct(0);
-    const start = performance.now();
-    const DURATION = 2500;
-    let raf: number;
-    const tick = (now: number) => {
-      const pct = Math.min(100, Math.round(((now - start) / DURATION) * 10) * 10);
-      setLoadPct(pct);
-      if (pct < 100) { raf = requestAnimationFrame(tick); }
+    /* Poll until the slider DOM is measured AND real data is loaded,
+       then start exactly once. */
+    let pollRaf: number;
+    const waitForTrack = () => {
+      if (animStarted.current) return; /* already started */
+      if (trackWReadyRef.current <= 0 || loadingRef.current || rowCountRef.current === 0 || routeWeeksRef.current <= 1) {
+        pollRaf = requestAnimationFrame(waitForTrack);
+        return;
+      }
+      /* Track is measured and data is loaded — kick off the animation. */
+      animStarted.current = true;
+      setCarReady(true);
+
+      const DURATION = 1200;
+      const start = performance.now();
+      let raf: number;
+      const tick = (now: number) => {
+        /* Step counter in multiples of 5 */
+        const raw = Math.min(100, ((now - start) / DURATION) * 100);
+        const pct = Math.min(100, Math.ceil(raw / 5) * 5);
+        setLoadPct(pct);
+        if (raw < 100) { raf = requestAnimationFrame(tick); }
+      };
+      raf = requestAnimationFrame(tick);
+
+      /* Retract pane invisibly, remember whether to reopen */
+      try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
+      setPaneOpen(false);
+
+      /* 1.2s: reveal cards (car still visible, parked at right thumb)
+         1.6s: fade car out (CSS transition on opacity)
+         1.9s: React removes car node, reopen pane */
+      const t1 = setTimeout(() => setShowIntro(false), 1200);
+      const t2 = setTimeout(() => setCarFading(true), 1600);
+      const t3 = setTimeout(() => {
+        setShowCar(false);
+        setCarFading(false);
+        setSettledCity(selectedCity);
+        if (willReopenPane.current) setPaneOpen(true);
+      }, 1900);
+
+      /* Store cleanup refs on the outer scope so the effect cleanup can reach them */
+      cleanupRef.current = () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     };
-    raf = requestAnimationFrame(tick);
-
-    /* Retract pane invisibly, remember whether to reopen */
-    try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
-    setPaneOpen(false);
-
-    /* Reveal cards at 2.5s, finish animation at 3.15s, then reopen pane if needed */
-    const t1 = setTimeout(() => setShowIntro(false), 2500);
-    const t2 = setTimeout(() => {
-      setShowCar(false);
-      setSettledCity(selectedCity);
-      if (willReopenPane.current) setPaneOpen(true);
-    }, 2500 + 650);
-    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); };
-  }, [selectedCity]); /* re-run on every city switch */
+    pollRaf = requestAnimationFrame(waitForTrack);
+    return () => {
+      cancelAnimationFrame(pollRaf);
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+  }, [citySource, selectedCity]); /* stable deps — trackW read via ref */
 
   /* Zoom control — steps hardcoded; no longer read from config.json */
   const ZOOM_STEPS = [0.80, 0.90, 1.00, 1.10, 1.20];
@@ -1409,6 +895,15 @@ function DashboardInner() {
 
   /* ── Slider ─────────────────────────────────────────────────── */
   const allRouteWeeks = useAllRouteWeeks(ttAllRows, selectedRoute, tod);
+
+  /* refs that mirror data state so the animation effect can read them
+     without adding them to deps (which would cancel timers). */
+  const loadingRef = useRef(false);
+  loadingRef.current = loading;
+  const rowCountRef = useRef(0);
+  rowCountRef.current = rowCount;
+  const routeWeeksRef = useRef(0);
+  routeWeeksRef.current = allRouteWeeks.length;
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
@@ -1942,7 +1437,7 @@ function DashboardInner() {
                 height={32}
                 style={{ height:32, width:"auto", flexShrink:0 }}
               />
-              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} />
+              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
             </div>
 
             {/* Right: Time Travel + Theme + Share + Zoom */}
@@ -2311,7 +1806,6 @@ function DashboardInner() {
             overflowY: "auto",
             position: "relative",
           }}>
-
           {/* ── City 404 overlay — only after animation settles on this city ── */}
           {!citySource && settledCity === selectedCity && (
             <div style={{
@@ -2319,69 +1813,9 @@ function DashboardInner() {
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "2rem",
               background: thm.paneBg,
-              animation: "cards-reveal 0.5s ease both",
+              animation: "cards-reveal 0.4s ease both",
             }}>
-              <div style={{
-                maxWidth: 480,
-                textAlign: "center",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "1.25rem",
-              }}>
-                {/* Route logo */}
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"
-                  style={{ width: 224, height: 224, fill: thm.textMuted, flexShrink: 0 }}>
-                  <path d="M 263.93798449612405 3.9689922480620154 Q 256 0 248.06201550387595 3.9689922480620154 L 227.2248062015504 16.868217054263567 L 227.2248062015504 16.868217054263567 Q 202.41860465116278 30.75968992248062 175.62790697674419 31.751937984496124 Q 147.84496124031008 33.736434108527135 123.03875968992249 20.837209302325583 Q 109.14728682170542 13.891472868217054 95.25581395348837 17.86046511627907 Q 81.36434108527132 20.837209302325583 72.43410852713178 32.74418604651163 L 48.62015503875969 64.49612403100775 L 48.62015503875969 64.49612403100775 Q 31.751937984496124 88.31007751937985 45.64341085271318 113.11627906976744 Q 65.48837209302326 148.8372093023256 65.48837209302326 190.51162790697674 L 65.48837209302326 203.4108527131783 L 65.48837209302326 203.4108527131783 Q 65.48837209302326 237.14728682170542 52.58914728682171 267.90697674418607 L 41.674418604651166 296.6821705426357 L 41.674418604651166 296.6821705426357 Q 33.736434108527135 316.52713178294573 33.736434108527135 338.3565891472868 Q 33.736434108527135 371.1007751937984 51.5968992248062 397.8914728682171 Q 68.46511627906976 424.6821705426357 98.23255813953489 438.5736434108527 L 249.05426356589146 509.0232558139535 L 249.05426356589146 509.0232558139535 Q 256 512 262.94573643410854 509.0232558139535 L 413.7674418604651 438.5736434108527 L 413.7674418604651 438.5736434108527 Q 443.5348837209302 424.6821705426357 460.4031007751938 397.8914728682171 Q 478.26356589147287 371.1007751937984 478.26356589147287 338.3565891472868 Q 478.26356589147287 316.52713178294573 470.3255813953488 296.6821705426357 L 459.4108527131783 267.90697674418607 L 459.4108527131783 267.90697674418607 Q 446.51162790697674 237.14728682170542 446.51162790697674 203.4108527131783 L 446.51162790697674 190.51162790697674 L 446.51162790697674 190.51162790697674 Q 446.51162790697674 148.8372093023256 467.3488372093023 113.11627906976744 Q 480.2480620155039 88.31007751937985 464.3720930232558 64.49612403100775 L 439.5658914728682 32.74418604651163 L 439.5658914728682 32.74418604651163 Q 430.6356589147287 20.837209302325583 416.74418604651163 17.86046511627907 Q 402.85271317829455 13.891472868217054 388.9612403100775 20.837209302325583 Q 364.15503875968994 33.736434108527135 336.3720930232558 31.751937984496124 Q 309.5813953488372 30.75968992248062 284.7751937984496 16.868217054263567 L 263.93798449612405 3.9689922480620154 L 263.93798449612405 3.9689922480620154 Z M 243.10077519379846 43.65891472868217 L 256 36.713178294573645 L 243.10077519379846 43.65891472868217 L 256 36.713178294573645 L 268.8992248062016 43.65891472868217 L 268.8992248062016 43.65891472868217 Q 300.6511627906977 62.51162790697674 335.37984496124034 63.50387596899225 Q 371.1007751937984 65.48837209302326 403.84496124031006 49.6124031007752 Q 409.7984496124031 46.63565891472868 414.7596899224806 51.5968992248062 L 438.5736434108527 84.34108527131782 L 438.5736434108527 84.34108527131782 Q 442.5426356589147 90.29457364341086 439.5658914728682 97.24031007751938 Q 422.69767441860466 127.0077519379845 416.74418604651163 160.74418604651163 L 95.25581395348837 160.74418604651163 L 95.25581395348837 160.74418604651163 Q 89.30232558139535 127.0077519379845 72.43410852713178 97.24031007751938 Q 68.46511627906976 90.29457364341086 73.42635658914729 84.34108527131782 L 97.24031007751938 51.5968992248062 L 97.24031007751938 51.5968992248062 Q 102.2015503875969 46.63565891472868 109.14728682170542 49.6124031007752 Q 140.89922480620154 65.48837209302326 176.6201550387597 64.49612403100775 Q 211.34883720930233 62.51162790697674 243.10077519379846 44.651162790697676 L 243.10077519379846 43.65891472868217 Z M 97.24031007751938 192.49612403100775 L 414.7596899224806 192.49612403100775 L 97.24031007751938 192.49612403100775 L 414.7596899224806 192.49612403100775 L 414.7596899224806 203.4108527131783 L 414.7596899224806 203.4108527131783 Q 414.7596899224806 243.10077519379846 429.6434108527132 279.8139534883721 L 440.5581395348837 308.5891472868217 L 440.5581395348837 308.5891472868217 Q 446.51162790697674 322.48062015503876 446.51162790697674 338.3565891472868 Q 446.51162790697674 361.1782945736434 433.61240310077517 381.0232558139535 Q 421.70542635658916 399.8759689922481 400.86821705426354 409.7984496124031 L 256 476.27906976744185 L 256 476.27906976744185 L 112.12403100775194 409.7984496124031 L 112.12403100775194 409.7984496124031 Q 90.29457364341086 399.8759689922481 78.3875968992248 381.0232558139535 Q 65.48837209302326 361.1782945736434 65.48837209302326 338.3565891472868 Q 65.48837209302326 322.48062015503876 71.44186046511628 308.5891472868217 L 82.35658914728683 279.8139534883721 L 82.35658914728683 279.8139534883721 Q 97.24031007751938 243.10077519379846 97.24031007751938 203.4108527131783 L 97.24031007751938 192.49612403100775 L 97.24031007751938 192.49612403100775 Z" />
-                </svg>
-                {/* Title */}
-                <p style={{
-                  fontFamily: "var(--app-font-display)",
-                  fontWeight: 900,
-                  fontSize: "clamp(1.6rem, 5vw, 2.4rem)",
-                  lineHeight: 1.1,
-                  color: thm.textPrimary,
-                  margin: 0,
-                  letterSpacing: "-0.02em",
-                }}>Route 404</p>
-                {/* Message */}
-                <p style={{
-                  fontSize: 14,
-                  lineHeight: 1.8,
-                  color: thm.textSecondary,
-                  margin: 0,
-                  maxWidth: 400,
-                }}>
-                  Sorry, this city page isn't ready yet. A good city view needs thoughtful route
-                  selection and reliable on-ground data. If you're a pro at being stuck in{" "}
-                  <strong style={{ color: thm.textPrimary }}>{selectedCity}</strong>{" "}
-                  traffic, perhaps we could collaborate on building the dashboard together.
-                </p>
-                {/* CTA button */}
-                <a
-                  href="https://thecontrarian.in/#contact"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    marginTop: 4,
-                    padding: "10px 22px",
-                    borderRadius: 9999,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    fontFamily: "var(--app-font-display)",
-                    background: thm.key === "colour" ? "rgba(255,255,255,0.12)" : thm.sectionBg,
-                    color: thm.textPrimary,
-                    border: `1.5px solid ${thm.key === "gray" ? "#d0d0d0" : "hsl(var(--border))"}`,
-                    textDecoration: "none",
-                    transition: "opacity 0.15s",
-                  }}
-                >
-                  Get in touch →
-                </a>
-              </div>
+              <Route404 selectedCity={selectedCity} thm={thm} />
             </div>
           )}
 
@@ -2398,7 +1832,7 @@ function DashboardInner() {
           {/* ── Hero question ────────────────────────────────── */}
           <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem",
             opacity: showIntro ? 0 : 1,
-            animation: showIntro ? "none" : "cards-reveal 0.5s ease both",
+            animation: showIntro ? "none" : "cards-reveal 0.4s ease both",
           }}>
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
@@ -2448,11 +1882,9 @@ function DashboardInner() {
             </div>
           )}
 
-          {!loading && !error && rowCount > 0 && (
-            <>
-              {/* ── Baseline slider ──────────────────────────── */}
-              {allRouteWeeks.length > 1 && (
-                <div className="animate-fade-in" style={{
+          {/* ── Baseline slider ─ rendered immediately ──── */}
+          {citySource && (
+            <div className="animate-fade-in" style={{
                   background: showIntro ? "transparent" : thm.sectionBg,
                   border: showIntro ? "none" : thm.cardBorder,
                   boxShadow: showIntro ? "none" : thm.cardShadow,
@@ -2474,7 +1906,12 @@ function DashboardInner() {
 
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* ── Intro car races along the slider track ── */}
-                    {showCar && trackW > 0 && <>
+                    {showCar && carReady && <div style={{
+                      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                      opacity: carFading ? 0 : 1,
+                      transition: carFading ? "opacity 0.3s ease-out" : "none",
+                      pointerEvents: "none",
+                    }}>
                     {/* 0→100% loading counter */}
                     <div style={{
                       position: "absolute",
@@ -2486,42 +1923,42 @@ function DashboardInner() {
                       fontSize: "clamp(2rem,6vw,3.5rem)",
                       letterSpacing: "-0.04em",
                       color: thm.textPrimary,
-                      opacity: 0.15,
-                      pointerEvents: "none",
                       userSelect: "none",
                       lineHeight: 1,
                     }}>
-                      {loadPct}%
+                      {loadPct}
                     </div>
                     <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="80" height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={thm.textPrimary}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{
-                          position: "absolute",
-                          /* Wrapper is 28px top-pad + 40px slider + 4px bottom = 72px.
-                             Track centreline is at 48px. Float car just above it. */
-                          top: "-20px",
-                          zIndex: 50,
-                          pointerEvents: "none",
-                          /* Start: right edge of left thumb (thumb=22px, centre at leftPct%) */
-                          "--car-from": `calc(${leftPct}% + 11px + 4px)`,
-                          /* Stop: left edge of right thumb minus car width and gap */
-                          "--car-to": `calc(${rightPct}% - 11px - 72px - 0px)`,
-                          animation: "track-run 2.5s ease-in-out forwards",
-                        } as React.CSSProperties}
-                      >
-                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                        <circle cx="7" cy="17" r="2" />
-                        <path d="M9 17h6" />
-                        <circle cx="17" cy="17" r="2" />
-                      </svg>
-                    </> /* end showCar && trackW>0 */}
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="80" height="80"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={thm.textPrimary}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        position: "absolute",
+                        top: "-20px",
+                        zIndex: 50,
+                        /* Start: right edge of left thumb; Stop: left edge of right thumb minus car width */
+                        "--car-from": `calc(${leftTrackPct}% + 11px + 4px)`,
+                        "--car-to":   `calc(${rightTrackPct}% - 11px - 80px + 6px)`,
+                        animation: `track-run 1.2s ease-in-out forwards`,
+                      } as React.CSSProperties}
+                    >
+                      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                      <circle cx="7" cy="17" r="2" />
+                      <path d="M9 17h6" />
+                      <circle cx="17" cy="17" r="2" />
+                    </svg>
+                    </div> /* end shared fade wrapper */}
+                    {/* Slider interior — hidden until real data loads so placeholder
+                        [0,1] thumb positions are never visible */}
+                    <div style={{
+                      opacity: carReady ? 1 : 0,
+                      transition: "opacity 0.3s ease",
+                    }}>
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}
@@ -2620,6 +2057,7 @@ function DashboardInner() {
                         }} />
                       </SliderPrimitive.Thumb>
                     </SliderPrimitive.Root>
+                    </div>{/* end slider interior opacity wrapper */}
                   </div>
 
                   {/* Boundary dates */}
@@ -2642,7 +2080,10 @@ function DashboardInner() {
                     </p>
                   )}
                 </div>
-              )}
+          )}
+
+          {!loading && !error && rowCount > 0 && (
+            <>
 
               {/* ── Cards reveal wrapper (hidden during intro) ── */}
               <div style={{
@@ -2650,7 +2091,7 @@ function DashboardInner() {
                 flexDirection: "column",
                 gap: "1.5rem",
                 opacity: showIntro ? 0 : 1,
-                animation: showIntro ? "none" : "cards-reveal 0.55s ease 0.05s both",
+                animation: showIntro ? "none" : "cards-reveal 0.4s ease 0.05s both",
               }}>
 
               {/* ── Verdict ──────────────────────────────────── */}
@@ -2995,8 +2436,8 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── TrafficNOW! uncertainty band chart ───────── */}
-                  {trafficNowData.length > 0 && (
+                  {/* ── HIDDEN: TrafficNOW! Speed Forecast Bands (hidden 2026-05-25) ── */}
+                  {false && trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
@@ -3008,7 +2449,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow)}` : ""}
+                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -3051,25 +2492,27 @@ function DashboardInner() {
                     </div>
                   )}
 
-                  {/* ── Daily calendar ────────────────────────── */}
-                  <div className="chart-card animate-fade-in"
-                    style={{
-                      padding:"1.25rem 1.5rem",
-                      position: "relative",
-                      zIndex: 1,
-                      ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
-                    }}>
-                    {/* Info icon — top-right corner */}
-                    <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
-                      <InfoTip thm={thm}>
-                        {TOOLTIP_CONTENT.dailyCalendar.body}
-                      </InfoTip>
+                  {/* ── HIDDEN: Daily Speeds by Month calendar (hidden 2026-05-25) ── */}
+                  {false && (
+                    <div className="chart-card animate-fade-in"
+                      style={{
+                        padding:"1.25rem 1.5rem",
+                        position: "relative",
+                        zIndex: 1,
+                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
+                      }}>
+                      {/* Info icon — top-right corner */}
+                      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                        <InfoTip thm={thm}>
+                          {TOOLTIP_CONTENT.dailyCalendar.body}
+                        </InfoTip>
+                      </div>
+                      <CalendarWidget
+                        dailyStats={dailyStats}
+                        fmtDur={fmtDuration}
+                      />
                     </div>
-                    <CalendarWidget
-                      dailyStats={dailyStats}
-                      fmtDur={fmtDuration}
-                    />
-                  </div>
+                  )}
                 </>
               )}
 

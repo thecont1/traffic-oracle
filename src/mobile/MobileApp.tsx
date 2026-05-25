@@ -299,7 +299,7 @@ function MobileInner() {
               x={58}
               y={3}
               width={74}
-              height={12}
+              height={0}
               rx={0}
               fill={thm.sectionBg}
               stroke={thm.cardBorder}
@@ -307,7 +307,7 @@ function MobileInner() {
             />
             <text
               x={50}
-              y={10}
+              y={12}
               textAnchor="start"
               fill={thm.textMuted}
               fontSize={9}

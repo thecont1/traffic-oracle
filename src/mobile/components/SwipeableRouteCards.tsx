@@ -37,6 +37,20 @@ function getStatusColor(status: LiveStatus, thm: AppTheme): string {
       : "#F87171";
 }
 
+/* ── Weather condition emoji ──────────────────────────────── */
+function weatherGlyph(condition: string): string {
+  const c = condition.toLowerCase();
+  if (c.includes("thunder")) return "⛈️";
+  if (c.includes("heavy")) return "🌧️";
+  if (c.includes("light") || c.includes("drizzle")) return "🌦️";
+  if (c.includes("rain") || c.includes("shower")) return "🌧️";
+  if (c.includes("snow") || c.includes("sleet") || c.includes("flurr")) return "❄️";
+  if (c.includes("fog") || c.includes("mist") || c.includes("haze")) return "🌫️";
+  if (c.includes("overcast") || c.includes("cloud")) return "☁️";
+  if (c.includes("clear") || c.includes("sunny")) return "☀️";
+  return "🌧️";
+}
+
 /* ── Trend label ─────────────────────────────────────────────── */
 function trendLabel(
   liveSpeed: number | null,
@@ -314,19 +328,7 @@ export default function SwipeableRouteCards({
               }}
             >
               {card.weather.temp_c !== null && (
-                <span>
-                  🌡 {card.weather.temp_c}°C
-                  {card.weather.realfeel_c !== null && (
-                    <span style={{ opacity: 0.75 }}>
-                      {" "}
-                      (Feels like {card.weather.realfeel_c}°C
-                      {card.weather.realfeel_word
-                        ? ` – ${card.weather.realfeel_word}`
-                        : ""}
-                      )
-                    </span>
-                  )}
-                </span>
+                <span>🌡 {card.weather.temp_c}°C</span>
               )}
               {card.weather.humidity_pct !== null && (
                 <span>💧{card.weather.humidity_pct}%</span>
@@ -363,7 +365,7 @@ export default function SwipeableRouteCards({
                   .toLowerCase()
                   .startsWith("no precipitation") && (
                   <span style={{ opacity: 0.8 }}>
-                    🌧️ {card.weather.condition}
+                    {weatherGlyph(card.weather.condition)} {card.weather.condition}
                   </span>
                 )}
             </div>

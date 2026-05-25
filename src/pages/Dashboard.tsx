@@ -27,25 +27,24 @@ import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandCha
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
+// ── Shared core modules ──────────────────────────────────────────
+import { fmtWeek, fmtDate, fmtDuration, weeklyAvg } from "@/core/format";
+import { PERIOD_LIST, TOD_LIST, VERDICT, deriveVerdict } from "@/core/constants";
+import type { VerdictKey, DataTrend } from "@/core/constants";
+import { computeAllRouteCards } from "@/core/trafficNow";
+import type { RouteCardData } from "@/core/trafficNow";
+import { readUrlParams } from "@/core/urlState";
+import { computeCutoffDate, computeBaselineAndRecent, computeSpeedDiff } from "@/core/periodLogic";
+
+// ── Shared UI components ────────────────────────────────────────
+import LocationDropdown from "@/components/shared/LocationDropdown";
+import Chip from "@/components/shared/Chip";
+import NapkinChart from "@/components/shared/NapkinChart";
+import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
+
 const cfg = appConfig as AppConfig;
+const CITIES = cfg.cities;
 
-/* ── Filter options ───────────────────────────────────────────── */
-const PERIOD_LIST: { value: TimePeriod; label: string }[] = [
-  { value:"1m",   label:"1 month" },
-  { value:"1.5m", label:"1½ months" },
-  { value:"2m",   label:"2 months" },
-  { value:"3m",   label:"3 months" },
-  { value:"6m",   label:"6 months" },
-];
-const TOD_LIST: { value: TimeOfDay; label: string }[] = [
-  { value:"weekday_morning",   label:"weekday mornings (8–12)" },
-  { value:"weekday_afternoon", label:"weekday afternoons (12–18)" },
-  { value:"weekday_evening",   label:"weekday evenings (18–22)" },
-  { value:"weekends",          label:"weekends (all day)" },
-  { value:"all",               label:"any time of day" },
-];
-
-/* ── Mobile detection ─────────────────────────────────────────── */
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -58,247 +57,10 @@ function useIsMobile() {
   return isMobile;
 }
 
-/* ── URL param helpers ────────────────────────────────────────── */
-function readUrlParams() {
-  if (typeof window === "undefined") return {} as Record<string, string | number>;
-  const p = new URLSearchParams(window.location.search);
-  const out: Record<string, string | number> = {};
-  if (p.has("city"))   out.city   = p.get("city")!;
-  if (p.has("route"))  out.route  = p.get("route")!;
-  if (p.has("tod"))    out.tod    = p.get("tod")!;
-  if (p.has("period")) out.period = p.get("period")!;
-  if (p.has("mode"))   out.mode   = p.get("mode")!;
-  if (p.has("theme"))  out.theme  = p.get("theme")!;
-  if (p.has("bl"))     out.bl     = Number(p.get("bl"));
-  if (p.has("br"))     out.br     = Number(p.get("br"));
-  if (p.has("zoom"))   out.zoom   = Number(p.get("zoom"));
-  if (p.has("aggregation")) out.aggregation = p.get("aggregation")!;
-  if (p.has("metric")) out.metric = p.get("metric")!;
-  if (p.has("tt"))     out.tt     = p.get("tt")!;
-  return out;
-}
 const URL_PARAMS = readUrlParams();
 
-/* ── Helpers ──────────────────────────────────────────────────── */
-function fmtWeek(s: string) {
-  try { return new Date(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"}); } catch { return s; }
-}
-function fmtDate(s?: string) {
-  if (!s) return "—";
-  try {
-    const d = new Date(s);
-    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-    return `${d.getDate()} ${mon} '${String(d.getFullYear()).slice(2)}`;
-  } catch { return s; }
-}
 const fmtSliderDate = fmtDate;
 const fmtShortDate  = fmtDate;
-function fmtDuration(min: number) {
-  if (!min) return "—";
-  if (min < 60) return `${min.toFixed(0)} min`;
-  const h = Math.floor(min/60), m = Math.round(min%60);
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-function weeklyAvg(weeks: {avgSpeed:number}[], key:"avgSpeed") : number;
-function weeklyAvg(weeks: {avgDuration:number}[], key:"avgDuration") : number;
-function weeklyAvg(weeks: Record<string,number>[], key: string): number {
-  if (!weeks.length) return 0;
-  return Math.round((weeks.reduce((a,b) => a + (b[key] as number), 0) / weeks.length) * 10) / 10;
-}
-
-/* ── Recharts tooltip ─────────────────────────────────────────── */
-function useChartTooltip(thm: { textPrimary:string; textSecondary:string; textMuted:string; cardBg:string; cardBorder:string }, view: 'speed' | 'duration' = 'speed') {
-  // Desired order: Best → Avg → Worst
-  const SPEED_ORDER = ["Best", "Avg Speed", "Worst"];
-  const DURATION_ORDER = ["Best", "Avg Duration", "Worst"];
-  const order = view === 'speed' ? SPEED_ORDER : DURATION_ORDER;
-
-  // Technical labels for the tooltip
-  const techLabel: Record<string, string> = {
-    "Best": view === 'speed' ? "Best" : "Best",
-    "Worst": view === 'speed' ? "Worst" : "Worst",
-    "Avg Speed": "Avg Speed",
-    "Avg Duration": "Avg Duration",
-  };
-
-  return (props: any) => {
-    const { active, payload, label } = props ?? {};
-    if (!active || !payload?.length) return null;
-    // Tooltip always has white/light background, so use dark text colors
-    const tp = "#2B2924"; // dark primary
-    const ts = "#6E675B"; // dark secondary
-
-    // Format weekKey (ISO date string) as "20 May 2026"
-    let dateLabel = label;
-    try {
-      const d = new Date(label);
-      if (!isNaN(d.getTime())) {
-        dateLabel = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-      }
-    } catch { /* keep original */ }
-
-    // Sort payload by desired order
-    const sorted = [...payload].sort((a: any, b: any) => {
-      const ai = order.indexOf(a.name);
-      const bi = order.indexOf(b.name);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    });
-
-    const unit = view === 'speed' ? 'km/h' : 'min';
-    return (
-      <div style={{ background:"rgba(255,255,255,0.97)", border:`1px solid ${thm?.cardBorder ?? "hsl(var(--border))"}`,
-        borderRadius:12, padding:"10px 14px", fontSize:13, boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
-        <p style={{ fontWeight:700, marginBottom:6, color:tp }}>{dateLabel}</p>
-        {sorted.map((p: any) => (
-          <div key={p.name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
-            <span style={{ width:8, height:8, borderRadius:"50%", background:p.color, flexShrink:0 }} />
-            <span style={{ color:ts }}>{techLabel[p.name] ?? p.name}:</span>
-            <span style={{ fontWeight:600, color:tp }}>
-              {view === 'speed' ? `${p.value} ${unit}` : fmtDuration(p.value)}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-}
-
-/* ── Chips ─────────────────────────────────────────────────────── */
-function Chip({ children, icon, variant, onClick, animate, inert }: {
-  children:React.ReactNode; icon:string; variant:ChipVariant;
-  onClick:()=>void; animate?:boolean; inert?:boolean;
-}) {
-  const { theme: thm } = useTheme();
-  const tok = thm.chips[variant];
-  const styleOverride: React.CSSProperties | undefined = thm.key !== "colour" ? {
-    background: tok.bg,
-    color:      tok.color,
-    border:     `1.5px solid ${tok.border}`,
-    boxShadow:  tok.shadow,
-  } : undefined;
-
-  return (
-    <button
-      className={`chip chip-${variant} ${animate?"animate-pop":""}`}
-      onClick={inert ? undefined : onClick}
-      title={inert ? "Multi-city support coming soon" : "Tap to explore differently"}
-      style={inert ? { cursor:"default", opacity:0.9, display:"flex", alignItems:"center", gap:6, padding:"6px 44px", ...styleOverride } : { display:"flex", alignItems:"center", gap:6, padding:"4px 34px", ...styleOverride }}
-    >
-      <span>{icon}</span>{children}
-    </button>
-  );
-}
-
-/* ── Location Dropdown ─────────────────────────────────────────── */
-const CITIES = cfg.cities;
-
-function LocationDropdown({ thm, selectedCity, onCityChange }: { thm: AppTheme; selectedCity: string; onCityChange: (name: string) => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Close when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-    return undefined;
-  }, [isOpen]);
-  
-  const tok = thm.chips.city;
-  const styleOverride: React.CSSProperties = thm.key !== "colour" ? {
-    background: tok.bg,
-    color: tok.color,
-    border: `1.5px solid ${tok.border}`,
-    boxShadow: tok.shadow,
-  } : {
-    background: "rgba(255,255,255,0.15)",
-    color: thm.textPrimary,
-    border: "1.5px solid rgba(255,255,255,0.3)",
-  };
-  
-  return (
-    <div ref={dropdownRef} style={{ position: "relative" }}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-        style={{
-          height: 44,
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "0 12px",
-          borderRadius: 9999,
-          cursor: "pointer",
-          fontSize: 12,
-          fontWeight: 600,
-          fontFamily: "var(--app-font-display)",
-          ...styleOverride,
-        }}
-      >
-        <span>📍</span>
-        <span>{selectedCity}</span>
-        <span style={{ 
-          marginLeft: 2, 
-          fontSize: 10,
-          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-          transition: "transform 0.2s",
-        }}>▼</span>
-      </button>
-      
-      {isOpen && (
-        <div style={{
-          position: "absolute",
-          top: "calc(100% + 4px)",
-          left: 0,
-          minWidth: 140,
-          background: thm.sectionBg,
-          border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
-          borderRadius: 8,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          padding: "4px 0",
-          zIndex: 1000,
-        }}>
-          {CITIES.map((city) => {
-            const hasData = !!city.data_source;
-            return (
-              <button
-                key={city.name}
-                onClick={() => { onCityChange(city.name); setIsOpen(false); }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  width: "100%",
-                  padding: "8px 12px",
-                  minHeight: 44,
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: city.name === selectedCity ? 700 : 400,
-                  color: hasData ? thm.textPrimary : thm.textMuted,
-                  opacity: hasData ? 1 : 0.55,
-                  textAlign: "left",
-                }}
-              >
-                <span style={{ fontSize: 10 }}>
-                  {city.name === selectedCity ? "●" : hasData ? "○" : "◌"}
-                </span>
-                <span>{city.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ── Sparkles ─────────────────────────────────────────────────── */
 function Sparkles() {
@@ -312,153 +74,6 @@ function Sparkles() {
         }}>{e}</span>
       ))}
     </div>
-  );
-}
-
-/* ── Napkin chart — baseline / gap / recent ───────────────────── */
-function NapkinChart({
-  baselineWeeks, recentWeeks, height = 120, dateLabels,
-}: {
-  baselineWeeks: WeeklyAggregate[];
-  recentWeeks:   WeeklyAggregate[];
-  height?: number;
-  dateLabels?: { bStart: string; bEnd: string; rStart: string; rEnd: string };
-}) {
-  const { theme: thm } = useTheme();
-
-  /* measure actual rendered width so coordinates scale to fit exactly */
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [W, setW] = useState(500);
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width;
-      if (w && w > 0) setW(Math.round(w));
-    });
-    obs.observe(el);
-    const init = el.getBoundingClientRect().width;
-    if (init > 0) setW(Math.round(init));
-    return () => obs.disconnect();
-  }, []);
-
-  const bLen = baselineWeeks.length;
-  const rLen = recentWeeks.length;
-  if (bLen + rLen < 2) return null;
-
-  const allSpeeds = [
-    ...baselineWeeks.map(w => w.avgSpeed),
-    ...recentWeeks.map(w => w.avgSpeed),
-  ].filter(s => s > 0);
-  if (allSpeeds.length < 2) return null;
-
-  const minS = Math.min(...allSpeeds);
-  const maxS = Math.max(...allSpeeds);
-  const range = maxS - minS || 1;
-
-  const H = height;
-  const PX = 0, PY = 8;
-  const chartW = W - PX * 2;
-  const chartH = H - PY * 2;
-  const LABEL_H = dateLabels ? 18 : 0;
-  const totalH  = H + LABEL_H;
-
-  const hasGap = bLen > 0 && rLen > 0;
-
-  const allWeeks = [...baselineWeeks, ...recentWeeks];
-  const t0 = new Date(allWeeks[0].weekKey).getTime();
-  const t1 = new Date(allWeeks[allWeeks.length - 1].weekKey).getTime();
-  const tSpan = t1 - t0 || 1;
-  const toX = (wk: string) => PX + ((new Date(wk).getTime() - t0) / tSpan) * chartW;
-
-  const bXS = toX(baselineWeeks[0].weekKey);
-  const bXE = toX(baselineWeeks[bLen - 1].weekKey);
-  const rXS = hasGap ? toX(recentWeeks[0].weekKey) : PX;
-  const rXE = W - PX;
-
-  const toY = (s: number) => PY + chartH - ((s - minS) / range) * chartH;
-
-  // Calculate averages for horizontal reference lines
-  const baselineAvg = bLen > 0
-    ? baselineWeeks.reduce((sum, w) => sum + w.avgSpeed, 0) / bLen
-    : 0;
-  const recentAvg = rLen > 0
-    ? recentWeeks.reduce((sum, w) => sum + w.avgSpeed, 0) / rLen
-    : 0;
-
-  const pts = (weeks: WeeklyAggregate[]) =>
-    weeks.length === 1
-      ? `${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)} ${toX(weeks[0].weekKey).toFixed(1)},${toY(weeks[0].avgSpeed).toFixed(1)}`
-      : weeks.map(w => `${toX(w.weekKey).toFixed(1)},${toY(w.avgSpeed).toFixed(1)}`).join(" ");
-
-  const { baseline: BL, recent: RC, gap: GAP } = thm.napkin;
-  const labelY = H + 13;
-
-  /* stroke weight: gray theme uses weight to distinguish avg vs baseline */
-  const baselineW = thm.key === "gray" ? 2 : 3.5;
-  const recentW   = thm.key === "gray" ? 3.5 : 3.5;
-
-  return (
-    <svg ref={svgRef}
-      role="img"
-      viewBox={`0 0 ${W} ${totalH}`}
-      style={{ width:"100%", height:totalH, display:"block", overflow: "visible" }}
-      overflow="visible"
-      preserveAspectRatio="xMidYMid meet">
-      <title>Traffic speed trend chart</title>
-      <desc>Line chart comparing baseline period speeds with recent speeds for the selected route.</desc>
-      {bLen > 0 && (
-        <polyline points={pts(baselineWeeks)}
-          fill="none" stroke={BL} strokeWidth={baselineW}
-          strokeLinejoin="round" strokeLinecap="round" />
-      )}
-      {rLen > 0 && (
-        <polyline points={pts(recentWeeks)}
-          fill="none" stroke={RC} strokeWidth={recentW}
-          strokeLinejoin="round" strokeLinecap="round" />
-      )}
-      {hasGap && bLen > 0 && (
-        <circle cx={bXE} cy={toY(baselineWeeks[bLen - 1].avgSpeed)} r={5} fill={BL} />
-      )}
-      {hasGap && rLen > 0 && (
-        <circle cx={rXS} cy={toY(recentWeeks[0].avgSpeed)} r={5} fill={RC} />
-      )}
-      {dateLabels && bLen > 0 && (<>
-        <line x1={bXS} y1={toY(baselineWeeks[0].avgSpeed)} x2={bXS} y2={H}
-          stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={bXS} y={labelY} fontSize={9} fill={BL} opacity={0.8}
-          textAnchor="start">{dateLabels.bStart}</text>
-        <line x1={bXE} y1={toY(baselineWeeks[bLen - 1].avgSpeed)} x2={bXE} y2={H}
-          stroke={BL} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={bXE} y={labelY} fontSize={9} fill={BL} opacity={0.8}
-          textAnchor="end">{dateLabels.bEnd}</text>
-      </>)}
-      {dateLabels && rLen > 0 && (<>
-        <line x1={rXS} y1={toY(recentWeeks[0].avgSpeed)} x2={rXS} y2={H}
-          stroke={RC} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={rXS} y={labelY} fontSize={9} fill={RC} opacity={0.8}
-          textAnchor="start">{dateLabels.rStart}</text>
-        <line x1={rXE} y1={toY(recentWeeks[rLen - 1].avgSpeed)} x2={rXE} y2={H}
-          stroke={RC} strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
-        <text x={rXE} y={labelY} fontSize={9} fill={RC} opacity={0.8}
-          textAnchor="end">{dateLabels.rEnd}</text>
-      </>)}
-
-      {/* Horizontal average reference lines */}
-      {bLen > 0 && baselineAvg > 0 && (
-        <line x1={bXS} y1={toY(baselineAvg)} x2={bXE} y2={toY(baselineAvg)}
-          stroke={BL} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.7} />
-      )}
-      {rLen > 0 && recentAvg > 0 && (
-        <line x1={rXS} y1={toY(recentAvg)} x2={rXE} y2={toY(recentAvg)}
-          stroke={RC} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.7} />
-      )}
-      {/* Connector between average lines */}
-      {hasGap && bLen > 0 && rLen > 0 && baselineAvg > 0 && recentAvg > 0 && (
-        <line x1={bXE} y1={toY(baselineAvg)} x2={rXS} y2={toY(recentAvg)}
-          stroke={GAP} strokeWidth={2} strokeDasharray="6 4" />
-      )}
-    </svg>
   );
 }
 
@@ -796,191 +411,6 @@ function CalendarWidget({
       )}
     </>
   );
-}
-
-/* ── Traffic NOW! live overview panel ──────────────────────────── */
-type LiveStatus = 'unusually-fast' | 'faster' | 'as-expected' | 'slower' | 'unusually-slower' | 'no-data';
-
-// Statistics for a route's typical behavior at a given time-of-day
-// Uses percentiles (industry standard) instead of std dev because traffic data is skewed
-interface RouteTODStats {
-  p05: number;
-  p10: number;
-  p15: number;
-  p50: number;
-  p85: number;
-  p90: number;
-  p95: number;
-  count: number;
-}
-
-interface RouteCardData {
-  label: string;
-  origin: string;
-  destination: string;
-  // Live current reading
-  liveSpeed: number | null;
-  prevSpeed: number | null; // Second-most-recent reading, for trend animation
-  liveTimestamp: Date | null;
-  // Typical stats for this time-of-day (±90 min window over 90 days)
-  typical: RouteTODStats | null;
-  // Where this route falls on the city-wide range (for positioning)
-  cityMin: number; // Slowest route in the city right now
-  cityMax: number; // Fastest route in the city right now
-  // Verdict
-  status: LiveStatus;
-  statusText: string; // "much faster", "faster", "as expected", "slower", "much slower", "no data"
-  // Stable sorting
-  sortKey: string;
-  // Weather snapshot
-  weather?: WeatherRow;
-}
-
-/** Compute live status based on percentiles - industry standard for traffic */
-function computeLiveStatus(liveSpeed: number | null, typical: RouteTODStats | null): { status: LiveStatus; statusText: string } {
-  if (liveSpeed === null || typical === null) {
-    return { status: 'no-data', statusText: 'no data' };
-  }
-  if (liveSpeed >= typical.p95) return { status: 'unusually-fast', statusText: 'unusually fast' };
-  if (liveSpeed >= typical.p85) return { status: 'faster', statusText: 'faster than typical' };
-  if (liveSpeed > typical.p15)  return { status: 'as-expected', statusText: 'typical' };
-  if (liveSpeed >= typical.p05) return { status: 'slower', statusText: 'slower than typical' };
-  return { status: 'unusually-slower', statusText: 'unusually slow' };
-}
-
-/** Compute TOD statistics from historical data within ±90 min window over 90 days */
-function computeTODStats(
-  routeRows: TrafficRow[],
-  referenceTime: Date,
-  daysBack: number = 90,
-  windowMinutes: number = 90,
-): RouteTODStats | null {
-  const cutoff = new Date(referenceTime.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  const refHour = referenceTime.getHours();
-  const refMin = referenceTime.getMinutes();
-  const refTimeVal = refHour * 60 + refMin;
-  
-  // Filter to rows within ±windowMinutes of the reference time
-  const relevantRows = routeRows.filter(r => {
-    if (r.timestamp < cutoff) return false;
-    const rowHour = r.timestamp.getHours();
-    const rowMin = r.timestamp.getMinutes();
-    const rowTimeVal = rowHour * 60 + rowMin;
-    // Handle wraparound at midnight
-    let diff = Math.abs(rowTimeVal - refTimeVal);
-    if (diff > 720) diff = 1440 - diff; // Adjust for crossing midnight
-    return diff <= windowMinutes;
-  });
-  
-  if (relevantRows.length < 3) return null;
-  
-  // Sort speeds for percentile calculation
-  const speeds = relevantRows.map(r => r.speed_kmh).sort((a, b) => a - b);
-  const n = speeds.length;
-  
-  // Percentile calculation using linear interpolation
-  const percentile = (p: number) => {
-    const idx = (p / 100) * (n - 1);
-    const lower = Math.floor(idx);
-    const upper = Math.ceil(idx);
-    const weight = idx - lower;
-    if (upper >= n) return speeds[n - 1];
-    return speeds[lower] * (1 - weight) + speeds[upper] * weight;
-  };
-  
-  return {
-    p05: percentile(5),
-    p10: percentile(10),
-    p15: percentile(15),
-    p50: percentile(50),  // Median
-    p85: percentile(85),
-    p90: percentile(90),
-    p95: percentile(95),
-    count: n,
-  };
-}
-
-function computeAllRouteCards(
-  allRows: TrafficRow[],
-  routeOptions: string[],
-  routes: { label_short: string; label_full: string; route_code?: string }[],
-  weatherMap?: Map<string, WeatherRow>,
-): RouteCardData[] {
-  // Find the most recent data timestamp across all routes
-  const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
-  const lastDataDate = lastTs ? new Date(lastTs) : new Date();
-  const ninetyDaysAgo = new Date(lastDataDate.getTime() - 90 * 24 * 60 * 60 * 1000);
-  
-  // First pass: compute all route data
-  const preliminaryCards = routeOptions.map((label) => {
-    const routeRows = allRows.filter(r => r.label_short === label);
-    
-    // Extract origin/destination
-    const labelFull = routes.find(r => r.label_short === label)?.label_full ?? label;
-    const arrowIdx = labelFull.indexOf("→");
-    const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
-    const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
-    
-    // Get most recent reading (live speed) and the one before it (for trend)
-    const recentRows = routeRows.filter(r => r.timestamp >= ninetyDaysAgo);
-    const sorted = recentRows.slice().sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    const mostRecent = sorted[0] ?? null;
-    const prevReading = sorted[1] ?? null;
-    const liveSpeed = mostRecent ? mostRecent.speed_kmh : null;
-    const prevSpeed = prevReading ? prevReading.speed_kmh : null;
-    const liveTimestamp = mostRecent ? mostRecent.timestamp : null;
-    
-    // Compute typical stats for this TOD (±90 min over 90 days)
-    const typical = computeTODStats(routeRows, lastDataDate, 90, 90);
-    
-    return {
-      label, origin, destination,
-      liveSpeed, prevSpeed, liveTimestamp, typical,
-      sortKey: label.toLowerCase(),
-    };
-  });
-  
-  // Second pass: compute city-wide min/max from live speeds AND typical ranges
-  const liveSpeeds = preliminaryCards
-    .map(c => c.liveSpeed)
-    .filter((s): s is number => s !== null);
-  const cityMin = liveSpeeds.length > 0 ? Math.min(...liveSpeeds) : 0;
-  const cityMax = liveSpeeds.length > 0 ? Math.max(...liveSpeeds) : 80;
-  
-  // Also consider p05/p95 from all routes' typical data so bars never overflow
-  const allP05 = preliminaryCards.map(c => c.typical?.p05).filter((v): v is number => v != null);
-  const allP95 = preliminaryCards.map(c => c.typical?.p95).filter((v): v is number => v != null);
-  const typicalMin = allP05.length > 0 ? Math.min(...allP05) : cityMin;
-  const typicalMax = allP95.length > 0 ? Math.max(...allP95) : cityMax;
-  
-  // Scale encompasses live speeds + typical ranges, with 1 km/h padding
-  const effectiveMin = Math.min(cityMin, typicalMin) - 1;
-  const effectiveMax = Math.max(cityMax, typicalMax) + 1;
-  
-  // Final pass: compute status and build final cards
-  const cards: RouteCardData[] = preliminaryCards.map(card => {
-    const { status, statusText } = computeLiveStatus(card.liveSpeed, card.typical);
-    const routeObj = routes.find(r => r.label_short === card.label);
-    const weather = routeObj?.route_code ? weatherMap?.get(routeObj.route_code) : undefined;
-    
-    return {
-      label: card.label,
-      origin: card.origin,
-      destination: card.destination,
-      liveSpeed: card.liveSpeed,
-      prevSpeed: card.prevSpeed,
-      liveTimestamp: card.liveTimestamp,
-      typical: card.typical,
-      cityMin: effectiveMin,
-      cityMax: effectiveMax,
-      status,
-      statusText,
-      sortKey: card.sortKey,
-      weather,
-    };
-  });
-  
-  return cards;
 }
 
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
@@ -1999,7 +1429,7 @@ function DashboardInner() {
                 height={32}
                 style={{ height:32, width:"auto", flexShrink:0 }}
               />
-              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} />
+              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
             </div>
 
             {/* Right: Time Travel + Theme + Share + Zoom */}
@@ -3072,7 +2502,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow)}` : ""}
+                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}

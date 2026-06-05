@@ -39,6 +39,7 @@ testem.log
 .DS_Store
 Thumbs.db
 .env
+.env.production
 
 # Lock files (Bun: bun.lock is committed; ignore everything else)
 pnpm-lock.yaml

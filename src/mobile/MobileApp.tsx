@@ -115,18 +115,22 @@ function MobileInner() {
     ? (CITIES.find(c => c.name === urlParams.city)?.name ?? defaultCityName)
     : defaultCityName;
   const [selectedCity, setSelectedCity] = useState(initialCity);
+
+  // Clean city from URL after initial read — city is shown in the logo instead
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.has("city")) {
+      p.delete("city");
+      const qs = p.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+    }
+  }, []);
+
   const selectedCityConfig = useMemo(
     () => CITIES.find(c => c.name === selectedCity) ?? CITIES[0],
     [selectedCity],
   );
   const citySource = selectedCityConfig.data_source;
-
-  // Sync selectedCity to URL so shell switch (mobile ↔ desktop) preserves the city
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search);
-    p.set("city", selectedCity);
-    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
-  }, [selectedCity]);
 
   // Data loading — auto-refresh enabled (same interval as desktop)
   const { routes, allRows, loading, error, rowCount, dataTimestamp, refresh } =
@@ -398,43 +402,62 @@ function MobileInner() {
             <div style={{ height: 1, background: thm.cardBorder, margin: "4px 8px" }} />
 
             {/* ── ROUTES collapsible submenu ────────────────── */}
-            <button
-              onClick={() => setRoutesOpen(o => !o)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", padding: "10px 12px", border: "none",
-                background: "transparent", cursor: "pointer", fontSize: 13,
-                color: thm.textPrimary, borderRadius: 8, fontWeight: 600,
-                textTransform: "uppercase", letterSpacing: "0.04em",
-              }}
-            >
-              <span>Routes</span>
-              {routesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            {routesOpen && (
-              <div style={{ paddingLeft: 12 }}>
-                {routes.map((route) => (
-                  <a
-                    key={route.route_code}
-                    href={route.map_link || undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => { setRoutesOpen(false); setMenuOpen(false); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%",
-                      padding: "8px 12px", border: "none",
-                      background: "transparent", cursor: route.map_link ? "pointer" : "default",
-                      fontSize: 13, color: thm.textPrimary, borderRadius: 8,
-                      textDecoration: "none", opacity: route.map_link ? 1 : 0.55,
-                    }}
-                  >
-                    <span style={{ fontSize: 10 }}>
-                      {route.map_link ? "○" : "◌"}
-                    </span>
-                    <span>{route.label_short}</span>
-                  </a>
-                ))}
-              </div>
+            {citySource ? (
+              <>
+                <button
+                  onClick={() => setRoutesOpen(o => !o)}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    width: "100%", padding: "10px 12px", border: "none",
+                    background: "transparent", cursor: "pointer", fontSize: 13,
+                    color: thm.textPrimary, borderRadius: 8, fontWeight: 600,
+                    textTransform: "uppercase", letterSpacing: "0.04em",
+                  }}
+                >
+                  <span>Routes</span>
+                  {routesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {routesOpen && (
+                  <div style={{ paddingLeft: 12 }}>
+                    {routes.map((route) => (
+                      <a
+                        key={route.route_code}
+                        href={route.map_link || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => { setRoutesOpen(false); setMenuOpen(false); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8, width: "100%",
+                          padding: "8px 12px", border: "none",
+                          background: "transparent", cursor: route.map_link ? "pointer" : "default",
+                          fontSize: 13, color: thm.textPrimary, borderRadius: 8,
+                          textDecoration: "none", opacity: route.map_link ? 1 : 0.55,
+                        }}
+                      >
+                        <span style={{ fontSize: 10 }}>
+                          {route.map_link ? "○" : "◌"}
+                        </span>
+                        <span>{route.label_short}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <button
+                disabled
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", padding: "10px 12px", border: "none",
+                  background: "transparent", cursor: "default", fontSize: 13,
+                  color: thm.textPrimary, borderRadius: 8, fontWeight: 600,
+                  textTransform: "uppercase", letterSpacing: "0.04em",
+                  opacity: 0.45,
+                }}
+              >
+                <span>Routes</span>
+                <span style={{ fontSize: 10, color: thm.textMuted }}>◌</span>
+              </button>
             )}
 
             <div style={{ height: 1, background: thm.cardBorder, margin: "4px 8px" }} />
@@ -456,7 +479,15 @@ function MobileInner() {
 
             <div style={{ height: 1, background: thm.cardBorder, margin: "4px 8px" }} />
 
-            {/* ── THEME options ─────────────────────────────── */}
+            {/* ── THEMES header + always-visible options ────── */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              width: "100%", padding: "10px 12px", fontSize: 13,
+              color: thm.textPrimary, borderRadius: 8, fontWeight: 600,
+              textTransform: "uppercase", letterSpacing: "0.04em",
+            }}>
+              <span>Themes</span>
+            </div>
             {(["colour", "gray", "pastel"] as ThemeKey[]).map(key => (
               <button key={key} onClick={() => { setTheme(key); setMenuOpen(false); }} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -469,7 +500,6 @@ function MobileInner() {
                   <span>{THEME_META[key].icon}</span>
                   <span>{THEME_META[key].label}</span>
                 </span>
-                {themeKey === key && <span style={{ fontSize: 11, color: thm.textMuted }}>✓</span>}
               </button>
             ))}
           </div>

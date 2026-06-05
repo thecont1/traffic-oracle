@@ -503,18 +503,22 @@ function DashboardInner() {
     ? (CITIES.find(c => c.name === URL_PARAMS.city)?.name ?? defaultCityName)
     : defaultCityName;
   const [selectedCity, setSelectedCity] = useState(initialCity);
+
+  // Clean city from URL after initial read — city is shown in the logo instead
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.has("city")) {
+      p.delete("city");
+      const qs = p.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+    }
+  }, []);
+
   const selectedCityConfig = useMemo(() =>
     CITIES.find(c => c.name === selectedCity) ?? CITIES[0],
     [selectedCity],
   );
   const citySource = selectedCityConfig.data_source;
-
-  // Sync selectedCity to URL so shell switch (mobile ↔ desktop) preserves the city
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search);
-    p.set("city", selectedCity);
-    window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
-  }, [selectedCity]);
 
   /* UI state */
   const [periodIdx,    setPeriodIdx]    = useState(() => {

@@ -14,6 +14,7 @@ interface SwipeableRouteCardsProps {
   onRouteSelect: (label: string) => void;
   routeOptions: string[];
   weatherMap?: Map<string, WeatherRow>;
+  dataTimestamp?: Date | null;
 }
 
 /* ── Status color (matching desktop RouteCard) ───────────────── */
@@ -61,6 +62,18 @@ function trendLabel(
   return liveSpeed > prevSpeed ? "improving" : "getting worse";
 }
 
+/* ── Relative time label (mirrors RouteBrowserPane) ──────────── */
+function relativeTime(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins === 1) return "1 min ago";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs === 1) return "1 hr ago";
+  return `${hrs} hr ago`;
+}
+
 export default function SwipeableRouteCards({
   allRows,
   routes,
@@ -68,8 +81,16 @@ export default function SwipeableRouteCards({
   onRouteSelect,
   routeOptions,
   weatherMap,
+  dataTimestamp,
 }: SwipeableRouteCardsProps) {
   const { theme: thm } = useTheme();
+
+  /* Tick every 60 s so the "X min ago" label stays fresh */
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const [currentIdx, setCurrentIdx] = useState(() => {
     const idx = routeOptions.indexOf(selectedRoute);
     return idx >= 0 ? idx : 0;
@@ -314,20 +335,23 @@ export default function SwipeableRouteCards({
             gap: 8,
           }}
         >
-          {/* Row 1: route name */}
-          <p
-            style={{
-              fontSize: 16,
-              fontWeight: 400,
-              color: thm.chart.line1,
-              lineHeight: 1.3,
-              margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
+          {/* Row 1: route name + live timestamp inline */}
+          <p style={{
+            fontSize: 16, fontWeight: 400, color: thm.chart.line1,
+            lineHeight: 1.3, margin: 0,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
             {card.label}
+            {dataTimestamp && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                fontSize: 10, color: thm.textMuted,
+                marginLeft: 8, verticalAlign: "middle",
+              }}>
+                <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />
+                <span>{relativeTime(dataTimestamp)}</span>
+              </span>
+            )}
           </p>
 
           {/* Row 2: origin → destination */}

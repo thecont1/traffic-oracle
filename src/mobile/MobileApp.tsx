@@ -538,6 +538,7 @@ function MobileInner() {
               onRouteSelect={handleRouteSelect}
               routeOptions={routeOptions}
               weatherMap={weatherMap}
+              dataTimestamp={dataTimestamp}
             />
 
             {/* ── Route question (clickable pills) ─────────── */}

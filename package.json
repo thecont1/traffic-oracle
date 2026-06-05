@@ -15,6 +15,7 @@
     "preview": "bun run build && wrangler dev"
   },
   "dependencies": {
+    "fingerprint.dev": "^0.1.1",
     "leaflet": "^1.9.4",
     "papaparse": "^5.5.3",
     "react-csv": "^2.2.2",

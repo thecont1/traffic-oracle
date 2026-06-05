@@ -1,3 +1,4 @@
+import { useFingerprint } from "@/hooks/use-fingerprint";
 import { lazy, Suspense, useState, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -53,6 +54,7 @@ function Shell() {
 }
 
 function App() {
+  useFingerprint();
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

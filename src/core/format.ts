@@ -3,13 +3,14 @@
 // Extracted from Dashboard.tsx.
 // ---------------------------------------------------------------------------
 
-/** Format an ISO date string (e.g. weekKey "2026-05-18") as "18 May '26". */
+/** Format an ISO date string (e.g. weekKey "2026-05-18") as "Tue 18 May '26". */
 export function fmtDate(s?: string): string {
   if (!s) return "—";
   try {
     const d = new Date(s);
+    const wd = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
     const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-    return `${d.getDate()} ${mon} '${String(d.getFullYear()).slice(2)}`;
+    return `${wd} ${d.getDate()} ${mon} '${String(d.getFullYear()).slice(2)}`;
   } catch { return s; }
 }
 

@@ -434,12 +434,13 @@ function DashboardInner() {
   });
 
   function ttFormat(dt: Date): string {
+    const wd = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()];
     const d = dt.getDate();
     const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
     const yr = String(dt.getFullYear()).slice(2);
     const hh = String(dt.getHours()).padStart(2, "0");
     const mm = String(dt.getMinutes()).padStart(2, "0");
-    return `${d} ${mon} '${yr} · ${hh}:${mm}`;
+    return `${wd} ${d} ${mon} '${yr} · ${hh}:${mm}`;
   }
 
   // TT glow colours per theme — blazing tier

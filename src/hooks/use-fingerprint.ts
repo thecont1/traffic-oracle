@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { identify, IdentifyError } from "fingerprint.dev";
+import { identify, Identify } from "fingerprint.dev";
 
 const FP_KEY = import.meta.env.VITE_FP_API_KEY as string;
 
@@ -28,7 +28,7 @@ export function useFingerprint() {
           }),
         });
       } catch (err) {
-        if (err instanceof IdentifyError) {
+        if (err instanceof Identify.Error) {
           console.warn("[FP]", err.code, err.message);
         }
       }

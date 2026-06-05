@@ -77,6 +77,7 @@ export default function SwipeableRouteCards({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   /* ── Slide animation state (arrow buttons only) ─────────── */
   const [slideDir, setSlideDir] = useState(0); // -1 exit left, 1 exit right, 0 settled
@@ -147,27 +148,56 @@ export default function SwipeableRouteCards({
     [currentIdx, total, routeOptions, onRouteSelect, wrapIdx],
   );
 
-  // Touch handlers
+  // Touch handlers — card follows finger, snaps on release
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (animating.current) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
     isDragging.current = false;
+    if (cardRef.current) {
+      cardRef.current.style.transition = "none";
+    }
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
-    const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
-    if (dx > 10 && dx > dy) isDragging.current = true;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      isDragging.current = true;
+      if (cardRef.current) {
+        cardRef.current.style.transform = `translateX(${dx}px)`;
+        cardRef.current.style.transition = "none";
+      }
+    }
   }, []);
 
   const onTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      if (!isDragging.current) return;
+      if (!isDragging.current || animating.current) return;
       const dx = e.changedTouches[0].clientX - touchStartX.current;
+
       if (Math.abs(dx) > 50) {
-        if (dx < 0) goNext();
-        else goPrev();
+        const direction = dx < 0 ? 1 : -1; // swipe left -> next, swipe right -> prev
+        const target = direction * -100;    // -100% or +100%
+
+        if (cardRef.current) {
+          cardRef.current.style.transition =
+            "transform 220ms cubic-bezier(0.25,0.1,0.25,1)";
+          cardRef.current.style.transform = `translateX(${target}%)`;
+        }
+
+        setTimeout(() => {
+          if (direction === 1) goNext();
+          else goPrev();
+        }, 220);
+      } else {
+        if (cardRef.current) {
+          cardRef.current.style.transition =
+            "transform 220ms cubic-bezier(0.25,0.1,0.25,1)";
+          cardRef.current.style.transform = "translateX(0)";
+        }
       }
+      isDragging.current = false;
     },
     [goNext, goPrev],
   );
@@ -267,8 +297,9 @@ export default function SwipeableRouteCards({
         }}
       >
 
-        {/* ── Card content (slides on arrow click) ─────────── */}
+        {/* ── Card content (slides on arrow click or drag) ─ */}
         <div
+          ref={cardRef}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}

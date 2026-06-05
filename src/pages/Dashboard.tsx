@@ -613,13 +613,13 @@ function DashboardInner() {
     }
   }, [selectedCity]);
 
-  /* ── Car animation timer — fires once trackW is measured (slider DOM exists) ──
-     trackW becomes > 0 only after data loads and the slider renders.
-     The car then starts from the left thumb and races to the right thumb.
+  /* ── Car animation timer — fires once data loads ──
+     The car races the full width of the timeline.
      Sequence:
-       0 ms  : car appears at left thumb, counter at 0%
-       2500ms: counter hits 100%, cards begin revealing (showIntro → false)
-       3150ms: car fades out, pane reopens, settledCity set
+       0 ms  : car appears at left edge, counter at 0%
+       2.0s  : car reaches finish line, all components reveal (showIntro → false)
+       2.6s  : car and counter begin gentle fade-out
+       4.0s  : car removed, pane reopens, settledCity set
   ── */
   /* trackWReadyRef: mirrors trackW so the animation effect can read the latest
      value without adding trackW to deps (which would cancel timers on resize). */
@@ -642,7 +642,7 @@ function DashboardInner() {
       animStarted.current = true;
       setCarReady(true);
 
-      const DURATION = 1200;
+      const DURATION = 2000;
       const start = performance.now();
       let raf: number;
       const tick = (now: number) => {
@@ -658,17 +658,17 @@ function DashboardInner() {
       try { const s = localStorage.getItem("to:paneOpen"); willReopenPane.current = s !== null ? s === "1" : (cfg.route_pane.open ?? true); } catch { willReopenPane.current = paneOpen; }
       setPaneOpen(false);
 
-      /* 1.2s: reveal cards (car still visible, parked at right thumb)
-         1.6s: fade car out (CSS transition on opacity)
-         1.9s: React removes car node, reopen pane */
-      const t1 = setTimeout(() => setShowIntro(false), 1200);
-      const t2 = setTimeout(() => setCarFading(true), 1600);
+      /* 2.0s: car reaches finish line, all components reveal
+         2.6s: gentle fade-out begins (1.2s transition)
+         4.0s: React removes car node, reopen pane */
+      const t1 = setTimeout(() => setShowIntro(false), 2000);
+      const t2 = setTimeout(() => setCarFading(true), 2600);
       const t3 = setTimeout(() => {
         setShowCar(false);
         setCarFading(false);
         setSettledCity(selectedCity);
         if (willReopenPane.current) setPaneOpen(true);
-      }, 1900);
+      }, 4000);
 
       /* Store cleanup refs on the outer scope so the effect cleanup can reach them */
       cleanupRef.current = () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
@@ -2058,24 +2058,15 @@ function DashboardInner() {
                 }}>
                   {showSparkle && <Sparkles />}
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14,
-                    opacity: showIntro ? 0 : 1,
+                  {/* ── Full-width intro car ── */}
+                  {showCar && carReady && <div style={{
+                    position: "absolute", top: "3.5rem", left: 0, right: 0,
+                    height: 80,
+                    opacity: carFading ? 0 : 1,
+                    transition: carFading ? "opacity 1.2s ease-out" : "none",
+                    pointerEvents: "none",
+                    zIndex: 50,
                   }}>
-                    <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                      color: thm.textPrimary, margin: 0 }}>
-                      Compare with this earlier period 
-                    </p>
-                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
-                  </div>
-
-                  <div style={{ padding:"28px 0 4px", position:"relative" }}>
-                    {/* ── Intro car races along the slider track ── */}
-                    {showCar && carReady && <div style={{
-                      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                      opacity: carFading ? 0 : 1,
-                      transition: carFading ? "opacity 0.3s ease-out" : "none",
-                      pointerEvents: "none",
-                    }}>
                     {/* 0→100% loading counter */}
                     <div style={{
                       position: "absolute",
@@ -2104,19 +2095,29 @@ function DashboardInner() {
                       style={{
                         position: "absolute",
                         top: "-20px",
+                        left: 0,
                         zIndex: 50,
-                        /* Start: right edge of left thumb; Stop: left edge of right thumb minus car width */
-                        "--car-from": `calc(${leftTrackPct}% + 11px + 4px)`,
-                        "--car-to":   `calc(${rightTrackPct}% - 11px - 80px + 6px)`,
-                        animation: `track-run 1.2s ease-in-out forwards`,
-                      } as React.CSSProperties}
+                        animation: `track-run 2s ease-in-out forwards`,
+                      }}
                     >
                       <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
                       <circle cx="7" cy="17" r="2" />
                       <path d="M9 17h6" />
                       <circle cx="17" cy="17" r="2" />
                     </svg>
-                    </div> /* end shared fade wrapper */}
+                  </div>}
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14,
+                    opacity: showIntro ? 0 : 1,
+                  }}>
+                    <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                      color: thm.textPrimary, margin: 0 }}>
+                      Compare with this earlier period 
+                    </p>
+                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
+                  </div>
+
+                  <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* Slider interior — hidden until real data loads so placeholder
                         [0,1] thumb positions are never visible */}
                     <div style={{
@@ -2171,7 +2172,7 @@ function DashboardInner() {
                           width:`${leftTrackPct}%`, height:"100%",
                           background: thm.slider.rail, pointerEvents:"none",
                         }} />
-                        {/* Selected baseline window */}
+                        {/* Selected baseline window — hidden during intro */}
                         <div style={{
                           position:"absolute", top:0,
                           left:`${leftTrackPct}%`,
@@ -2179,6 +2180,8 @@ function DashboardInner() {
                           height:"100%",
                           background: thm.slider.track,
                           pointerEvents:"none",
+                          opacity: showIntro ? 0 : 1,
+                          transition: "opacity 0.3s ease",
                         }} />
                         {/* Right unselected segment */}
                         <div style={{
@@ -2189,13 +2192,16 @@ function DashboardInner() {
                         <SliderPrimitive.Range style={{ display:"none" }} />
                       </SliderPrimitive.Track>
 
-                      {/* Left thumb */}
+                      {/* Left thumb — hidden during intro */}
                       <SliderPrimitive.Thumb
                         className="slider-thumb"
                         onPointerDown={() => setDragThumb(0)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
                           width:22, height:40, background:"transparent",
-                          border:"none", outline:"none", cursor:"grab", zIndex:10, flexShrink:0 }}
+                          border:"none", outline:"none", cursor:"grab", zIndex:10, flexShrink:0,
+                          opacity: showIntro ? 0 : 1,
+                          transition: "opacity 0.3s ease",
+                        }}
                       >
                         <span style={{
                           display:"block", width:7, height:28, borderRadius:9999,
@@ -2205,13 +2211,16 @@ function DashboardInner() {
                         }} />
                       </SliderPrimitive.Thumb>
 
-                      {/* Right thumb */}
+                      {/* Right thumb — hidden during intro */}
                       <SliderPrimitive.Thumb
                         className="slider-thumb"
                         onPointerDown={() => setDragThumb(1)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
                           width:22, height:40, background:"transparent",
-                          border:"none", outline:"none", cursor:"grab", zIndex:10, flexShrink:0 }}
+                          border:"none", outline:"none", cursor:"grab", zIndex:10, flexShrink:0,
+                          opacity: showIntro ? 0 : 1,
+                          transition: "opacity 0.3s ease",
+                        }}
                       >
                         <span style={{
                           display:"block", width:7, height:28, borderRadius:9999,
@@ -2228,6 +2237,7 @@ function DashboardInner() {
                   <div style={{ display:"flex", justifyContent:"space-between",
                     fontSize:10, fontWeight:400, color: thm.textMuted, marginTop:6,
                     opacity: showIntro ? 0 : 1,
+                    transition: "opacity 0.4s ease",
                   }}>
                     <span>{fmtDate(allRouteWeeks[0]?.weekKey)}</span>
                     <span>{lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate)}</span>

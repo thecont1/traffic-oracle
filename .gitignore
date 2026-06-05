@@ -58,3 +58,4 @@ yarn.lock
 
 # Local dev files
 hermes.md
+.hermes/

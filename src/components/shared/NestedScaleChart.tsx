@@ -12,6 +12,7 @@ export default function NestedScaleChart({
   status,
   thm,
   expanded,
+  ttActive,
 }: {
   liveSpeed: number | null;
   prevSpeed: number | null;
@@ -21,33 +22,67 @@ export default function NestedScaleChart({
   status: LiveStatus;
   thm: AppTheme;
   expanded: boolean;
+  ttActive?: boolean;
 }) {
   const hasData = liveSpeed !== null && typical !== null && cityMax > cityMin;
+
+  /* TT mode: colour diamond by p15/p85 instead of status */
+  const ttIsTypical = ttActive && typical && liveSpeed !== null
+    ? liveSpeed >= typical.p15 && liveSpeed <= typical.p85
+    : false;
+  const ttIsFaster = ttActive && typical && liveSpeed !== null
+    ? liveSpeed > typical.p85
+    : false;
+  const ttIsSlower = ttActive && typical && liveSpeed !== null
+    ? liveSpeed < typical.p15
+    : false;
 
   const isFaster = status === "faster" || status === "unusually-fast";
   const isSlower = status === "slower" || status === "unusually-slower";
   const isTypical = status === "as-expected";
 
-  const statusColor = isTypical
-    ? thm.key === "colour"
-      ? "#9CA3AF"
-      : "#4A4A4A"
-    : thm.key === "gray"
-      ? isFaster
-        ? "#2D8A4E"
-        : isSlower
-          ? "#C0392B"
-          : "#555555"
-      : thm.key === "pastel"
+  const statusColor = ttActive
+    ? ttIsTypical
+      ? thm.key === "colour"
+        ? "#9CA3AF"
+        : "#4A4A4A"
+      : thm.key === "gray"
+        ? ttIsFaster
+          ? "#2D8A4E"
+          : ttIsSlower
+            ? "#C0392B"
+            : "#555555"
+        : thm.key === "pastel"
+          ? ttIsFaster
+            ? "#2E7D32"
+            : ttIsSlower
+              ? "#D84315"
+              : "#546E7A"
+          : ttIsFaster
+            ? "#34D399"
+            : ttIsSlower
+              ? "#F87171"
+              : "#60A5FA"
+    : isTypical
+      ? thm.key === "colour"
+        ? "#9CA3AF"
+        : "#4A4A4A"
+      : thm.key === "gray"
         ? isFaster
-          ? "#2E7D32"
+          ? "#2D8A4E"
           : isSlower
-            ? "#D84315"
-            : "#546E7A"
-        : isFaster
-          ? "#34D399"
-          : isSlower
-            ? "#F87171"
+            ? "#C0392B"
+            : "#555555"
+        : thm.key === "pastel"
+          ? isFaster
+            ? "#2E7D32"
+            : isSlower
+              ? "#D84315"
+              : "#546E7A"
+          : isFaster
+            ? "#34D399"
+            : isSlower
+              ? "#F87171"
             : "#60A5FA";
 
   const bandColor =
@@ -225,8 +260,8 @@ export default function NestedScaleChart({
               }}
             />
 
-            {/* Trail diamond */}
-            {prevPos !== null && prevPos !== livePos && (
+            {/* Trail diamond — hidden in TT mode (no 20-min prev reading) */}
+            {!ttActive && prevPos !== null && prevPos !== livePos && (
               <div
                 key={`trail-${animKey}`}
                 style={{

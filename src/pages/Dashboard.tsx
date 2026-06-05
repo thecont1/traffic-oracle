@@ -746,12 +746,12 @@ function DashboardInner() {
     const map = new Map<string, WeatherRow>();
     for (const [rc, row] of lastByRoute) {
       // Only include if at least one weather field is populated
-      if (row.temp_c === null && row.realfeel_c === null && row.humidity_pct === null && row.aqi === null) continue;
+      if (row.temp_c === null && row.realfeel_c === null && row.humidity_pct === null && row.aqi === null && row.rsi_flag === null) continue;
       map.set(rc, {
         route_code: rc,
         aqi: row.aqi,
         aqi_category: "",       // not available from traffic CSV
-        condition: "",           // not available from traffic CSV
+        condition: row.rsi_flag ?? "",
         temp_c: row.temp_c,
         temp_flag: "",           // not available from traffic CSV
         realfeel_c: row.realfeel_c,

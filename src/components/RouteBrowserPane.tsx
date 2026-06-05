@@ -50,12 +50,13 @@ function ttFormatPane(dt: Date): string {
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
 function SortedCardList({
-  cards, thm, selectedRoute, onRouteSelect,
+  cards, thm, selectedRoute, onRouteSelect, ttActive,
 }: {
   cards: RouteCardData[];
   thm: AppTheme;
   selectedRoute: string;
   onRouteSelect: (label: string) => void;
+  ttActive?: boolean;
 }) {
   // Sort ascending by liveSpeed; nulls sink to bottom
   const sorted = useMemo(() => {
@@ -113,6 +114,7 @@ function SortedCardList({
             isSelected={card.label === selectedRoute}
             onSelect={onRouteSelect}
             isLast={i === sorted.length - 1}
+            ttActive={ttActive}
           />
         </div>
       ))}
@@ -138,10 +140,11 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect, isLast,
+  card, thm, isSelected, onSelect, isLast, ttActive,
 }: {
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
+  ttActive?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -249,11 +252,11 @@ function RouteCard({
           fontStyle: 'italic',
         }}>
           {card.statusText}
-          {card.liveSpeed !== null && card.prevSpeed !== null && (
+          {!ttActive && card.liveSpeed !== null && card.prevSpeed !== null && (
             <span style={{ opacity: 0.75 }}>
-              {card.liveSpeed === card.prevSpeed 
-                ? ', no change' 
-                : card.liveSpeed !== card.prevSpeed && (card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse')
+              {card.liveSpeed === card.prevSpeed
+                ? ', no change'
+                : card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse'
               }
             </span>
           )}
@@ -320,6 +323,7 @@ function RouteCard({
         status={card.status}
         thm={thm}
         expanded={hovered || isSelected}
+        ttActive={ttActive}
       />
       
       
@@ -478,6 +482,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 thm={thm}
                 selectedRoute={selectedRoute}
                 onRouteSelect={onRouteSelect}
+                ttActive={ttActive}
               />
             )}
           </div>
@@ -592,6 +597,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 thm={thm}
                 selectedRoute={selectedRoute}
                 onRouteSelect={onRouteSelect}
+                ttActive={ttActive}
               />
             )}
           </div>

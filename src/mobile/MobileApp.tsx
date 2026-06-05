@@ -21,7 +21,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, ResponsiveContainer,
 } from "recharts";
 import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
-import { Share2, EllipsisVertical } from "lucide-react";
+import { Share2, EllipsisVertical, ChevronDown, ChevronUp } from "lucide-react";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -90,6 +90,7 @@ function MobileInner() {
   const { share, shared } = useMobileShare();
   const [showLoader, setShowLoader] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [citiesOpen, setCitiesOpen] = useState(false);
   const [chartGranularity, setChartGranularity] = useState<"daily" | "weekly">("weekly");
 
   // Question pills state (clickable, cycle through options)
@@ -346,32 +347,45 @@ function MobileInner() {
           padding: 8, minWidth: 200,
         }}>
 
-          {/* ── City selector ───────────────────────────────── */}
-          <p style={{ fontSize: 10, fontWeight: 600, color: thm.textMuted, margin: "6px 12px 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            City
-          </p>
-          {CITIES.map((city) => {
-            const hasData = !!city.data_source;
-            return (
-              <button
-                key={city.name}
-                onClick={() => { setSelectedCity(city.name); setMenuOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8, width: "100%",
-                  padding: "8px 12px", border: "none",
-                  background: selectedCity === city.name ? "rgba(128,128,128,0.15)" : "transparent",
-                  cursor: "pointer", fontSize: 13, color: thm.textPrimary, borderRadius: 8,
-                  fontWeight: selectedCity === city.name ? 600 : 400,
-                  opacity: hasData ? 1 : 0.55,
-                }}
-              >
-                <span style={{ fontSize: 10 }}>
-                  {selectedCity === city.name ? "●" : hasData ? "○" : "◌"}
-                </span>
-                <span>{city.name}</span>
-              </button>
-            );
-          })}
+          {/* ── Cities collapsible submenu ──────────────────── */}
+          <button
+            onClick={() => setCitiesOpen(o => !o)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              width: "100%", padding: "10px 12px", border: "none",
+              background: "transparent", cursor: "pointer", fontSize: 13,
+              color: thm.textPrimary, borderRadius: 8, fontWeight: 600,
+            }}
+          >
+            <span>Cities</span>
+            {citiesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {citiesOpen && (
+            <div style={{ paddingLeft: 12 }}>
+              {CITIES.map((city) => {
+                const hasData = !!city.data_source;
+                return (
+                  <button
+                    key={city.name}
+                    onClick={() => { setSelectedCity(city.name); setCitiesOpen(false); setMenuOpen(false); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%",
+                      padding: "8px 12px", border: "none",
+                      background: selectedCity === city.name ? "rgba(128,128,128,0.15)" : "transparent",
+                      cursor: "pointer", fontSize: 13, color: thm.textPrimary, borderRadius: 8,
+                      fontWeight: selectedCity === city.name ? 600 : 400,
+                      opacity: hasData ? 1 : 0.55,
+                    }}
+                  >
+                    <span style={{ fontSize: 10 }}>
+                      {selectedCity === city.name ? "●" : hasData ? "○" : "◌"}
+                    </span>
+                    <span>{city.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div style={{ height: 1, background: thm.cardBorder, margin: "4px 8px" }} />
 

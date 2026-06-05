@@ -166,19 +166,3 @@ Everything from the raw CSV download to the final chart pixel happens on your de
 
 City traffic is not normally distributed: most trips cluster around a "typical" speed, but a single accident can create a long tail of very slow trips. Simple averages hide this. TraffiCOracle uses **percentiles** — the same approach used by professional traffic services like INRIX and TomTom — so the "typical" band truly represents what most commuters experience.
 
----
-
-## Tips & Troubleshooting
-
-| Problem | What to try |
-|---------|-------------|
-| Dashboard shows no data | Check your internet connection. The app needs to reach GitHub to download the CSV files. |
-| TrafficNOW! looks old | Click the **Refresh** button in the pane, or wait a few minutes for the next automatic check. |
-| Shared link looks different on my friend's screen | Make sure the URL contains the same `theme=` parameter if you want identical colours. |
-| Fonts or layout look odd | Use the zoom pill in the header (`[-] 92% [+]`) instead of browser zoom. |
-
----
-
-## License
-
-MIT

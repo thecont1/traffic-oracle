@@ -128,10 +128,10 @@ function MobileInner() {
     window.history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
   }, [selectedCity]);
 
-  // Data loading — no auto-refresh on mobile
+  // Data loading — auto-refresh enabled (same interval as desktop)
   const { routes, allRows, loading, error, rowCount, dataTimestamp, refresh } =
-    useTrafficData(citySource, /* paused = */ true);
-  const weatherMap = useWeatherData(/* paused = */ true);
+    useTrafficData(citySource, /* paused = */ false);
+  const weatherMap = useWeatherData(/* paused = */ false);
 
   // Re-trigger loading animation on city switch
   const prevCityRef = useRef(selectedCity);

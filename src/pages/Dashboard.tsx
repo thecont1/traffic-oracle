@@ -704,6 +704,22 @@ function DashboardInner() {
   const zoomIn = useCallback(() => setZoomIdx(i => Math.min(i + 1, ZOOM_STEPS.length - 1)), []);
   const zoomOut = useCallback(() => setZoomIdx(i => Math.max(i - 1, 0)), []);
 
+  /* route dropdown */
+  const [routeDropdownOpen, setRouteDropdownOpen] = useState(false);
+  const routeDropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (routeDropdownRef.current && !routeDropdownRef.current.contains(e.target as Node)) {
+        setRouteDropdownOpen(false);
+      }
+    };
+    if (routeDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+    return undefined;
+  }, [routeDropdownOpen]);
+
   /* data */
   const { routes, allRows, loading, error, rowCount, lastUpdated, dataTimestamp, refresh } =
     useTrafficData(citySource, tt.isActive);
@@ -1438,20 +1454,124 @@ function DashboardInner() {
         }}>
           <div style={{ margin:"0 auto", padding:"0.75rem 1rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-            {/* Left: Logo + Location */}
+            {/* Left: Logo + City name */}
             <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-              <img
-                src="/trafficoracle-light.png"
-                alt="TraffiCOracle"
-                width={120}
-                height={32}
-                style={{ height:32, width:"auto", flexShrink:0 }}
-              />
-              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <img
+                  src="/trafficoracle-light.png"
+                  alt="TraffiCOracle"
+                  width={120}
+                  height={32}
+                  style={{ height:32, width:"auto", flexShrink:0, display:"block" }}
+                />
+                <svg
+                  height={20}
+                  viewBox="0 0 120 14"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ position: "absolute", bottom: -13, right: -8, overflow: "visible" }}
+                >
+                  <text
+                    x={50}
+                    y={12}
+                    textAnchor="start"
+                    fill={thm.textMuted}
+                    fontSize={10}
+                    fontFamily="var(--app-font-display), Inter, system-ui, sans-serif"
+                    fontWeight={900}
+                    letterSpacing="0.12em"
+                  >
+                    {selectedCity.toUpperCase()}
+                  </text>
+                </svg>
+              </div>
             </div>
 
-            {/* Right: Time Travel + Theme + Share + Zoom */}
+            {/* Right: Cities + Routes + Time Travel + Share + Zoom + Theme */}
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>
+              {/* City pill */}
+              <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
+
+              {/* Route pill */}
+              <div ref={routeDropdownRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setRouteDropdownOpen(o => !o)}
+                  aria-expanded={routeDropdownOpen}
+                  style={{
+                    height: 44,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "0 12px",
+                    borderRadius: 9999,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    fontFamily: "var(--app-font-display)",
+                    border: `1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                    background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
+                    color: thm.textSecondary,
+                  }}
+                >
+                  <span>🛣</span>
+                  <span>{selectedRoute}</span>
+                  <span style={{
+                    marginLeft: 2,
+                    fontSize: 10,
+                    transform: routeDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                  }}>▼</span>
+                </button>
+
+                {routeDropdownOpen && (
+                  <div style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    minWidth: 180,
+                    maxHeight: 320,
+                    overflow: "auto",
+                    background: thm.sectionBg,
+                    border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+                    borderRadius: 8,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    padding: "4px 0",
+                    zIndex: 1000,
+                  }}>
+                    {routeOptions.map((route) => (
+                      <button
+                        key={route}
+                        onClick={() => {
+                          const idx = routeOptions.indexOf(route);
+                          if (idx >= 0) setRouteIdx(idx);
+                          setRouteDropdownOpen(false);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          width: "100%",
+                          padding: "8px 12px",
+                          minHeight: 36,
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: route === selectedRoute ? 700 : 400,
+                          color: thm.textPrimary,
+                          textAlign: "left",
+                        }}
+                      >
+                        <span style={{ fontSize: 10 }}>
+                          {route === selectedRoute ? "●" : "○"}
+                        </span>
+                        <span>{route}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Time Travel pill — blazing when active */}
               <button
                 ref={ttButtonRef}
@@ -1666,28 +1786,6 @@ function DashboardInner() {
                 document.body
               )}
 
-              {/* Theme pill */}
-              <button
-                onClick={cycleTheme}
-                title={`Switch to ${nextMeta.label}`}
-                style={{
-                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                  height:44, borderRadius:9999, padding:"0 12px",
-                  minWidth: 160,
-                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
-                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
-                  cursor:"pointer",
-                  transition:"background 0.2s",
-                }}
-                aria-label="Cycle theme"
-              >
-                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
-                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
-                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
-                  {curMeta.label}
-                </span>
-              </button>
-
               {/* Share pill */}
               {!loading && effectiveRowCount > 0 && (
                 <button onClick={handleShare} style={{
@@ -1740,6 +1838,28 @@ function DashboardInner() {
                   <Plus size={13} />
                 </button>
               </div>
+
+              {/* Theme pill */}
+              <button
+                onClick={cycleTheme}
+                title={`Switch to ${nextMeta.label}`}
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                  height:44, borderRadius:9999, padding:"0 12px",
+                  minWidth: 160,
+                  border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                  background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
+                  cursor:"pointer",
+                  transition:"background 0.2s",
+                }}
+                aria-label="Cycle theme"
+              >
+                <span style={{ fontSize:14 }}>{curMeta.icon}</span>
+                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                  color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
+                  {curMeta.label}
+                </span>
+              </button>
             </div>
           </div>
         </header>

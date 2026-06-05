@@ -26,16 +26,11 @@ export default function LocationDropdown({ thm, selectedCity, onCityChange, citi
     return undefined;
   }, [isOpen]);
 
-  const tok = thm.chips.city;
-  const styleOverride: React.CSSProperties = thm.key !== "colour" ? {
-    background: tok.bg,
-    color: tok.color,
-    border: `1.5px solid ${tok.border}`,
-    boxShadow: tok.shadow,
-  } : {
-    background: "rgba(255,255,255,0.15)",
-    color: thm.textPrimary,
-    border: "1.5px solid rgba(255,255,255,0.3)",
+  const pillBg = thm.key === "colour" ? "#141A24" : thm.key === "gray" ? "#f5f5f5" : "#ffefe6";
+  const styleOverride: React.CSSProperties = {
+    background: pillBg,
+    color: thm.textSecondary,
+    border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
   };
 
   return (
@@ -51,14 +46,13 @@ export default function LocationDropdown({ thm, selectedCity, onCityChange, citi
           padding: "0 12px",
           borderRadius: 9999,
           cursor: "pointer",
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 600,
           fontFamily: "var(--app-font-display)",
           ...styleOverride,
         }}
       >
-        <span>📍</span>
-        <span>{selectedCity}</span>
+        <span>City Explorer</span>
         <span style={{
           marginLeft: 2,
           fontSize: 10,

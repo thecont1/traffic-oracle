@@ -1492,7 +1492,7 @@ function DashboardInner() {
               {/* City pill */}
               <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
 
-              {/* Route pill */}
+              {/* Route Observer pill */}
               <div ref={routeDropdownRef} style={{ position: "relative" }}>
                 <button
                   onClick={() => setRouteDropdownOpen(o => !o)}
@@ -1505,7 +1505,7 @@ function DashboardInner() {
                     padding: "0 12px",
                     borderRadius: 9999,
                     cursor: "pointer",
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600,
                     fontFamily: "var(--app-font-display)",
                     border: `1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
@@ -1513,8 +1513,7 @@ function DashboardInner() {
                     color: thm.textSecondary,
                   }}
                 >
-                  <span>🛣</span>
-                  <span>{selectedRoute}</span>
+                  <span>Route Observer</span>
                   <span style={{
                     marginLeft: 2,
                     fontSize: 10,
@@ -1538,14 +1537,13 @@ function DashboardInner() {
                     padding: "4px 0",
                     zIndex: 1000,
                   }}>
-                    {routeOptions.map((route) => (
-                      <button
-                        key={route}
-                        onClick={() => {
-                          const idx = routeOptions.indexOf(route);
-                          if (idx >= 0) setRouteIdx(idx);
-                          setRouteDropdownOpen(false);
-                        }}
+                    {routes.map((route) => (
+                      <a
+                        key={route.route_code}
+                        href={route.map_link || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => { setRouteDropdownOpen(false); }}
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -1555,18 +1553,23 @@ function DashboardInner() {
                           minHeight: 36,
                           border: "none",
                           background: "transparent",
-                          cursor: "pointer",
+                          cursor: route.map_link ? "pointer" : "default",
                           fontSize: 12,
-                          fontWeight: route === selectedRoute ? 700 : 400,
+                          fontWeight: route.label_short === selectedRoute ? 700 : 400,
                           color: thm.textPrimary,
                           textAlign: "left",
+                          textDecoration: "none",
+                          opacity: route.map_link ? 1 : 0.55,
                         }}
                       >
                         <span style={{ fontSize: 10 }}>
-                          {route === selectedRoute ? "●" : "○"}
+                          {route.map_link ? "○" : "◌"}
                         </span>
-                        <span>{route}</span>
-                      </button>
+                        <span>{route.label_short}</span>
+                        {route.map_link && (
+                          <span style={{ marginLeft: "auto", fontSize: 10, color: thm.textMuted }}>↗</span>
+                        )}
+                      </a>
                     ))}
                   </div>
                 )}
@@ -1596,13 +1599,13 @@ function DashboardInner() {
                     : thm.textMuted,
                   background: tt.isActive
                     ? (ttBgActiveMap[themeKey] ?? ttBgActiveMap.colour)
-                    : themeKey==="colour" ? "#141A24" : "transparent",
+                    : themeKey==="colour" ? "#141A24" : themeKey==="gray" ? "#f5f5f5" : "#ffefe6",
                   boxShadow: tt.isActive ? (ttGlowMap[themeKey] ?? ttGlowMap.colour) : "none",
                   cursor:"pointer",
                   transition:"color 0.2s, background 0.2s, box-shadow 0.4s, border-color 0.2s",
                   animation: tt.isActive ? "tt-glow-pulse 3s ease-in-out infinite" : "none",
                 }}
-                title={tt.isActive ? "Click to cancel Time Travel" : "Open Time Travel"}
+                title={tt.isActive ? "Click to cancel Time Traveller" : "Open Time Traveller"}
               >
                 {/* Shimmer sweep overlay */}
                 {tt.isActive && (
@@ -1615,13 +1618,20 @@ function DashboardInner() {
                     borderRadius:9999,
                   }} />
                 )}
-                <span style={{ fontSize:14, position:"relative", zIndex:1 }}>{tt.isActive ? "★" : "⏳"}</span>
                 <span style={{
-                  fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1,
+                  fontFamily:"var(--app-font-display)", fontSize:13, fontWeight:600, lineHeight:1,
                   whiteSpace:"nowrap", position:"relative", zIndex:1,
                 }}>
-                  Time Travel
+                  Time Traveller
                 </span>
+                {!tt.isActive && (
+                  <span style={{
+                    fontSize: 10,
+                    transform: ttPopoverOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                    marginLeft: 2,
+                  }}>▼</span>
+                )}
               </button>
 
               {/* Time Travel calendar popover */}
@@ -1793,11 +1803,10 @@ function DashboardInner() {
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, height:44, padding:"0 14px",
                   color: copied ? thm.speedGood : thm.textMuted,
-                  background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#141A24" : "transparent",
+                  background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
-                  <Share2 size={13} />
-                  <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600, lineHeight:1 }}>
+                  <span style={{ fontFamily:"var(--app-font-display)", fontSize:13, fontWeight:600, lineHeight:1 }}>
                     {copied ? "Copied!" : "Share"}
                   </span>
                 </button>
@@ -1808,7 +1817,7 @@ function DashboardInner() {
                 display:"flex", alignItems:"center",
                 border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                 borderRadius:9999, height:44, overflow:"hidden",
-                background: thm.key==="colour" ? "#141A24" : "transparent",
+                background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
               }}>
                 <button onClick={zoomOut} disabled={zoomIdx === 0}
                   title="Decrease size"
@@ -1818,10 +1827,10 @@ function DashboardInner() {
                     color: thm.textMuted, cursor: zoomIdx === 0 ? "default" : "pointer",
                     opacity: zoomIdx === 0 ? 0.3 : 1,
                   }}>
-                  <Minus size={13} />
+                  <span style={{ fontFamily:"var(--app-font-display)", fontSize:13, fontWeight:600, color: thm.textMuted }}>−</span>
                 </button>
                 <span style={{
-                  fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                  fontFamily:"var(--app-font-display)", fontSize:13, fontWeight:600,
                   color: thm.textSecondary, lineHeight:1, minWidth:32, textAlign:"center",
                   userSelect:"none",
                 }}>
@@ -1835,7 +1844,7 @@ function DashboardInner() {
                     color: thm.textMuted, cursor: zoomIdx === ZOOM_STEPS.length - 1 ? "default" : "pointer",
                     opacity: zoomIdx === ZOOM_STEPS.length - 1 ? 0.3 : 1,
                   }}>
-                  <Plus size={13} />
+                  <span style={{ fontFamily:"var(--app-font-display)", fontSize:13, fontWeight:600, color: thm.textMuted }}>+</span>
                 </button>
               </div>
 
@@ -1855,7 +1864,7 @@ function DashboardInner() {
                 aria-label="Cycle theme"
               >
                 <span style={{ fontSize:14 }}>{curMeta.icon}</span>
-                <span style={{ fontFamily:"var(--app-font-display)", fontSize:11, fontWeight:600,
+                <span style={{ fontFamily:"var(--app-font-display)", fontSize:13, fontWeight:600,
                   color: thm.textSecondary, lineHeight:1, whiteSpace:"nowrap" }}>
                   {curMeta.label}
                 </span>

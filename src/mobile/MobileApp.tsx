@@ -21,7 +21,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RCTooltip, ResponsiveContainer,
 } from "recharts";
 import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
-import { Share2, EllipsisVertical, ChevronDown, ChevronUp } from "lucide-react";
+import { Share2, Menu, ChevronDown, ChevronUp } from "lucide-react";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -339,7 +339,7 @@ function MobileInner() {
           }}
           aria-label="Menu"
         >
-          <EllipsisVertical size={20} />
+          <Menu size={20} />
         </button>
       </header>
 
@@ -358,7 +358,7 @@ function MobileInner() {
             padding: 8, minWidth: 200,
           }}>
 
-            {/* ── CITIES collapsible submenu ──────────────────── */}
+            {/* ── CITY EXPLORER collapsible submenu ─────────── */}
             <button
               onClick={() => setCitiesOpen(o => !o)}
               style={{
@@ -369,7 +369,7 @@ function MobileInner() {
                 textTransform: "uppercase", letterSpacing: "0.04em",
               }}
             >
-              <span>Cities</span>
+              <span>City Explorer</span>
               {citiesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {citiesOpen && (
@@ -414,7 +414,7 @@ function MobileInner() {
                     textTransform: "uppercase", letterSpacing: "0.04em",
                   }}
                 >
-                  <span>Routes</span>
+                  <span>Route Observer</span>
                   {routesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {routesOpen && (
@@ -455,7 +455,7 @@ function MobileInner() {
                   opacity: 0.45,
                 }}
               >
-                <span>Routes</span>
+                <span>Route Observer</span>
                 <span style={{ fontSize: 10, color: thm.textMuted }}>◌</span>
               </button>
             )}

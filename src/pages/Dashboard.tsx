@@ -911,9 +911,9 @@ function DashboardInner() {
 
   useEffect(() => {
     if (allRouteWeeks.length === 0) return;
-    // If user has manually set the slider, don't reset it on tod/period changes
+    // If user has manually set the slider, don't reset it
     if (sliderManuallySet) return;
-    
+
     const maxI = allRouteWeeks.length - 1;
     const p = urlParamsRef.current;
     if (p.bl !== undefined && p.br !== undefined) {
@@ -924,23 +924,28 @@ function DashboardInner() {
       urlParamsRef.current = { ...p, bl: undefined, br: undefined };
       return;
     }
-    const cfgStart = cfg.defaults.baseline_start;
-    const cfgEnd   = cfg.defaults.baseline_end;
-    let leftIdx  = 0;
-    let rightIdx = Math.max(0, Math.floor(maxI * 0.5));
-    if (cfgStart) {
-      const idx = allRouteWeeks.findIndex(w => w.weekKey >= cfgStart);
-      if (idx >= 0) leftIdx = idx;
+
+    // Equal-length baseline: same number of weeks as the recent period
+    const lastDataDate = allRouteWeeks[maxI]?.weekStart ?? new Date();
+    const cutoff = new Date(lastDataDate);
+    if      (period === "1m")   cutoff.setDate(cutoff.getDate() - 30);
+    else if (period === "1.5m") cutoff.setDate(cutoff.getDate() - 45);
+    else if (period === "2m")   cutoff.setDate(cutoff.getDate() - 60);
+    else if (period === "3m")   cutoff.setMonth(cutoff.getMonth() - 3);
+    else if (period === "6m")   cutoff.setMonth(cutoff.getMonth() - 6);
+    else                         cutoff.setFullYear(cutoff.getFullYear() - 1);
+
+    const recentStartIdx = allRouteWeeks.findIndex(w => w.weekStart >= cutoff);
+    if (recentStartIdx > 0) {
+      const recentCount = allRouteWeeks.length - recentStartIdx;
+      const rightIdx = recentStartIdx - 1;
+      const leftIdx = Math.max(0, rightIdx - recentCount + 1);
+      setSliderVals([leftIdx, rightIdx]);
+    } else {
+      // Fallback: first half of data
+      setSliderVals([0, Math.max(0, Math.floor(maxI * 0.5))]);
     }
-    if (cfgEnd) {
-      let idx = -1;
-      for (let i = allRouteWeeks.length - 1; i >= 0; i--) {
-        if (allRouteWeeks[i].weekKey <= cfgEnd) { idx = i; break; }
-      }
-      if (idx >= 0) rightIdx = idx;
-    }
-    setSliderVals([Math.min(leftIdx, rightIdx), Math.max(leftIdx, rightIdx)]);
-  }, [tod, allRouteWeeks.length, sliderManuallySet]);
+  }, [tod, allRouteWeeks.length, sliderManuallySet, period]);
 
   // Time Travel: save pre-TT state on activate, restore on cancel.
   // Uses stateSnapshotRef for closure-safe capture and ttStateHelpers

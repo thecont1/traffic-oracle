@@ -404,6 +404,8 @@ export function useTrafficData(citySource?: CitySource, paused?: boolean) {
       setLoading(true);
       setError(null);
       setRowCount(0);
+      setRoutes([]);
+      setAllRows([]);
 
       fetchTrafficData(signal, citySource)
         .then(({ routes: rl, allRows: ar, rowCount: rc }) => {

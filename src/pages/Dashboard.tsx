@@ -1493,10 +1493,91 @@ function DashboardInner() {
               <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
 
               {/* Route Observer pill */}
-              <div ref={routeDropdownRef} style={{ position: "relative" }}>
+              {citySource ? (
+                <div ref={routeDropdownRef} style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setRouteDropdownOpen(o => !o)}
+                    aria-expanded={routeDropdownOpen}
+                    style={{
+                      height: 44,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "0 12px",
+                      borderRadius: 9999,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      fontFamily: "var(--app-font-display)",
+                      border: `1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
+                      background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
+                      color: thm.textSecondary,
+                    }}
+                  >
+                    <span>Route Observer</span>
+                    <span style={{
+                      marginLeft: 2,
+                      fontSize: 10,
+                      transform: routeDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                    }}>▼</span>
+                  </button>
+
+                  {routeDropdownOpen && (
+                    <div style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      minWidth: 180,
+                      maxHeight: 320,
+                      overflow: "auto",
+                      background: thm.sectionBg,
+                      border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
+                      borderRadius: 8,
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                      padding: "4px 0",
+                      zIndex: 1000,
+                    }}>
+                      {routes.map((route) => (
+                        <a
+                          key={route.route_code}
+                          href={route.map_link || undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => { setRouteDropdownOpen(false); }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            width: "100%",
+                            padding: "8px 12px",
+                            minHeight: 36,
+                            border: "none",
+                            background: "transparent",
+                            cursor: route.map_link ? "pointer" : "default",
+                            fontSize: 12,
+                            fontWeight: route.label_short === selectedRoute ? 700 : 400,
+                            color: thm.textPrimary,
+                            textAlign: "left",
+                            textDecoration: "none",
+                            opacity: route.map_link ? 1 : 0.55,
+                          }}
+                        >
+                          <span style={{ fontSize: 10 }}>
+                            {route.map_link ? "○" : "◌"}
+                          </span>
+                          <span>{route.label_short}</span>
+                          {route.map_link && (
+                            <span style={{ marginLeft: "auto", fontSize: 10, color: thm.textMuted }}>↗</span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <button
-                  onClick={() => setRouteDropdownOpen(o => !o)}
-                  aria-expanded={routeDropdownOpen}
+                  disabled
                   style={{
                     height: 44,
                     display: "flex",
@@ -1504,76 +1585,20 @@ function DashboardInner() {
                     gap: 4,
                     padding: "0 12px",
                     borderRadius: 9999,
-                    cursor: "pointer",
+                    cursor: "default",
                     fontSize: 13,
                     fontWeight: 600,
                     fontFamily: "var(--app-font-display)",
                     border: `1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                     background: thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
                     color: thm.textSecondary,
+                    opacity: 0.45,
                   }}
                 >
                   <span>Route Observer</span>
-                  <span style={{
-                    marginLeft: 2,
-                    fontSize: 10,
-                    transform: routeDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                  }}>▼</span>
+                  <span style={{ marginLeft: 2, fontSize: 10, color: thm.textMuted }}>◌</span>
                 </button>
-
-                {routeDropdownOpen && (
-                  <div style={{
-                    position: "absolute",
-                    top: "calc(100% + 4px)",
-                    left: 0,
-                    minWidth: 180,
-                    maxHeight: 320,
-                    overflow: "auto",
-                    background: thm.sectionBg,
-                    border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
-                    borderRadius: 8,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    padding: "4px 0",
-                    zIndex: 1000,
-                  }}>
-                    {routes.map((route) => (
-                      <a
-                        key={route.route_code}
-                        href={route.map_link || undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => { setRouteDropdownOpen(false); }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          width: "100%",
-                          padding: "8px 12px",
-                          minHeight: 36,
-                          border: "none",
-                          background: "transparent",
-                          cursor: route.map_link ? "pointer" : "default",
-                          fontSize: 12,
-                          fontWeight: route.label_short === selectedRoute ? 700 : 400,
-                          color: thm.textPrimary,
-                          textAlign: "left",
-                          textDecoration: "none",
-                          opacity: route.map_link ? 1 : 0.55,
-                        }}
-                      >
-                        <span style={{ fontSize: 10 }}>
-                          {route.map_link ? "○" : "◌"}
-                        </span>
-                        <span>{route.label_short}</span>
-                        {route.map_link && (
-                          <span style={{ marginLeft: "auto", fontSize: 10, color: thm.textMuted }}>↗</span>
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Time Travel pill — blazing when active */}
               <button

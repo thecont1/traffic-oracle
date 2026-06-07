@@ -96,14 +96,15 @@ export const TOOLTIP_CONTENT = {
     ].join(" "),
   },
 
-  // ── TrafficNOW! Forecast Bands ──────────────────────────────────
+  // ── Weekly Speed Distribution ────────────────────────────────────
   forecastBands: {
-    title: "Speed forecast bands",
+    title: "Weekly speed distribution",
     body: [
-      "This chart shows the expected range of traffic speeds for each week, based on historical patterns.",
-      "The dark centre line is the median (50th percentile) — the most likely outcome.",
-      "The inner band (15th–85th percentile) captures the core range where most trips fall.",
+      "This chart shows how speeds were distributed across each week, filtered to your selected time bracket.",
+      "The dark centre line is the median (50th percentile) — the typical trip speed that week.",
+      "The inner band (15th–85th percentile) captures the core range where most trips fell.",
       "The outer band (5th–95th percentile) shows the full spread including unusually fast and slow trips.",
+      "Use the baseline slider to compare a reference period against recent weeks.",
     ].join(" "),
   },
 

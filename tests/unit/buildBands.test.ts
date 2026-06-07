@@ -130,3 +130,42 @@ describe("buildBands", () => {
     check(datum.p05); check(datum.p15); check(datum.p50); check(datum.p85); check(datum.p95);
   });
 });
+
+describe("buildBands with tod filter", () => {
+  // Rows at hour=8, dayOfWeek=1 (Mon) → matches "weekday_morning"
+  // Rows at hour=20, dayOfWeek=1 (Mon) → matches "weekday_evening" not morning
+  function makeRowAt(speed_kmh: number, hour: number, dow: number): TrafficRow {
+    return { ...makeRow(speed_kmh), hour, dayOfWeek: dow };
+  }
+
+  const morningRows = [30, 35, 40, 45, 50].map(s => makeRowAt(s, 8, 1));
+  const eveningRows = [10, 12, 14].map(s => makeRowAt(s, 20, 1));
+  const mixed       = [...morningRows, ...eveningRows];
+
+  test("tod='all' includes all rows (same as no-tod)", () => {
+    const [a] = buildBands([makeWeek(WEEK)], mixed, "all");
+    const [b] = buildBands([makeWeek(WEEK)], mixed);
+    expect(a).toEqual(b);
+  });
+
+  test("tod='weekday_morning' includes only morning rows, producing higher speeds", () => {
+    const [all]     = buildBands([makeWeek(WEEK)], mixed, "all");
+    const [morning] = buildBands([makeWeek(WEEK)], mixed, "weekday_morning");
+    // morning-only median should be higher than all-hours median
+    expect(morning.p50).toBeGreaterThan(all.p50);
+  });
+
+  test("tod='weekday_morning' with exactly 2 matching rows uses their mean as fallback centre", () => {
+    // 2 morning rows with speeds 30 and 50 → mean = 40
+    const twoMorning = [makeRowAt(30, 8, 1), makeRowAt(50, 8, 1)];
+    const [datum]    = buildBands([makeWeek(WEEK, 99)], twoMorning, "weekday_morning");
+    // fallback: mean of [30, 50] = 40.0 (not w.avgSpeed=99)
+    expect(datum.p50).toBe(40.0);
+  });
+
+  test("tod='late_hours' with only morning rows falls back to w.avgSpeed", () => {
+    // No late-hours rows → speeds=[] → last-resort fallback to w.avgSpeed
+    const [datum] = buildBands([makeWeek(WEEK, 25)], morningRows, "late_hours");
+    expect(datum.p50).toBe(25.0);
+  });
+});

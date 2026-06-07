@@ -70,23 +70,24 @@ test.describe("Speed Forecast Bands card", () => {
 
     test("chart content is hidden by default (tnOpen = false)", async ({ page }) => {
       const card = page.getByTestId("forecast-bands-card");
-      // The subtitle paragraph only renders when tnOpen=true
-      await expect(card.getByText("Weekly speed distribution")).not.toBeVisible();
+      // The subtitle paragraph (contains "·") only renders when tnOpen=true;
+      // the card title and SVG title do not contain "·" so the regex is unique.
+      await expect(card.getByText(/Weekly speed distribution ·/)).not.toBeVisible();
     });
 
     test("clicking the toggle reveals the chart content", async ({ page }) => {
       const card = page.getByTestId("forecast-bands-card");
       await card.getByRole("button").first().click();
-      await expect(card.getByText("Weekly speed distribution")).toBeVisible();
+      await expect(card.getByText(/Weekly speed distribution ·/)).toBeVisible();
     });
 
     test("clicking toggle a second time collapses the chart again", async ({ page }) => {
       const card = page.getByTestId("forecast-bands-card");
       const btn = card.getByRole("button").first();
       await btn.click();
-      await expect(card.getByText("Weekly speed distribution")).toBeVisible();
+      await expect(card.getByText(/Weekly speed distribution ·/)).toBeVisible();
       await btn.click();
-      await expect(card.getByText("Weekly speed distribution")).not.toBeVisible();
+      await expect(card.getByText(/Weekly speed distribution ·/)).not.toBeVisible();
     });
   });
 
@@ -109,12 +110,10 @@ test.describe("Speed Forecast Bands card", () => {
     expect(errors).toHaveLength(0);
   });
 
-  /* ── Known design behaviour: ToD filter does not affect band shapes ── */
-
-  test("card is still visible on weekday_morning ToD (buildBands uses all-hours rows)", async ({ page }) => {
-    // The forecast-bands fixture has trips at 08:30 which IS in weekday_morning.
-    // This test documents that buildBands counts those rows regardless of the ToD selector,
-    // i.e., the card does not disappear when a narrow ToD is selected.
+  test("card is visible on weekday_morning ToD (fixture rows at 08:30 match the filter)", async ({ page }) => {
+    // All 17 fixture rows are at 08:30 Mon–Fri, which falls inside weekday_morning.
+    // buildBands now respects the tod filter, so those rows ARE included and the
+    // card remains visible with real (non-fallback) bands for the full weeks.
     await interceptWith(page, bandsCsv);
     await page.goto("/?route=Hosur+Road&tod=weekday_morning&period=1.5m");
     await expect(page.getByTestId("forecast-bands-card")).toBeVisible();

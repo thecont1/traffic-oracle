@@ -1159,10 +1159,10 @@ function DashboardInner() {
   /* ── TrafficNOW! per-week percentile bands ───────────────────── */
   const { trafficNowData, trafficNowCompare } = useMemo(() => {
     const routeRows    = ttAllRows.filter(r => r.label_short === selectedRoute);
-    const recentData   = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12), routeRows);
-    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : [], routeRows);
+    const recentData   = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12), routeRows, tod);
+    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : [], routeRows, tod);
     return { trafficNowData: recentData, trafficNowCompare: baselineData };
-  }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
+  }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks, tod]);
 
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
@@ -2679,7 +2679,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "✳︎"} Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
+                            {tt.isActive ? "⏳" : "✳︎"} Weekly Speed Distribution{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2710,7 +2710,7 @@ function DashboardInner() {
                             data={trafficNowData}
                             compareData={trafficNowCompare.length > 0 ? trafficNowCompare : undefined}
                             mode={trafficNowCompare.length > 0 ? "compare" : tnMode}
-                            title={`TrafficNOW! forecast bands for ${selectedRoute}`}
+                            title={`Weekly speed distribution for ${selectedRoute}`}
                             routeName={selectedRoute}
                             seriesLabel={`Recent: ${todLabel}`}
                             compareLabel={`Baseline: ${fmtDate(baselineStartDate)}–${fmtDate(baselineEndDate)}`}

@@ -67,7 +67,7 @@ function MobileCarLoader({ thm, onComplete }: { thm: any; onComplete: () => void
       opacity: fading ? 0 : 1,
       transition: "opacity 0.4s ease",
     }}>
-      <img src="/trafficoracle-light.png" alt="TraffiCOracle" style={{ width: "min(40vw, 200px)", marginBottom: 32 }} />
+      <img src="/trafficoracle-light.png" alt="traffiCOracle" style={{ width: "min(40vw, 200px)", marginBottom: 32 }} />
       <p style={{
         fontFamily: "var(--app-font-display)", fontWeight: 800,
         fontSize: "clamp(2rem, 10vw, 3.5rem)", letterSpacing: "-0.04em",
@@ -262,7 +262,7 @@ function MobileInner() {
   // Share handler
   const handleShare = useCallback(() => {
     share({
-      title: `TraffiCOracle — ${selectedRoute}`,
+      title: `traffiCOracle — ${selectedRoute}`,
       text: `${v.msg} (${selectedRoute})`,
       url: window.location.href,
     });
@@ -299,7 +299,7 @@ function MobileInner() {
         justifyContent: "space-between", flexShrink: 0, zIndex: 100,
       }}>
         <div style={{ position: "relative", display: "inline-block" }}>
-          <img src="/trafficoracle-light.png" alt="TraffiCOracle" style={{ height: 28, width: "auto", display: "block" }} />
+          <img src="/trafficoracle-light.png" alt="traffiCOracle" style={{ height: 28, width: "auto", display: "block" }} />
           <svg
             height={18}
             viewBox="0 0 120 12"

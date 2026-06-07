@@ -1,8 +1,8 @@
-# WARP.md — TraffiCOracle AI Onboarding Guide
+# WARP.md — traffiCOracle AI Onboarding Guide
 
 ## Architecture Overview
 
-TraffiCOracle is a **zero-backend, config-driven traffic analytics dashboard** for Indian cities. It fetches live traffic CSV data from GitHub raw files, parses it client-side, and presents weekly/daily speed and duration trends with interactive charts, route comparisons, and a Time Travel simulation feature.
+traffiCOracle is a **zero-backend, config-driven traffic analytics dashboard** for Indian cities. It fetches live traffic CSV data from GitHub raw files, parses it client-side, and presents weekly/daily speed and duration trends with interactive charts, route comparisons, and a Time Travel simulation feature.
 
 ### Tech Stack
 
@@ -36,7 +36,7 @@ TraffiCOracle is a **zero-backend, config-driven traffic analytics dashboard** f
 ## Project Structure
 
 ```
-TraffiCOracle/
+traffiCOracle/
 ├── config.json              # City data sources, percentile settings, UI defaults
 ├── index.html               # SPA entry point
 ├── package.json             # Scripts, dependencies

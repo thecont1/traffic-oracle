@@ -84,7 +84,7 @@ export default {
       const upstream = await fetch(upstreamUrl, {
         // Tell Cloudflare's own fetch not to use its cache for this subrequest
         cf: { cacheEverything: false, cacheTtl: 0 },
-        headers: { "User-Agent": "TraffiCOracle/1.0" },
+        headers: { "User-Agent": "traffiCOracle/1.0" },
       } as RequestInit & { cf?: { cacheEverything: boolean; cacheTtl: number } });
 
       if (!upstream.ok) {

@@ -1,10 +1,10 @@
-# TraffiCOracle
+# traffiCOracle
 
 <p align="center">
-  <img src="public/trafficoracle-light.png" alt="TraffiCOracle" height="64">
+  <img src="public/trafficoracle-light.png" alt="traffiCOracle" height="64">
 </p>
 
-**TraffiCOracle** is a free, live traffic dashboard for Bangalore. It shows you how fast (or slow) the city is moving right now — and how today's conditions compare to the last few months.
+**traffiCOracle** is a free, live traffic dashboard for Bangalore. It shows you how fast (or slow) the city is moving right now — and how today's conditions compare to the last few months.
 
 There is **no app to install, no login, and no server** running behind it. Open it in any browser, on your phone or laptop, and it works immediately. All the number-crunching happens inside your browser, and the data is pulled fresh from a public dataset that updates throughout the day.
 
@@ -66,7 +66,7 @@ There is **no app to install, no login, and no server** running behind it. Open 
 
 ## Quick Start
 
-You do **not** need to run anything locally to use TraffiCOracle. The public instance loads instantly in a browser.
+You do **not** need to run anything locally to use traffiCOracle. The public instance loads instantly in a browser.
 
 If you want to hack on the code or run it offline:
 
@@ -80,7 +80,7 @@ If you want to hack on the code or run it offline:
 
 ```bash
 # Clone the repository
-git clone <repo-url> && cd TraffiCOracle
+git clone https://github.com/thecont1/traffic-oracle && cd traffic-oracle
 
 # Install dependencies
 bun install
@@ -106,7 +106,7 @@ bun run deploy      # Deploy to Cloudflare Workers
 
 ### Where the data comes from
 
-TraffiCOracle reads two CSV files that are published by its sister project, **[traffic-monitor-lizard](https://github.com/thecont1/traffic-monitor-lizard)**. That project uses a small automated script to check Google Maps travel times every 30 minutes and appends the results to a public CSV on GitHub. TraffiCOracle fetches those files directly from GitHub's raw-content CDN.
+traffiCOracle reads two CSV files that are published by its sister project, **[traffic-monitor-lizard](https://github.com/thecont1/traffic-monitor-lizard)**. That project uses a small automated script to check Google Maps travel times every 30 minutes and appends the results to a public CSV on GitHub. traffiCOracle fetches those files directly from GitHub's raw-content CDN.
 
 - **Routes file** — metadata about each monitored road (`csv-routes-bangalore.csv`)
 - **Traffic file** — timestamped speed and duration readings (`csv-traffic-bangalore.csv`)
@@ -123,7 +123,7 @@ TraffiCOracle reads two CSV files that are published by its sister project, **[t
 | `duration` | `35` | Travel time in minutes |
 | `distance` | `18` | Route distance in kilometres |
 
-From `duration` and `distance`, TraffiCOracle computes **average speed** (km/h) for every row.
+From `duration` and `distance`, traffiCOracle computes **average speed** (km/h) for every row.
 
 ### Data quality
 
@@ -146,7 +146,7 @@ After validation, rows are aggregated by week and by day, and filtered by the ro
 
 ## How it works
 
-TraffiCOracle is a **zero-backend** React app. That means there is no private server holding your data, no login gate, and no API key to configure.
+traffiCOracle is a **zero-backend** React app. That means there is no private server holding your data, no login gate, and no API key to configure.
 
 ```
 Your Browser
@@ -164,5 +164,5 @@ Everything from the raw CSV download to the final chart pixel happens on your de
 
 ### Why percentiles matter
 
-City traffic is not normally distributed: most trips cluster around a "typical" speed, but a single accident can create a long tail of very slow trips. Simple averages hide this. TraffiCOracle uses **percentiles** — the same approach used by professional traffic services like INRIX and TomTom — so the "typical" band truly represents what most commuters experience.
+City traffic is not normally distributed: most trips cluster around a "typical" speed, but a single accident can create a long tail of very slow trips. Simple averages hide this. traffiCOracle uses **percentiles** — the same approach used by professional traffic services like INRIX and TomTom — so the "typical" band truly represents what most commuters experience.
 

@@ -1403,7 +1403,7 @@ function DashboardInner() {
               <div style={{ position: "relative", display: "inline-block" }}>
                 <img
                   src="/trafficoracle-light.png"
-                  alt="TraffiCOracle"
+                  alt="traffiCOracle"
                   width={120}
                   height={32}
                   style={{ height:32, width:"auto", flexShrink:0, display:"block" }}

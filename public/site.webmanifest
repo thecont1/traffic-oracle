@@ -1,6 +1,6 @@
 {
-  "name": "TraffiCOracle — Traffic Intelligence for Bangalore",
-  "short_name": "TraffiCOracle",
+  "name": "traffiCOracle — Traffic Intelligence for Bangalore",
+  "short_name": "traffiCOracle",
   "description": "Compare current speeds with historical patterns across pre-determined routes. Weekly speed distributions, time-of-day filtering, and baseline comparison.",
   "icons": [
     { "src": "/favicon-16x16.png", "sizes": "16x16", "type": "image/png" },

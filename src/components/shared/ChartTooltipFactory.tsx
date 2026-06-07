@@ -11,7 +11,7 @@ interface ThmColors {
 /** Create a Recharts tooltip renderer for speed or duration view. */
 export function useChartTooltip(thm: ThmColors, view: "speed" | "duration" = "speed") {
   const SPEED_ORDER = ["Best", "Avg Speed", "Worst"];
-  const DURATION_ORDER = ["Best", "Avg Duration", "Worst"];
+  const DURATION_ORDER = ["Worst", "Avg Duration", "Best"];
   const order = view === "speed" ? SPEED_ORDER : DURATION_ORDER;
 
   const techLabel: Record<string, string> = {

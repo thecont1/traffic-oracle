@@ -1,8 +1,8 @@
-# TraffiCOracle Architecture
+# traffiCOracle Architecture
 
 ## Overview
 
-TraffiCOracle is a zero-backend, config-driven traffic analytics dashboard. It fetches CSV data from GitHub, parses it client-side, and presents traffic trends with interactive charts, route comparisons, and verdict generation.
+traffiCOracle is a zero-backend, config-driven traffic analytics dashboard. It fetches CSV data from GitHub, parses it client-side, and presents traffic trends with interactive charts, route comparisons, and verdict generation.
 
 The app has **two UI shells** powered by **one shared analytics core**:
 

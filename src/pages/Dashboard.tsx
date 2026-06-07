@@ -11,10 +11,10 @@ import { Share2, Plus, Minus } from "lucide-react";
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
@@ -23,7 +23,8 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
-import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandChart";
+import type { ViewingMode } from "@/components/UncertaintyBandChart";
+import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -88,41 +89,19 @@ function parseYM(s: string) {
 }
 
 function CalendarWidget({
-  dailyStats, fmtDur,
+  dailyStats, fmtDur, widgetCalYear, widgetCalMonth,
 }: {
   dailyStats: Map<string, DayStats>;
   fmtDur: (n: number) => string;
+  widgetCalYear: number;
+  widgetCalMonth: number;
 }) {
   const { theme: thm } = useTheme();
 
-  const allDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
-  const lastStr  = allDates[allDates.length - 1] ?? "";
-  const firstStr = allDates[0] ?? "";
-
-  const initYM = (() => {
-    const base = lastStr ? parseYM(lastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
-    /* if today is before the 10th, default to the month before the most-recent data month */
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) return { y: base.y - 1, m: 11 };
-      return { y: base.y, m: base.m - 1 };
-    }
-    return base;
-  })();
-  const [calYear,  setCalYear]  = useState(initYM.y);
-  const [calMonth, setCalMonth] = useState(initYM.m);
-  const [fadeKey,  setFadeKey]  = useState(0);
-  const [calOpen,  setCalOpen]  = useState(false);
-
+  const [fadeKey, setFadeKey] = useState(0);
   useEffect(() => {
-    if (!lastStr) return;
-    const base = parseYM(lastStr);
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) { setCalYear(base.y - 1); setCalMonth(11); }
-      else              { setCalYear(base.y);      setCalMonth(base.m - 1); }
-    } else {
-      setCalYear(base.y); setCalMonth(base.m);
-    }
-  }, [lastStr]);
+    setFadeKey(k => k + 1);
+  }, [widgetCalYear, widgetCalMonth]);
 
   /* p10/p90 of full route dataset — gives visible colour spread across any month */
   const { p10, p90 } = useMemo(() => {
@@ -158,7 +137,7 @@ function CalendarWidget({
       ["⚡ Avg Speed",    `${s.avgSpeed} km/h`],
       ["🕐 Median Trip",  fmtDur(s.medianDuration)],
       ["🔥 Bad Day Trip", fmtDur(s.p95Duration)],
-      ["📊 Trips",        String(s.count)],
+      ["# Trips",        String(s.count)],
     ] as [string,string][]).map(([lbl, val]) =>
       `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
       `<span style="color:#94A3B8">${lbl}</span>` +
@@ -222,33 +201,15 @@ function CalendarWidget({
   }, [showTip, hideTip]);
 
   /* ── Calendar math ──────────────────────────────────────────── */
-  const prefixStr  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-  const firstDay   = (new Date(calYear, calMonth, 1).getDay() + 6) % 7; // Monday = 0
-  const daysInMo   = new Date(calYear, calMonth + 1, 0).getDate();
-  const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString("en-IN", { month:"long", year:"numeric" });
-
-  const minMonthStr = firstStr ? firstStr.slice(0, 7) : prefixStr;
-  const { y: ly, m: lm } = lastStr ? parseYM(lastStr) : { y: calYear, m: calMonth };
-  const maxMonthStr = `${ly}-${String(lm + 1).padStart(2, "0")}`;
-  const canBack = prefixStr > minMonthStr;
-  const canFwd  = prefixStr < maxMonthStr;
-
-  const prevMo = () => {
-    setFadeKey(k => k + 1);
-    if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
-    else setCalMonth(m => m - 1);
-  };
-  const nextMo = () => {
-    setFadeKey(k => k + 1);
-    if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
-    else setCalMonth(m => m + 1);
-  };
+  const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
+  const firstDay   = (new Date(widgetCalYear, widgetCalMonth, 1).getDay() + 6) % 7; // Monday = 0
+  const daysInMo   = new Date(widgetCalYear, widgetCalMonth + 1, 0).getDate();
 
   /* Memoised cells — always 42 cells (6 rows × 7 cols), no height jumping */
   const cells = useMemo(() => {
     const todayD   = new Date();
     const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
-    const isCurrentMo = calYear === todayD.getFullYear() && calMonth === todayD.getMonth();
+    const isCurrentMo = widgetCalYear === todayD.getFullYear() && widgetCalMonth === todayD.getMonth();
 
     /* reduce rgba/rgb color to 0.5 alpha for the stripe overlay */
     const fadeColor = (c: string) =>
@@ -327,78 +288,42 @@ function CalendarWidget({
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, calYear, calMonth]);
-
-  const navBtn = (label: string, active: boolean, onClick: () => void) => (
-    <button onClick={onClick} disabled={!active}
-      style={{ background:"none", border:`1px solid ${thm.cardBorder}`,
-        borderRadius:8, padding:"3px 11px", fontSize:18, lineHeight:1,
-        cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
-        color: thm.textPrimary }}>
-      {label}
-    </button>
-  );
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, widgetCalYear, widgetCalMonth]);
 
   const CAL_MUTED = thm.textMuted;
 
   return (
     <>
       <div style={{ position:"relative" }}>
-        {/* ── Header row: title + chevron + (when open) month nav ── */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-          marginBottom: calOpen ? 14 : 0 }}>
-          <button onClick={() => setCalOpen(o => !o)} style={{
-            display:"flex", alignItems:"center", gap:8,
-            background:"none", border:"none", cursor:"pointer", padding:0,
-          }}>
-            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-              color: thm.textPrimary, margin:0 }}>📅 Daily Speeds by Month</p>
-            <span style={{ fontSize:16, color: thm.textMuted, display:"inline-block",
-              transform: calOpen ? "rotate(180deg)" : "rotate(0deg)",
-              transition:"transform 0.2s ease" }}>▾</span>
-          </button>
-          {calOpen && (
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              {navBtn("‹", canBack, prevMo)}
-              <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
-                minWidth:150, textAlign:"center" }}>{monthLabel}</span>
-              {navBtn("›", canFwd, nextMo)}
-            </div>
-          )}
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
+          {DAY_HDR.map(d => (
+            <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
+              textTransform:"uppercase", letterSpacing:"0.06em",
+              color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
+          ))}
         </div>
 
-        {calOpen && (
-          <>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
-              {DAY_HDR.map(d => (
-                <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
-                  textTransform:"uppercase", letterSpacing:"0.06em",
-                  color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
-              ))}
-            </div>
+        <div key={fadeKey}
+          onMouseMove={handleGridMove}
+          onMouseLeave={hideTip}
+          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+            animation:"cal-fade-in 0.2s ease" }}>
+          {cells}
+        </div>
 
-            <div key={fadeKey}
-              onMouseMove={handleGridMove}
-              onMouseLeave={hideTip}
-              style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
-                animation:"cal-fade-in 0.2s ease" }}>
-              {cells}
-            </div>
-
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
-              justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
-              <span>Slow</span>
-              <div style={{ width:88, height:7, borderRadius:4,
-                background: thm.key === "gray"
-                  ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
-                  : thm.key === "pastel"
-                  ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
-                  : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
-              }} />
-              <span>Fast (km/h)</span>
-            </div>
-          </>
-        )}
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
+          justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
+          <span>Slow</span>
+          <div style={{ width:88, height:7, borderRadius:4,
+            background: thm.key === "gray"
+              ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
+              : thm.key === "pastel"
+              ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
+              : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
+          }} />
+          <span>Fast (km/h)</span>
+        </div>
       </div>
       {createPortal(
         <div ref={tooltipRef} style={{
@@ -1215,7 +1140,7 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStatsAllDay(ttAllRows, selectedRoute);
+  const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -1233,52 +1158,71 @@ function DashboardInner() {
 
   /* ── TrafficNOW! per-week percentile bands ───────────────────── */
   const { trafficNowData, trafficNowCompare } = useMemo(() => {
-    const { percentile: pctFn } = (() => {
-      function pct(sorted: number[], p: number): number {
-        if (!sorted.length) return 0;
-        const idx = (p / 100) * (sorted.length - 1);
-        const lo = Math.floor(idx), hi = Math.ceil(idx);
-        return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-      }
-      return { percentile: pct };
-    })();
-
-    const routeRows = ttAllRows.filter(r => r.label_short === selectedRoute);
-
-    // Helper: build IntervalDatum[] from a slice of WeeklyAggregates
-    function buildBands(weeks: WeeklyAggregate[]): IntervalDatum[] {
-      return weeks.map(w => {
-        const wStart = new Date(w.weekKey);
-        const wEnd   = new Date(wStart.getTime() + 7 * 86400000);
-        const wRows  = routeRows.filter(r => r.timestamp >= wStart && r.timestamp < wEnd);
-        const speeds = wRows.map(r => r.speed_kmh).sort((a, b) => a - b);
-        if (speeds.length < 3) {
-          // Fallback: use avgSpeed as a flat band ±5%
-          const s = w.avgSpeed || 0;
-          return { x: w.weekKey, p05: s * 0.9, p15: s * 0.95, p50: s, p85: s * 1.05, p95: s * 1.1 };
-        }
-        return {
-          x: w.weekKey,
-          p05: Math.round(pctFn(speeds, 5)  * 10) / 10,
-          p15: Math.round(pctFn(speeds, 15) * 10) / 10,
-          p50: Math.round(pctFn(speeds, 50) * 10) / 10,
-          p85: Math.round(pctFn(speeds, 85) * 10) / 10,
-          p95: Math.round(pctFn(speeds, 95) * 10) / 10,
-        };
-      });
-    }
-
-    // Recent window data (the primary "now" view)
-    const recentData = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12));
-    // Baseline data for compare mode
-    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : []);
-
+    const routeRows    = ttAllRows.filter(r => r.label_short === selectedRoute);
+    const recentData   = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12), routeRows, tod);
+    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : [], routeRows, tod);
     return { trafficNowData: recentData, trafficNowCompare: baselineData };
-  }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
+  }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks, tod]);
 
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
   const [tnOpen, setTnOpen] = useState(false);
+  const [verdictOpen, setVerdictOpen] = useState(true);
+  const [chartOpen, setChartOpen] = useState(true);
+  const [calendarCardOpen, setCalendarCardOpen] = useState(true);
+  const [baselineOpen, setBaselineOpen] = useState(true);
+
+  // Calendar month state (lifted from CalendarWidget)
+  const calAllDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
+  const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
+  const calFirstStr = calAllDates[0] ?? "";
+  const calInitYM = useMemo(() => {
+    const base = calLastStr ? parseYM(calLastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
+    if (new Date().getDate() < 10) {
+      if (base.m === 0) return { y: base.y - 1, m: 11 };
+      return { y: base.y, m: base.m - 1 };
+    }
+    return base;
+  }, [calLastStr]);
+  const [widgetCalYear, setWidgetCalYear] = useState(calInitYM.y);
+  const [widgetCalMonth, setWidgetCalMonth] = useState(calInitYM.m);
+  useEffect(() => {
+    if (!calLastStr) return;
+    const base = parseYM(calLastStr);
+    if (new Date().getDate() < 10) {
+      if (base.m === 0) { setWidgetCalYear(base.y - 1); setWidgetCalMonth(11); }
+      else              { setWidgetCalYear(base.y);      setWidgetCalMonth(base.m - 1); }
+    } else {
+      setWidgetCalYear(base.y); setWidgetCalMonth(base.m);
+    }
+  }, [calLastStr]);
+
+  const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
+  const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;
+  const { y: wCalLy, m: wCalLm } = calLastStr ? parseYM(calLastStr) : { y: widgetCalYear, m: widgetCalMonth };
+  const widgetCalMaxMonthStr = `${wCalLy}-${String(wCalLm + 1).padStart(2, "0")}`;
+  const widgetCalCanBack = widgetCalPrefixStr > widgetCalMinMonthStr;
+  const widgetCalCanFwd  = widgetCalPrefixStr < widgetCalMaxMonthStr;
+  const widgetCalMonthLabel = new Date(widgetCalYear, widgetCalMonth, 1).toLocaleDateString("en-IN", { month:"long", year:"numeric" });
+
+  const widgetCalPrevMo = () => {
+    if (widgetCalMonth === 0) { setWidgetCalYear(y => y - 1); setWidgetCalMonth(11); }
+    else setWidgetCalMonth(m => m - 1);
+  };
+  const widgetCalNextMo = () => {
+    if (widgetCalMonth === 11) { setWidgetCalYear(y => y + 1); setWidgetCalMonth(0); }
+    else setWidgetCalMonth(m => m + 1);
+  };
+
+  const widgetCalNavBtn = (label: string, active: boolean, onClick: () => void) => (
+    <button onClick={onClick} disabled={!active}
+      style={{ background:"none", border:`1px solid ${thm.cardBorder}`,
+        borderRadius:8, padding:"3px 11px", fontSize:18, lineHeight:1,
+        cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
+        color: thm.textPrimary }}>
+      {label}
+    </button>
+  );
 
   // Unified chart data array based on granularity
   const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
@@ -1459,7 +1403,7 @@ function DashboardInner() {
               <div style={{ position: "relative", display: "inline-block" }}>
                 <img
                   src="/trafficoracle-light.png"
-                  alt="TraffiCOracle"
+                  alt="traffiCOracle"
                   width={120}
                   height={32}
                   style={{ height:32, width:"auto", flexShrink:0, display:"block" }}
@@ -1621,7 +1565,7 @@ function DashboardInner() {
                   borderRadius:9999, height:44, padding:"0 16px",
                   color: tt.isActive
                     ? (ttTextActiveMap[themeKey] ?? ttTextActiveMap.colour)
-                    : thm.textMuted,
+                    : thm.textSecondary,
                   background: tt.isActive
                     ? (ttBgActiveMap[themeKey] ?? ttBgActiveMap.colour)
                     : themeKey==="colour" ? "#141A24" : themeKey==="gray" ? "#f5f5f5" : "#ffefe6",
@@ -1827,7 +1771,7 @@ function DashboardInner() {
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, height:44, padding:"0 14px",
-                  color: copied ? thm.speedGood : thm.textMuted,
+                  color: copied ? thm.speedGood : thm.textSecondary,
                   background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">
@@ -1994,9 +1938,13 @@ function DashboardInner() {
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}
-          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem",
+          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"0.75rem 1rem 0.5rem",
             opacity: showIntro ? 0 : 1,
             animation: showIntro ? "none" : "cards-reveal 0.4s ease both",
+            position: "sticky", top: 0, zIndex: 200,
+            background: thm.headerBg,
+            backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            borderBottom: thm.cardBorder,
           }}>
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
@@ -2107,16 +2055,31 @@ function DashboardInner() {
                     </svg>
                   </div>}
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14,
+                  {/* Header row: title + toggle + InfoTip — TrafficNOW! style */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: baselineOpen ? 14 : 0,
                     opacity: showIntro ? 0 : 1,
                   }}>
-                    <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                      color: thm.textPrimary, margin: 0 }}>
-                      Compare with this earlier period 
-                    </p>
-                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
+                    <button onClick={() => setBaselineOpen(o => !o)} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      background: "none", border: "none", cursor: "pointer", padding: 0,
+                    }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        ✳︎ Baseline — Compare with this earlier period
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
+                      <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                        transform: baselineOpen ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.2s ease" }}>▾</span>
+                    </button>
+                    {!baselineOpen && baselineStartDate && (
+                      <span style={{ fontSize: 13, color: thm.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "50%" }}>
+                        {fmtShortDate(baselineStartDate)}–{fmtShortDate(baselineEndDate)}
+                      </span>
+                    )}
                   </div>
 
+                  {baselineOpen && (
+                  <>
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* Slider interior — hidden until real data loads so placeholder
                         [0,1] thumb positions are never visible */}
@@ -2253,6 +2216,8 @@ function DashboardInner() {
                       Baseline can't overlap with the recent period 🙅
                     </p>
                   )}
+                  </>
+                  )}
                 </div>
           )}
 
@@ -2271,67 +2236,88 @@ function DashboardInner() {
               {/* ── Verdict ──────────────────────────────────── */}
               <div className="animate-fade-in" style={{
                 background: thm.verdictBg(v.bg),
-                border: `2px solid ${thm.verdictBorder(v.border)}`,
-                borderRadius:"1.5rem", padding:"1.5rem 2rem",
+                border: `1px solid ${thm.verdictBorder(v.border)}`,  
+                borderRadius:"1.5rem", padding: "1.25rem 1.5rem",
                 position: "relative",
               }}>
-                {/* Info icon — top-right corner */}
-                <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
-                  <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
-                </div>
-                <div style={{ textAlign:"center" }}>
-                  <div className="animate-bounce-in" key={verdictKey}
-                    style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
-                    {v.face}
-                  </div>
-                  <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
-                    color: thm.verdictText(v.tc) }}>
-                    {v.msg}
-                  </p>
-                  {verdictSubtext && (
-                    <p style={{ marginTop:6, fontSize:12,
-                      color: thm.verdictText(v.tc), opacity:0.85, lineHeight:1.6 }}>
-                      {verdictSubtext}
+                {/* Header row: title + toggle + Info icon */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: verdictOpen ? 12 : 0 }}>
+                  <button onClick={() => setVerdictOpen(o => !o)} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: "none", border: "none", cursor: "pointer", padding: 0,
+                  }}>
+                    <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
+                      color: thm.verdictText(v.tc), margin: 0 }}>
+                      ✳︎ Verdict
                     </p>
+                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
+                    <span style={{ fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6, display: "inline-block",
+                      transform: verdictOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease" }}>▾</span>
+                  </button>
+                  {!verdictOpen && (
+                    <span style={{ fontSize: 13, color: thm.verdictText(v.tc), opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "60%", textAlign: "right" }}>
+                      {v.msg}
+                    </span>
                   )}
                 </div>
-
-                {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
-                  <div style={{ display:"flex", alignItems:"center", gap:0, marginTop:20, opacity:0.95 }}>
-                    {baselineSpeed > 0 && (
-                      <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
-                        <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>Baseline</p>
-                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: thm.verdictText(v.tc), lineHeight:1 }}>
-                          {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
-                        </p>
+                {verdictOpen && (
+                  <>
+                    <div style={{ textAlign:"center" }}>
+                      <div className="animate-bounce-in" key={verdictKey}
+                        style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
+                        {v.face}
                       </div>
-                    )}
-                    <div style={{ flex:1, position:"relative" }}>
-                      <NapkinChart
-                        baselineWeeks={baselineWeeks}
-                        recentWeeks={recentWeeks}
-                        height={132}
-                        dateLabels={{
-                          bStart: fmtDate(baselineStartDate),
-                          bEnd:   fmtDate(baselineEndDate),
-                          rStart: fmtDate(recentStartDate),
-                          rEnd:   lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate),
-                        }}
-                      />
+                      <p data-testid="verdict-message" style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
+                        color: thm.verdictText(v.tc) }}>
+                        {v.msg}
+                      </p>
+                      {verdictSubtext && (
+                        <p style={{ marginTop:6, fontSize:12,
+                          color: thm.verdictText(v.tc), opacity:0.85, lineHeight:1.6 }}>
+                          {verdictSubtext}
+                        </p>
+                      )}
                     </div>
-                    {recentSpeed > 0 && (
-                      <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingLeft:6 }}>
-                        <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.08em", color: thm.recentLabel, marginBottom:4 }}>Recent</p>
-                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: thm.verdictText(v.tc), lineHeight:1 }}>
-                          {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
-                        </p>
+
+                    {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
+                      <div style={{ display:"flex", alignItems:"center", gap:0, marginTop:20, opacity:0.95 }}>
+                        {baselineSpeed > 0 && (
+                          <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
+                            <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                              letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>✳Baseline</p>
+                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
+                              color: thm.verdictText(v.tc), lineHeight:1 }}>
+                              {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
+                            </p>
+                          </div>
+                        )}
+                        <div style={{ flex:1, position:"relative" }}>
+                          <NapkinChart
+                            baselineWeeks={baselineWeeks}
+                            recentWeeks={recentWeeks}
+                            height={132}
+                            dateLabels={{
+                              bStart: fmtDate(baselineStartDate),
+                              bEnd:   fmtDate(baselineEndDate),
+                              rStart: fmtDate(recentStartDate),
+                              rEnd:   lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate),
+                            }}
+                          />
+                        </div>
+                        {recentSpeed > 0 && (
+                          <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingLeft:6 }}>
+                            <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                              letterSpacing:"0.08em", color: thm.recentLabel, marginBottom:4 }}>Recent</p>
+                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
+                              color: thm.verdictText(v.tc), lineHeight:1 }}>
+                              {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
 
@@ -2341,9 +2327,13 @@ function DashboardInner() {
                   gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
-                    {/*<span style={{ fontSize:28 }}>⚡</span>*/}
-                    <div style={kpiLabel}>Avg Speed ({periodLabel}) <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip></div>
-                    <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        ⚡ Avg Speed
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
+                    </div>
+                    <p data-testid="kpi-avg-speed-value" style={kpiValue}>{selectedStats.avgSpeed || "—"}
                       {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
                     </p>
                     <p style={kpiSub}>
@@ -2352,23 +2342,35 @@ function DashboardInner() {
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[1] }}>
-                    {/*<span style={{ fontSize:28 }}>🕐</span>*/}
-                    <div style={kpiLabel}>Median Trip <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip></div>
-                    <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        🕐 Median Trip
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
+                    </div>
+                    <p data-testid="kpi-median-trip-value" style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
                     <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
-                    {/*<span style={{ fontSize:28 }}>🔥</span>*/}
-                    <div style={kpiLabel}>Bad Day Trip <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip></div>
-                    <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        🔥 Bad Day Trip
+                      </p>
+                      <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
+                    </div>
+                    <p data-testid="kpi-bad-day-value" style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
-                    {/*<span style={{ fontSize:28 }}>📊</span>*/}
-                    <div style={kpiLabel}>No. of Trips <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip></div>
-                    <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        📊 No. of Trips
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
+                    </div>
+                    <p data-testid="kpi-trips-count-value" style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
                   </div>
                 </div>
@@ -2389,21 +2391,28 @@ function DashboardInner() {
                   <div style={{ display:"grid", gap:16 }}>
                     {/* Merged Speed / Duration chart with toggle */}
                     <div className="chart-card animate-fade-in"
-                      style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                            color: thm.textPrimary, margin: 0 }}>
-                            {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
-                          </p>
+                      style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" } : { position: "relative", zIndex: 1, padding: "1.25rem 1.5rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: chartOpen ? 8 : 0 }}>
+                        <button onClick={() => setChartOpen(o => !o)} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          background: "none", border: "none", cursor: "pointer", padding: 0,
+                        }}>
+                          <span style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
+                            color: thm.textPrimary }}>
+                            {chartView === 'speed' ? '✳︎ Speed Over Time' : '✳︎ Trip Duration Over Time'}
+                          </span>
                           <InfoTip thm={thm} maxWidth={280}>
                             {chartView === 'speed'
                               ? TOOLTIP_CONTENT.chartSpeed.body
                               : TOOLTIP_CONTENT.chartDuration.body
                             }
                           </InfoTip>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
+                        </button>
+                        {chartOpen && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {/* Daily / Weekly toggle */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
                             {(['daily', 'weekly'] as const).map(g => (
@@ -2462,7 +2471,10 @@ function DashboardInner() {
                             </button>
                           </div>
                         </div>
+                        )}
                       </div>
+                      {chartOpen && (
+                      <>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
                         {chartView === 'speed'
                           ? `${chartGranularity === 'daily' ? 'Daily' : 'Weekly'} avg km/h vs. best & worst envelope — higher is faster`
@@ -2607,12 +2619,56 @@ function DashboardInner() {
                           </span>
                         </div>
                       )}
+                    </>
+                    )}
                     </div>
                   </div>
 
-                  {/* ── HIDDEN: TrafficNOW! Speed Forecast Bands (hidden 2026-05-25) ── */}
-                  {false && trafficNowData.length > 0 && (
+                  {/* ── Daily Speeds by Month calendar ── */}
+                  {
                     <div className="chart-card animate-fade-in"
+                      style={{
+                        padding:"1.25rem 1.5rem",
+                        position: "relative",
+                        zIndex: 1,
+                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
+                      }}>
+                      {/* Header row: title + toggle + Info icon */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: calendarCardOpen ? 12 : 0 }}>
+                        <button onClick={() => setCalendarCardOpen(o => !o)} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          background: "none", border: "none", cursor: "pointer", padding: 0,
+                        }}>
+                          <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                            ✳︎ Daily Speeds by Month
+                          </p>
+                          <InfoTip thm={thm}>
+                            {TOOLTIP_CONTENT.dailyCalendar.body}
+                          </InfoTip>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
+                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {widgetCalNavBtn("‹", widgetCalCanBack, widgetCalPrevMo)}
+                          <span style={{ fontWeight: 700, fontSize: 14, color: thm.textPrimary, minWidth: 150, textAlign: "center" }}>{widgetCalMonthLabel}</span>
+                          {widgetCalNavBtn("›", widgetCalCanFwd, widgetCalNextMo)}
+                        </div>
+                      </div>
+                      {calendarCardOpen && (
+                        <CalendarWidget
+                          dailyStats={dailyStats}
+                          fmtDur={fmtDuration}
+                          widgetCalYear={widgetCalYear}
+                          widgetCalMonth={widgetCalMonth}
+                        />
+                      )}
+                    </div>
+                  }
+
+                  {/* ── Weekly Speed Distribution — hidden pending redesign ── */}
+                  {false && trafficNowData.length > 0 && (
+                    <div data-testid="forecast-bands-card" className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
                         : { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", padding: "1.25rem 1.5rem" }}>
@@ -2623,7 +2679,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
+                            {tt.isActive ? "⏳" : "✳︎"} Weekly Speed Distribution{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2654,7 +2710,7 @@ function DashboardInner() {
                             data={trafficNowData}
                             compareData={trafficNowCompare.length > 0 ? trafficNowCompare : undefined}
                             mode={trafficNowCompare.length > 0 ? "compare" : tnMode}
-                            title={`TrafficNOW! forecast bands for ${selectedRoute}`}
+                            title={`Weekly speed distribution for ${selectedRoute}`}
                             routeName={selectedRoute}
                             seriesLabel={`Recent: ${todLabel}`}
                             compareLabel={`Baseline: ${fmtDate(baselineStartDate)}–${fmtDate(baselineEndDate)}`}
@@ -2663,28 +2719,6 @@ function DashboardInner() {
                           />
                         </>
                       )}
-                    </div>
-                  )}
-
-                  {/* ── HIDDEN: Daily Speeds by Month calendar (hidden 2026-05-25) ── */}
-                  {false && (
-                    <div className="chart-card animate-fade-in"
-                      style={{
-                        padding:"1.25rem 1.5rem",
-                        position: "relative",
-                        zIndex: 1,
-                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
-                      }}>
-                      {/* Info icon — top-right corner */}
-                      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
-                        <InfoTip thm={thm}>
-                          {TOOLTIP_CONTENT.dailyCalendar.body}
-                        </InfoTip>
-                      </div>
-                      <CalendarWidget
-                        dailyStats={dailyStats}
-                        fmtDur={fmtDuration}
-                      />
                     </div>
                   )}
                 </>

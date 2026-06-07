@@ -1601,7 +1601,7 @@ function DashboardInner() {
                   borderRadius:9999, height:44, padding:"0 16px",
                   color: tt.isActive
                     ? (ttTextActiveMap[themeKey] ?? ttTextActiveMap.colour)
-                    : thm.textMuted,
+                    : thm.textSecondary,
                   background: tt.isActive
                     ? (ttBgActiveMap[themeKey] ?? ttBgActiveMap.colour)
                     : themeKey==="colour" ? "#141A24" : themeKey==="gray" ? "#f5f5f5" : "#ffefe6",
@@ -1807,7 +1807,7 @@ function DashboardInner() {
                   display:"flex", alignItems:"center", justifyContent:"center", gap:5,
                   border:`1px solid ${thm.key==="gray"?"#e0e0e0":"hsl(var(--border))"}`,
                   borderRadius:9999, height:44, padding:"0 14px",
-                  color: copied ? thm.speedGood : thm.textMuted,
+                  color: copied ? thm.speedGood : thm.textSecondary,
                   background: copied ? "rgba(111,174,99,0.1)" : thm.key==="colour" ? "#141A24" : thm.key==="gray" ? "#f5f5f5" : "#ffefe6",
                   cursor:"pointer", transition:"color 0.2s, background 0.2s",
                 }} title="Copy shareable link">

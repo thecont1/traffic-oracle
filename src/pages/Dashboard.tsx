@@ -136,7 +136,7 @@ function CalendarWidget({
       ["⚡ Avg Speed",    `${s.avgSpeed} km/h`],
       ["🕐 Median Trip",  fmtDur(s.medianDuration)],
       ["🔥 Bad Day Trip", fmtDur(s.p95Duration)],
-      ["📊 Trips",        String(s.count)],
+      ["# Trips",        String(s.count)],
     ] as [string,string][]).map(([lbl, val]) =>
       `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
       `<span style="color:#94A3B8">${lbl}</span>` +
@@ -2096,13 +2096,18 @@ function DashboardInner() {
                       background: "none", border: "none", cursor: "pointer", padding: 0,
                     }}>
                       <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                        📊 Baseline — Compare with this earlier period
+                        Baseline — Compare with this earlier period
                       </p>
                       <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
                       <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                         transform: baselineOpen ? "rotate(180deg)" : "rotate(0deg)",
                         transition: "transform 0.2s ease" }}>▾</span>
                     </button>
+                    {!baselineOpen && baselineStartDate && (
+                      <span style={{ fontSize: 13, color: thm.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "50%" }}>
+                        {fmtShortDate(baselineStartDate)}–{fmtShortDate(baselineEndDate)}
+                      </span>
+                    )}
                   </div>
 
                   {baselineOpen && (
@@ -2275,13 +2280,18 @@ function DashboardInner() {
                   }}>
                     <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
                       color: thm.verdictText(v.tc), margin: 0 }}>
-                      📊 Verdict
+                      Verdict
                     </p>
                     <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
                     <span style={{ fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6, display: "inline-block",
                       transform: verdictOpen ? "rotate(180deg)" : "rotate(0deg)",
                       transition: "transform 0.2s ease" }}>▾</span>
                   </button>
+                  {!verdictOpen && (
+                    <span style={{ fontSize: 13, color: thm.verdictText(v.tc), opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "60%", textAlign: "right" }}>
+                      {v.msg}
+                    </span>
+                  )}
                 </div>
                 {verdictOpen && (
                   <>

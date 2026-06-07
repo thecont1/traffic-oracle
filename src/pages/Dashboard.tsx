@@ -1279,6 +1279,8 @@ function DashboardInner() {
   // Map app theme to UncertaintyBandChart ViewingMode
   const tnMode: ViewingMode = themeKey === "gray" ? "grayscale" : "default";
   const [tnOpen, setTnOpen] = useState(false);
+  const [verdictOpen, setVerdictOpen] = useState(true);
+  const [chartOpen, setChartOpen] = useState(true);
 
   // Unified chart data array based on granularity
   const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
@@ -2272,66 +2274,79 @@ function DashboardInner() {
               <div className="animate-fade-in" style={{
                 background: thm.verdictBg(v.bg),
                 border: `2px solid ${thm.verdictBorder(v.border)}`,
-                borderRadius:"1.5rem", padding:"1.5rem 2rem",
+                borderRadius:"1.5rem", padding: verdictOpen ? "1.5rem 2rem" : "1rem 2rem",
                 position: "relative",
+                transition: "padding 0.2s ease",
               }}>
-                {/* Info icon — top-right corner */}
-                <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                {/* Collapse toggle + Info icon — top-right corner */}
+                <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2, display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => setVerdictOpen(o => !o)} style={{
+                    background: "none", border: "none", cursor: "pointer", padding: 0,
+                    fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 24, height: 24,
+                    transform: verdictOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                  }}>▾</button>
                   <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
                 </div>
-                <div style={{ textAlign:"center" }}>
-                  <div className="animate-bounce-in" key={verdictKey}
-                    style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
-                    {v.face}
-                  </div>
-                  <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
-                    color: thm.verdictText(v.tc) }}>
-                    {v.msg}
-                  </p>
-                  {verdictSubtext && (
-                    <p style={{ marginTop:6, fontSize:12,
-                      color: thm.verdictText(v.tc), opacity:0.85, lineHeight:1.6 }}>
-                      {verdictSubtext}
-                    </p>
-                  )}
-                </div>
-
-                {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
-                  <div style={{ display:"flex", alignItems:"center", gap:0, marginTop:20, opacity:0.95 }}>
-                    {baselineSpeed > 0 && (
-                      <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
-                        <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>Baseline</p>
-                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: thm.verdictText(v.tc), lineHeight:1 }}>
-                          {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
-                        </p>
+                {verdictOpen && (
+                  <>
+                    <div style={{ textAlign:"center" }}>
+                      <div className="animate-bounce-in" key={verdictKey}
+                        style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
+                        {v.face}
                       </div>
-                    )}
-                    <div style={{ flex:1, position:"relative" }}>
-                      <NapkinChart
-                        baselineWeeks={baselineWeeks}
-                        recentWeeks={recentWeeks}
-                        height={132}
-                        dateLabels={{
-                          bStart: fmtDate(baselineStartDate),
-                          bEnd:   fmtDate(baselineEndDate),
-                          rStart: fmtDate(recentStartDate),
-                          rEnd:   lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate),
-                        }}
-                      />
+                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
+                        color: thm.verdictText(v.tc) }}>
+                        {v.msg}
+                      </p>
+                      {verdictSubtext && (
+                        <p style={{ marginTop:6, fontSize:12,
+                          color: thm.verdictText(v.tc), opacity:0.85, lineHeight:1.6 }}>
+                          {verdictSubtext}
+                        </p>
+                      )}
                     </div>
-                    {recentSpeed > 0 && (
-                      <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingLeft:6 }}>
-                        <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.08em", color: thm.recentLabel, marginBottom:4 }}>Recent</p>
-                        <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
-                          color: thm.verdictText(v.tc), lineHeight:1 }}>
-                          {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
-                        </p>
+
+                    {(baselineWeeks.length > 0 || recentWeeks.length > 0) && (
+                      <div style={{ display:"flex", alignItems:"center", gap:0, marginTop:20, opacity:0.95 }}>
+                        {baselineSpeed > 0 && (
+                          <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
+                            <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                              letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>Baseline</p>
+                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
+                              color: thm.verdictText(v.tc), lineHeight:1 }}>
+                              {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
+                            </p>
+                          </div>
+                        )}
+                        <div style={{ flex:1, position:"relative" }}>
+                          <NapkinChart
+                            baselineWeeks={baselineWeeks}
+                            recentWeeks={recentWeeks}
+                            height={132}
+                            dateLabels={{
+                              bStart: fmtDate(baselineStartDate),
+                              bEnd:   fmtDate(baselineEndDate),
+                              rStart: fmtDate(recentStartDate),
+                              rEnd:   lastDataDate ? fmtDate(lastDataDate.toISOString()) : fmtDate(lastDate),
+                            }}
+                          />
+                        </div>
+                        {recentSpeed > 0 && (
+                          <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingLeft:6 }}>
+                            <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
+                              letterSpacing:"0.08em", color: thm.recentLabel, marginBottom:4 }}>Recent</p>
+                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
+                              color: thm.verdictText(v.tc), lineHeight:1 }}>
+                              {recentSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
 
@@ -2390,12 +2405,20 @@ function DashboardInner() {
                     {/* Merged Speed / Duration chart with toggle */}
                     <div className="chart-card animate-fade-in"
                       style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: chartOpen ? 8 : 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                            color: thm.textPrimary, margin: 0 }}>
-                            {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
-                          </p>
+                          <button onClick={() => setChartOpen(o => !o)} style={{
+                            display: "flex", alignItems: "center", gap: 6,
+                            background: "none", border: "none", cursor: "pointer", padding: 0,
+                          }}>
+                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                              color: thm.textPrimary, margin: 0 }}>
+                              {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
+                            </p>
+                            <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                              transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
+                              transition: "transform 0.2s ease" }}>▾</span>
+                          </button>
                           <InfoTip thm={thm} maxWidth={280}>
                             {chartView === 'speed'
                               ? TOOLTIP_CONTENT.chartSpeed.body
@@ -2403,7 +2426,8 @@ function DashboardInner() {
                             }
                           </InfoTip>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {chartOpen && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {/* Daily / Weekly toggle */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
                             {(['daily', 'weekly'] as const).map(g => (
@@ -2462,7 +2486,10 @@ function DashboardInner() {
                             </button>
                           </div>
                         </div>
+                        )}
                       </div>
+                      {chartOpen && (
+                      <>
                       <p style={{ fontSize:12, color: thm.textMuted, marginBottom:14 }}>
                         {chartView === 'speed'
                           ? `${chartGranularity === 'daily' ? 'Daily' : 'Weekly'} avg km/h vs. best & worst envelope — higher is faster`
@@ -2607,6 +2634,8 @@ function DashboardInner() {
                           </span>
                         </div>
                       )}
+                    </>
+                    )}
                     </div>
                   </div>
 

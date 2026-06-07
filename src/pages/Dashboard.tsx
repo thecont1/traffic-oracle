@@ -1139,7 +1139,7 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStatsAllDay(ttAllRows, selectedRoute);
+  const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -1974,9 +1974,13 @@ function DashboardInner() {
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}
-          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"1.5rem 1rem 0.25rem",
+          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"0.75rem 1rem 0.5rem",
             opacity: showIntro ? 0 : 1,
             animation: showIntro ? "none" : "cards-reveal 0.4s ease both",
+            position: "sticky", top: 0, zIndex: 200,
+            background: thm.headerBg,
+            backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            borderBottom: thm.cardBorder,
           }}>
             <h1 style={{
               fontFamily:"var(--app-font-display)", fontWeight:900,
@@ -2268,7 +2272,7 @@ function DashboardInner() {
               {/* ── Verdict ──────────────────────────────────── */}
               <div className="animate-fade-in" style={{
                 background: thm.verdictBg(v.bg),
-                border: `2px solid ${thm.verdictBorder(v.border)}`,
+                border: `1px solid ${thm.verdictBorder(v.border)}`,  
                 borderRadius:"1.5rem", padding: "1.25rem 1.5rem",
                 position: "relative",
               }}>
@@ -2300,7 +2304,7 @@ function DashboardInner() {
                         style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
                         {v.face}
                       </div>
-                      <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
+                      <p data-testid="verdict-message" style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
                         color: thm.verdictText(v.tc) }}>
                         {v.msg}
                       </p>
@@ -2365,7 +2369,7 @@ function DashboardInner() {
                       </p>
                       <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
                     </div>
-                    <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
+                    <p data-testid="kpi-avg-speed-value" style={kpiValue}>{selectedStats.avgSpeed || "—"}
                       {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
                     </p>
                     <p style={kpiSub}>
@@ -2380,7 +2384,7 @@ function DashboardInner() {
                       </p>
                       <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
                     </div>
-                    <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
+                    <p data-testid="kpi-median-trip-value" style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
                     <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
@@ -2391,7 +2395,7 @@ function DashboardInner() {
                       </p>
                       <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
                     </div>
-                    <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
+                    <p data-testid="kpi-bad-day-value" style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
                     <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
                   </div>
 
@@ -2402,7 +2406,7 @@ function DashboardInner() {
                       </p>
                       <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
                     </div>
-                    <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
+                    <p data-testid="kpi-trips-count-value" style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
                     <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
                   </div>
                 </div>
@@ -2656,6 +2660,48 @@ function DashboardInner() {
                     </div>
                   </div>
 
+                  {/* ── Daily Speeds by Month calendar ── */}
+                  {
+                    <div className="chart-card animate-fade-in"
+                      style={{
+                        padding:"1.25rem 1.5rem",
+                        position: "relative",
+                        zIndex: 1,
+                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
+                      }}>
+                      {/* Header row: title + toggle + Info icon */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: calendarCardOpen ? 12 : 0 }}>
+                        <button onClick={() => setCalendarCardOpen(o => !o)} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          background: "none", border: "none", cursor: "pointer", padding: 0,
+                        }}>
+                          <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                            ✳︎ Daily Speeds by Month
+                          </p>
+                          <InfoTip thm={thm}>
+                            {TOOLTIP_CONTENT.dailyCalendar.body}
+                          </InfoTip>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
+                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {widgetCalNavBtn("‹", widgetCalCanBack, widgetCalPrevMo)}
+                          <span style={{ fontWeight: 700, fontSize: 14, color: thm.textPrimary, minWidth: 150, textAlign: "center" }}>{widgetCalMonthLabel}</span>
+                          {widgetCalNavBtn("›", widgetCalCanFwd, widgetCalNextMo)}
+                        </div>
+                      </div>
+                      {calendarCardOpen && (
+                        <CalendarWidget
+                          dailyStats={dailyStats}
+                          fmtDur={fmtDuration}
+                          widgetCalYear={widgetCalYear}
+                          widgetCalMonth={widgetCalMonth}
+                        />
+                      )}
+                    </div>
+                  }
+
                   {/* ── Speed Forecast Bands ── */}
                   {trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
@@ -2711,48 +2757,6 @@ function DashboardInner() {
                       )}
                     </div>
                   )}
-
-                  {/* ── Daily Speeds by Month calendar ── */}
-                  {
-                    <div className="chart-card animate-fade-in"
-                      style={{
-                        padding:"1.25rem 1.5rem",
-                        position: "relative",
-                        zIndex: 1,
-                        ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
-                      }}>
-                      {/* Header row: title + toggle + Info icon */}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: calendarCardOpen ? 12 : 0 }}>
-                        <button onClick={() => setCalendarCardOpen(o => !o)} style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          background: "none", border: "none", cursor: "pointer", padding: 0,
-                        }}>
-                          <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            ✳︎ Daily Speeds by Month
-                          </p>
-                          <InfoTip thm={thm}>
-                            {TOOLTIP_CONTENT.dailyCalendar.body}
-                          </InfoTip>
-                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
-                            transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
-                            transition: "transform 0.2s ease" }}>▾</span>
-                        </button>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {widgetCalNavBtn("‹", widgetCalCanBack, widgetCalPrevMo)}
-                          <span style={{ fontWeight: 700, fontSize: 14, color: thm.textPrimary, minWidth: 150, textAlign: "center" }}>{widgetCalMonthLabel}</span>
-                          {widgetCalNavBtn("›", widgetCalCanFwd, widgetCalNextMo)}
-                        </div>
-                      </div>
-                      {calendarCardOpen && (
-                        <CalendarWidget
-                          dailyStats={dailyStats}
-                          fmtDur={fmtDuration}
-                          widgetCalYear={widgetCalYear}
-                          widgetCalMonth={widgetCalMonth}
-                        />
-                      )}
-                    </div>
-                  }
                 </>
               )}
 

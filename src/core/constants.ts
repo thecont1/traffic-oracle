@@ -18,6 +18,7 @@ export const TOD_LIST: { value: TimeOfDay; label: string }[] = [
   { value: "weekday_afternoon", label: "weekday afternoons (12–18)" },
   { value: "weekday_evening",   label: "weekday evenings (18–22)" },
   { value: "weekends",          label: "weekends (all day)" },
+  { value: "late_hours",        label: "late hours (22–4)" },
   { value: "all",               label: "any time of day" },
 ];
 

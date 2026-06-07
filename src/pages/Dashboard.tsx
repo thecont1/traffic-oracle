@@ -88,40 +88,19 @@ function parseYM(s: string) {
 }
 
 function CalendarWidget({
-  dailyStats, fmtDur,
+  dailyStats, fmtDur, widgetCalYear, widgetCalMonth,
 }: {
   dailyStats: Map<string, DayStats>;
   fmtDur: (n: number) => string;
+  widgetCalYear: number;
+  widgetCalMonth: number;
 }) {
   const { theme: thm } = useTheme();
 
-  const allDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
-  const lastStr  = allDates[allDates.length - 1] ?? "";
-  const firstStr = allDates[0] ?? "";
-
-  const initYM = (() => {
-    const base = lastStr ? parseYM(lastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
-    /* if today is before the 10th, default to the month before the most-recent data month */
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) return { y: base.y - 1, m: 11 };
-      return { y: base.y, m: base.m - 1 };
-    }
-    return base;
-  })();
-  const [calYear,  setCalYear]  = useState(initYM.y);
-  const [calMonth, setCalMonth] = useState(initYM.m);
-  const [fadeKey,  setFadeKey]  = useState(0);
-
+  const [fadeKey, setFadeKey] = useState(0);
   useEffect(() => {
-    if (!lastStr) return;
-    const base = parseYM(lastStr);
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) { setCalYear(base.y - 1); setCalMonth(11); }
-      else              { setCalYear(base.y);      setCalMonth(base.m - 1); }
-    } else {
-      setCalYear(base.y); setCalMonth(base.m);
-    }
-  }, [lastStr]);
+    setFadeKey(k => k + 1);
+  }, [widgetCalYear, widgetCalMonth]);
 
   /* p10/p90 of full route dataset — gives visible colour spread across any month */
   const { p10, p90 } = useMemo(() => {
@@ -221,33 +200,15 @@ function CalendarWidget({
   }, [showTip, hideTip]);
 
   /* ── Calendar math ──────────────────────────────────────────── */
-  const prefixStr  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-  const firstDay   = (new Date(calYear, calMonth, 1).getDay() + 6) % 7; // Monday = 0
-  const daysInMo   = new Date(calYear, calMonth + 1, 0).getDate();
-  const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString("en-IN", { month:"long", year:"numeric" });
-
-  const minMonthStr = firstStr ? firstStr.slice(0, 7) : prefixStr;
-  const { y: ly, m: lm } = lastStr ? parseYM(lastStr) : { y: calYear, m: calMonth };
-  const maxMonthStr = `${ly}-${String(lm + 1).padStart(2, "0")}`;
-  const canBack = prefixStr > minMonthStr;
-  const canFwd  = prefixStr < maxMonthStr;
-
-  const prevMo = () => {
-    setFadeKey(k => k + 1);
-    if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
-    else setCalMonth(m => m - 1);
-  };
-  const nextMo = () => {
-    setFadeKey(k => k + 1);
-    if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
-    else setCalMonth(m => m + 1);
-  };
+  const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
+  const firstDay   = (new Date(widgetCalYear, widgetCalMonth, 1).getDay() + 6) % 7; // Monday = 0
+  const daysInMo   = new Date(widgetCalYear, widgetCalMonth + 1, 0).getDate();
 
   /* Memoised cells — always 42 cells (6 rows × 7 cols), no height jumping */
   const cells = useMemo(() => {
     const todayD   = new Date();
     const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
-    const isCurrentMo = calYear === todayD.getFullYear() && calMonth === todayD.getMonth();
+    const isCurrentMo = widgetCalYear === todayD.getFullYear() && widgetCalMonth === todayD.getMonth();
 
     /* reduce rgba/rgb color to 0.5 alpha for the stripe overlay */
     const fadeColor = (c: string) =>
@@ -326,33 +287,13 @@ function CalendarWidget({
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, calYear, calMonth]);
-
-  const navBtn = (label: string, active: boolean, onClick: () => void) => (
-    <button onClick={onClick} disabled={!active}
-      style={{ background:"none", border:`1px solid ${thm.cardBorder}`,
-        borderRadius:8, padding:"3px 11px", fontSize:18, lineHeight:1,
-        cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
-        color: thm.textPrimary }}>
-      {label}
-    </button>
-  );
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, widgetCalYear, widgetCalMonth]);
 
   const CAL_MUTED = thm.textMuted;
 
   return (
     <>
       <div style={{ position:"relative" }}>
-        {/* ── Month nav (always visible; Dashboard-level toggle controls card visibility) ── */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end",
-          marginBottom: 14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {navBtn("‹", canBack, prevMo)}
-            <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
-              minWidth:150, textAlign:"center" }}>{monthLabel}</span>
-            {navBtn("›", canFwd, nextMo)}
-          </div>
-        </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
           {DAY_HDR.map(d => (
@@ -1264,14 +1205,60 @@ function DashboardInner() {
   const [tnOpen, setTnOpen] = useState(false);
   const [verdictOpen, setVerdictOpen] = useState(true);
   const [chartOpen, setChartOpen] = useState(true);
-  const [kpiOpen, setKpiOpen] = useState([true, true, true, true]);
-  const toggleKpi = (i: number) => setKpiOpen(prev => {
-    const next = [...prev];
-    next[i] = !next[i];
-    return next;
-  });
   const [calendarCardOpen, setCalendarCardOpen] = useState(true);
   const [baselineOpen, setBaselineOpen] = useState(true);
+
+  // Calendar month state (lifted from CalendarWidget)
+  const calAllDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
+  const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
+  const calFirstStr = calAllDates[0] ?? "";
+  const calInitYM = useMemo(() => {
+    const base = calLastStr ? parseYM(calLastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
+    if (new Date().getDate() < 10) {
+      if (base.m === 0) return { y: base.y - 1, m: 11 };
+      return { y: base.y, m: base.m - 1 };
+    }
+    return base;
+  }, [calLastStr]);
+  const [widgetCalYear, setWidgetCalYear] = useState(calInitYM.y);
+  const [widgetCalMonth, setWidgetCalMonth] = useState(calInitYM.m);
+  useEffect(() => {
+    if (!calLastStr) return;
+    const base = parseYM(calLastStr);
+    if (new Date().getDate() < 10) {
+      if (base.m === 0) { setWidgetCalYear(base.y - 1); setWidgetCalMonth(11); }
+      else              { setWidgetCalYear(base.y);      setWidgetCalMonth(base.m - 1); }
+    } else {
+      setWidgetCalYear(base.y); setWidgetCalMonth(base.m);
+    }
+  }, [calLastStr]);
+
+  const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
+  const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;
+  const { y: wCalLy, m: wCalLm } = calLastStr ? parseYM(calLastStr) : { y: widgetCalYear, m: widgetCalMonth };
+  const widgetCalMaxMonthStr = `${wCalLy}-${String(wCalLm + 1).padStart(2, "0")}`;
+  const widgetCalCanBack = widgetCalPrefixStr > widgetCalMinMonthStr;
+  const widgetCalCanFwd  = widgetCalPrefixStr < widgetCalMaxMonthStr;
+  const widgetCalMonthLabel = new Date(widgetCalYear, widgetCalMonth, 1).toLocaleDateString("en-IN", { month:"long", year:"numeric" });
+
+  const widgetCalPrevMo = () => {
+    if (widgetCalMonth === 0) { setWidgetCalYear(y => y - 1); setWidgetCalMonth(11); }
+    else setWidgetCalMonth(m => m - 1);
+  };
+  const widgetCalNextMo = () => {
+    if (widgetCalMonth === 11) { setWidgetCalYear(y => y + 1); setWidgetCalMonth(0); }
+    else setWidgetCalMonth(m => m + 1);
+  };
+
+  const widgetCalNavBtn = (label: string, active: boolean, onClick: () => void) => (
+    <button onClick={onClick} disabled={!active}
+      style={{ background:"none", border:`1px solid ${thm.cardBorder}`,
+        borderRadius:8, padding:"3px 11px", fontSize:18, lineHeight:1,
+        cursor: active ? "pointer" : "default", opacity: active ? 1 : 0.3,
+        color: thm.textPrimary }}>
+      {label}
+    </button>
+  );
 
   // Unified chart data array based on granularity
   const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
@@ -2362,99 +2349,51 @@ function DashboardInner() {
                   gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[0] ? 8 : 0 }}>
-                      <button onClick={() => toggleKpi(0)} style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        background: "none", border: "none", cursor: "pointer", padding: 0,
-                      }}>
-                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                          ⚡ Avg Speed
-                        </p>
-                        <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
-                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
-                          transform: kpiOpen[0] ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s ease" }}>▾</span>
-                      </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        ⚡ Avg Speed
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
                     </div>
-                    {kpiOpen[0] && (
-                      <>
-                        <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
-                          {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
-                        </p>
-                        <p style={kpiSub}>
-                          {baselineSpeed > 0 ? `Baseline: ${baselineSpeed} km/h` : "Set baseline above"}
-                        </p>
-                      </>
-                    )}
+                    <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
+                      {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
+                    </p>
+                    <p style={kpiSub}>
+                      {baselineSpeed > 0 ? `Baseline: ${baselineSpeed} km/h` : "Set baseline above"}
+                    </p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[1] }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[1] ? 8 : 0 }}>
-                      <button onClick={() => toggleKpi(1)} style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        background: "none", border: "none", cursor: "pointer", padding: 0,
-                      }}>
-                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                          🕐 Median Trip
-                        </p>
-                        <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
-                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
-                          transform: kpiOpen[1] ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s ease" }}>▾</span>
-                      </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        🕐 Median Trip
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
                     </div>
-                    {kpiOpen[1] && (
-                      <>
-                        <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
-                        <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
-                      </>
-                    )}
+                    <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
+                    <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[2] ? 8 : 0 }}>
-                      <button onClick={() => toggleKpi(2)} style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        background: "none", border: "none", cursor: "pointer", padding: 0,
-                      }}>
-                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                          🔥 Bad Day Trip
-                        </p>
-                        <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
-                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
-                          transform: kpiOpen[2] ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s ease" }}>▾</span>
-                      </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        🔥 Bad Day Trip
+                      </p>
+                      <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
                     </div>
-                    {kpiOpen[2] && (
-                      <>
-                        <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
-                        <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
-                      </>
-                    )}
+                    <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
+                    <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[3] ? 8 : 0 }}>
-                      <button onClick={() => toggleKpi(3)} style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        background: "none", border: "none", cursor: "pointer", padding: 0,
-                      }}>
-                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                          📊 No. of Trips
-                        </p>
-                        <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
-                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
-                          transform: kpiOpen[3] ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s ease" }}>▾</span>
-                      </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        📊 No. of Trips
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
                     </div>
-                    {kpiOpen[3] && (
-                      <>
-                        <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
-                        <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
-                      </>
-                    )}
+                    <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
+                    <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
                   </div>
                 </div>
               ) : (
@@ -2709,7 +2648,7 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── TrafficNOW! Speed Forecast Bands ── */}
+                  {/* ── Speed Forecast Bands ── */}
                   {trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
@@ -2722,7 +2661,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "📡"} TrafficNOW! — Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
+                            {tt.isActive ? "⏳" : "📡"} Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2790,10 +2729,17 @@ function DashboardInner() {
                             transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
                             transition: "transform 0.2s ease" }}>▾</span>
                         </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {widgetCalNavBtn("‹", widgetCalCanBack, widgetCalPrevMo)}
+                          <span style={{ fontWeight: 700, fontSize: 14, color: thm.textPrimary, minWidth: 150, textAlign: "center" }}>{widgetCalMonthLabel}</span>
+                          {widgetCalNavBtn("›", widgetCalCanFwd, widgetCalNextMo)}
+                        </div>
                       </div>
                       <CalendarWidget
                         dailyStats={dailyStats}
                         fmtDur={fmtDuration}
+                        widgetCalYear={widgetCalYear}
+                        widgetCalMonth={widgetCalMonth}
                       />
                     </div>
                   }

@@ -2735,12 +2735,14 @@ function DashboardInner() {
                           {widgetCalNavBtn("›", widgetCalCanFwd, widgetCalNextMo)}
                         </div>
                       </div>
-                      <CalendarWidget
-                        dailyStats={dailyStats}
-                        fmtDur={fmtDuration}
-                        widgetCalYear={widgetCalYear}
-                        widgetCalMonth={widgetCalMonth}
-                      />
+                      {calendarCardOpen && (
+                        <CalendarWidget
+                          dailyStats={dailyStats}
+                          fmtDur={fmtDuration}
+                          widgetCalYear={widgetCalYear}
+                          widgetCalMonth={widgetCalMonth}
+                        />
+                      )}
                     </div>
                   }
                 </>

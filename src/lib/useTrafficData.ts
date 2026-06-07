@@ -134,7 +134,7 @@ export function matchesToD(hour: number, dow: number, tod: TimeOfDay): boolean {
   if (tod === "all") return true;
   const isWeekend = dow === 0 || dow === 6;
   if (tod === "weekends") return isWeekend;
-  if (tod === "late_hours") return hour >= 22 || hour < 4;
+  if (tod === "late_hours") return hour >= 22 || hour < 5;
   if (isWeekend) return false;
   if (tod === "weekday_morning") return hour >= 8 && hour < 12;
   if (tod === "weekday_afternoon") return hour >= 12 && hour < 18;

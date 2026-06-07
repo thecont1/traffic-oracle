@@ -2666,8 +2666,8 @@ function DashboardInner() {
                     </div>
                   }
 
-                  {/* ── Speed Forecast Bands ── */}
-                  {trafficNowData.length > 0 && (
+                  {/* ── Weekly Speed Distribution — hidden pending redesign ── */}
+                  {false && trafficNowData.length > 0 && (
                     <div data-testid="forecast-bands-card" className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }

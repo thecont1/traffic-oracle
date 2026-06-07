@@ -2425,26 +2425,24 @@ function DashboardInner() {
                     <div className="chart-card animate-fade-in"
                       style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: chartOpen ? 8 : 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <button onClick={() => setChartOpen(o => !o)} style={{
-                            display: "flex", alignItems: "center", gap: 6,
-                            background: "none", border: "none", cursor: "pointer", padding: 0,
-                          }}>
-                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-                              color: thm.textPrimary, margin: 0, lineHeight: 1 }}>
-                              {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
-                            </p>
-                            <InfoTip thm={thm} maxWidth={280}>
-                            {chartView === 'speed'
-                              ? TOOLTIP_CONTENT.chartSpeed.body
-                              : TOOLTIP_CONTENT.chartDuration.body
-                            }
-                          </InfoTip>
-                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
-                            transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
-                            transition: "transform 0.2s ease" }}>▾</span>
+                        <button onClick={() => setChartOpen(o => !o)} style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          background: "none", border: "none", cursor: "pointer", padding: 0,
+                        }}>
+                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
+                            color: thm.textPrimary, margin: 0 }}>
+                            {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
+                          </p>
+                          <InfoTip thm={thm} maxWidth={280}>
+                          {chartView === 'speed'
+                            ? TOOLTIP_CONTENT.chartSpeed.body
+                            : TOOLTIP_CONTENT.chartDuration.body
+                          }
+                        </InfoTip>
+                        <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                          transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease" }}>▾</span>
                         </button>
-                        </div>
                         {chartOpen && (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {/* Daily / Weekly toggle */}

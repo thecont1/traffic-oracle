@@ -2423,7 +2423,7 @@ function DashboardInner() {
                   <div style={{ display:"grid", gap:16 }}>
                     {/* Merged Speed / Duration chart with toggle */}
                     <div className="chart-card animate-fade-in"
-                      style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
+                      style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" } : { position: "relative", zIndex: 1, padding: "1.25rem 1.5rem" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: chartOpen ? 8 : 0 }}>
                         <button onClick={() => setChartOpen(o => !o)} style={{
                           display: "flex", alignItems: "center", gap: 8,

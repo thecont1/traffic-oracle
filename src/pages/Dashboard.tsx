@@ -1281,6 +1281,13 @@ function DashboardInner() {
   const [tnOpen, setTnOpen] = useState(false);
   const [verdictOpen, setVerdictOpen] = useState(true);
   const [chartOpen, setChartOpen] = useState(true);
+  const [kpiOpen, setKpiOpen] = useState([true, true, true, true]);
+  const toggleKpi = (i: number) => setKpiOpen(prev => {
+    const next = [...prev];
+    next[i] = !next[i];
+    return next;
+  });
+  const [calendarCardOpen, setCalendarCardOpen] = useState(true);
 
   // Unified chart data array based on granularity
   const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
@@ -2274,20 +2281,23 @@ function DashboardInner() {
               <div className="animate-fade-in" style={{
                 background: thm.verdictBg(v.bg),
                 border: `2px solid ${thm.verdictBorder(v.border)}`,
-                borderRadius:"1.5rem", padding: verdictOpen ? "1.5rem 2rem" : "1rem 2rem",
+                borderRadius:"1.5rem", padding: "1.25rem 1.5rem",
                 position: "relative",
-                transition: "padding 0.2s ease",
               }}>
-                {/* Collapse toggle + Info icon — top-right corner */}
-                <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2, display: "flex", alignItems: "center", gap: 8 }}>
+                {/* Header row: title + toggle + Info icon */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: verdictOpen ? 12 : 0 }}>
                   <button onClick={() => setVerdictOpen(o => !o)} style={{
+                    display: "flex", alignItems: "center", gap: 8,
                     background: "none", border: "none", cursor: "pointer", padding: 0,
-                    fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 24, height: 24,
-                    transform: verdictOpen ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s ease",
-                  }}>▾</button>
+                  }}>
+                    <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
+                      color: thm.verdictText(v.tc), margin: 0 }}>
+                      📊 Verdict
+                    </p>
+                    <span style={{ fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6, display: "inline-block",
+                      transform: verdictOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease" }}>▾</span>
+                  </button>
                   <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
                 </div>
                 {verdictOpen && (
@@ -2356,35 +2366,99 @@ function DashboardInner() {
                   gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
-                    {/*<span style={{ fontSize:28 }}>⚡</span>*/}
-                    <div style={kpiLabel}>Avg Speed ({periodLabel}) <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip></div>
-                    <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
-                      {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
-                    </p>
-                    <p style={kpiSub}>
-                      {baselineSpeed > 0 ? `Baseline: ${baselineSpeed} km/h` : "Set baseline above"}
-                    </p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[0] ? 8 : 0 }}>
+                      <button onClick={() => toggleKpi(0)} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        background: "none", border: "none", cursor: "pointer", padding: 0,
+                      }}>
+                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                          ⚡ Avg Speed
+                        </p>
+                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
+                          transform: kpiOpen[0] ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease" }}>▾</span>
+                      </button>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
+                    </div>
+                    {kpiOpen[0] && (
+                      <>
+                        <p style={kpiValue}>{selectedStats.avgSpeed || "—"}
+                          {selectedStats.avgSpeed > 0 && <span style={{ fontSize:14, fontWeight:600 }}> km/h</span>}
+                        </p>
+                        <p style={kpiSub}>
+                          {baselineSpeed > 0 ? `Baseline: ${baselineSpeed} km/h` : "Set baseline above"}
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[1] }}>
-                    {/*<span style={{ fontSize:28 }}>🕐</span>*/}
-                    <div style={kpiLabel}>Median Trip <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip></div>
-                    <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
-                    <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[1] ? 8 : 0 }}>
+                      <button onClick={() => toggleKpi(1)} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        background: "none", border: "none", cursor: "pointer", padding: 0,
+                      }}>
+                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                          🕐 Median Trip
+                        </p>
+                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
+                          transform: kpiOpen[1] ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease" }}>▾</span>
+                      </button>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
+                    </div>
+                    {kpiOpen[1] && (
+                      <>
+                        <p style={kpiValue}>{fmtDuration(selectedStats.median)}</p>
+                        <p style={kpiSub}>Mean: {fmtDuration(selectedStats.mean)}</p>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[2] }}>
-                    {/*<span style={{ fontSize:28 }}>🔥</span>*/}
-                    <div style={kpiLabel}>Bad Day Trip <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip></div>
-                    <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
-                    <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[2] ? 8 : 0 }}>
+                      <button onClick={() => toggleKpi(2)} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        background: "none", border: "none", cursor: "pointer", padding: 0,
+                      }}>
+                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                          🔥 Bad Day Trip
+                        </p>
+                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
+                          transform: kpiOpen[2] ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease" }}>▾</span>
+                      </button>
+                      <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
+                    </div>
+                    {kpiOpen[2] && (
+                      <>
+                        <p style={kpiValue}>{fmtDuration(selectedStats.p95)}</p>
+                        <p style={kpiSub}>1-in-{badDayN} trips take this long</p>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[3] }}>
-                    {/*<span style={{ fontSize:28 }}>📊</span>*/}
-                    <div style={kpiLabel}>No. of Trips <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip></div>
-                    <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
-                    <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: kpiOpen[3] ? 8 : 0 }}>
+                      <button onClick={() => toggleKpi(3)} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        background: "none", border: "none", cursor: "pointer", padding: 0,
+                      }}>
+                        <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                          📊 No. of Trips
+                        </p>
+                        <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
+                          transform: kpiOpen[3] ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease" }}>▾</span>
+                      </button>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
+                    </div>
+                    {kpiOpen[3] && (
+                      <>
+                        <p style={kpiValue}>{selectedStats.count.toLocaleString()}</p>
+                        <p style={kpiSub}>{chartDataArr.length} {chartGranularity === 'daily' ? 'days' : 'weeks'} · {periodLabel} window</p>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -2411,7 +2485,7 @@ function DashboardInner() {
                             display: "flex", alignItems: "center", gap: 6,
                             background: "none", border: "none", cursor: "pointer", padding: 0,
                           }}>
-                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
+                            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
                               color: thm.textPrimary, margin: 0 }}>
                               {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
                             </p>
@@ -2704,16 +2778,29 @@ function DashboardInner() {
                         zIndex: 1,
                         ...(thm.key!=="colour" ? { background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : {}),
                       }}>
-                      {/* Info icon — top-right corner */}
-                      <div style={{ position: "absolute", top: 12, right: 16, zIndex: 2 }}>
+                      {/* Header row: title + toggle + Info icon */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: calendarCardOpen ? 12 : 0 }}>
+                        <button onClick={() => setCalendarCardOpen(o => !o)} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          background: "none", border: "none", cursor: "pointer", padding: 0,
+                        }}>
+                          <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                            📅 Daily Speeds by Month
+                          </p>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
+                        </button>
                         <InfoTip thm={thm}>
                           {TOOLTIP_CONTENT.dailyCalendar.body}
                         </InfoTip>
                       </div>
-                      <CalendarWidget
-                        dailyStats={dailyStats}
-                        fmtDur={fmtDuration}
-                      />
+                      {calendarCardOpen && (
+                        <CalendarWidget
+                          dailyStats={dailyStats}
+                          fmtDur={fmtDuration}
+                        />
+                      )}
                     </div>
                   }
                 </>

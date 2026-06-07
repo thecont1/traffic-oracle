@@ -2096,7 +2096,7 @@ function DashboardInner() {
                       background: "none", border: "none", cursor: "pointer", padding: 0,
                     }}>
                       <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                        Baseline — Compare with this earlier period
+                        ✳︎ Baseline — Compare with this earlier period
                       </p>
                       <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
                       <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
@@ -2280,7 +2280,7 @@ function DashboardInner() {
                   }}>
                     <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17,
                       color: thm.verdictText(v.tc), margin: 0 }}>
-                      Verdict
+                      ✳︎ Verdict
                     </p>
                     <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
                     <span style={{ fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6, display: "inline-block",
@@ -2317,7 +2317,7 @@ function DashboardInner() {
                         {baselineSpeed > 0 && (
                           <div style={{ width:"auto", flexShrink:0, textAlign:"center", paddingRight:6 }}>
                             <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase",
-                              letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>Baseline</p>
+                              letterSpacing:"0.08em", color: thm.baselineLabel, marginBottom:4 }}>✳Baseline</p>
                             <p style={{ fontFamily:"var(--app-font-display)", fontWeight:800, fontSize:22,
                               color: thm.verdictText(v.tc), lineHeight:1 }}>
                               {baselineSpeed}<span style={{ fontSize:11, fontWeight:600 }}> km/h</span>
@@ -2431,7 +2431,7 @@ function DashboardInner() {
                         }}>
                           <span style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
                             color: thm.textPrimary }}>
-                            {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
+                            {chartView === 'speed' ? '✳︎ Speed Over Time' : '✳︎ Trip Duration Over Time'}
                           </span>
                           <InfoTip thm={thm} maxWidth={280}>
                             {chartView === 'speed'
@@ -2669,7 +2669,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            {tt.isActive ? "⏳" : "📡"} Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
+                            {tt.isActive ? "⏳" : "✳︎"} Speed Forecast Bands{tt.isActive && tt.simulatedNow ? ` · as of ${ttFormat(tt.simulatedNow!)}` : ""}
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.forecastBands.body}
@@ -2728,7 +2728,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            📅 Daily Speeds by Month
+                            ✳︎ Daily Speeds by Month
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.dailyCalendar.body}

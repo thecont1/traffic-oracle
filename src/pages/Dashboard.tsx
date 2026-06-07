@@ -2610,8 +2610,8 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── HIDDEN: TrafficNOW! Speed Forecast Bands (hidden 2026-05-25) ── */}
-                  {false && trafficNowData.length > 0 && (
+                  {/* ── TrafficNOW! Speed Forecast Bands ── */}
+                  {trafficNowData.length > 0 && (
                     <div className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
@@ -2666,8 +2666,8 @@ function DashboardInner() {
                     </div>
                   )}
 
-                  {/* ── HIDDEN: Daily Speeds by Month calendar (hidden 2026-05-25) ── */}
-                  {false && (
+                  {/* ── Daily Speeds by Month calendar ── */}
+                  {
                     <div className="chart-card animate-fade-in"
                       style={{
                         padding:"1.25rem 1.5rem",
@@ -2686,7 +2686,7 @@ function DashboardInner() {
                         fmtDur={fmtDuration}
                       />
                     </div>
-                  )}
+                  }
                 </>
               )}
 

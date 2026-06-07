@@ -2431,7 +2431,7 @@ function DashboardInner() {
                             background: "none", border: "none", cursor: "pointer", padding: 0,
                           }}>
                             <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-                              color: thm.textPrimary, margin: 0 }}>
+                              color: thm.textPrimary, margin: 0, lineHeight: 1 }}>
                               {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
                             </p>
                             <InfoTip thm={thm} maxWidth={280}>

@@ -2426,22 +2426,22 @@ function DashboardInner() {
                       style={thm.key!=="colour" ? { position: "relative", zIndex: 1, background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow } : { position: "relative", zIndex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: chartOpen ? 8 : 0 }}>
                         <button onClick={() => setChartOpen(o => !o)} style={{
-                          display: "flex", alignItems: "center", gap: 6,
+                          display: "flex", alignItems: "center", gap: 8,
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
-                          <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-                            color: thm.textPrimary, margin: 0 }}>
+                          <span style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
+                            color: thm.textPrimary }}>
                             {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
-                          </p>
+                          </span>
                           <InfoTip thm={thm} maxWidth={280}>
-                          {chartView === 'speed'
-                            ? TOOLTIP_CONTENT.chartSpeed.body
-                            : TOOLTIP_CONTENT.chartDuration.body
-                          }
-                        </InfoTip>
-                        <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
-                          transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s ease" }}>▾</span>
+                            {chartView === 'speed'
+                              ? TOOLTIP_CONTENT.chartSpeed.body
+                              : TOOLTIP_CONTENT.chartDuration.body
+                            }
+                          </InfoTip>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
                         </button>
                         {chartOpen && (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -11,10 +11,10 @@ import { Share2, Plus, Minus } from "lucide-react";
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, WeeklyAggregate, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
@@ -23,7 +23,8 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
-import type { IntervalDatum, ViewingMode } from "@/components/UncertaintyBandChart";
+import type { ViewingMode } from "@/components/UncertaintyBandChart";
+import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
 import type { AppConfig } from "../lib/config";
 
@@ -1157,46 +1158,9 @@ function DashboardInner() {
 
   /* ── TrafficNOW! per-week percentile bands ───────────────────── */
   const { trafficNowData, trafficNowCompare } = useMemo(() => {
-    const { percentile: pctFn } = (() => {
-      function pct(sorted: number[], p: number): number {
-        if (!sorted.length) return 0;
-        const idx = (p / 100) * (sorted.length - 1);
-        const lo = Math.floor(idx), hi = Math.ceil(idx);
-        return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-      }
-      return { percentile: pct };
-    })();
-
-    const routeRows = ttAllRows.filter(r => r.label_short === selectedRoute);
-
-    // Helper: build IntervalDatum[] from a slice of WeeklyAggregates
-    function buildBands(weeks: WeeklyAggregate[]): IntervalDatum[] {
-      return weeks.map(w => {
-        const wStart = new Date(w.weekKey);
-        const wEnd   = new Date(wStart.getTime() + 7 * 86400000);
-        const wRows  = routeRows.filter(r => r.timestamp >= wStart && r.timestamp < wEnd);
-        const speeds = wRows.map(r => r.speed_kmh).sort((a, b) => a - b);
-        if (speeds.length < 3) {
-          // Fallback: use avgSpeed as a flat band ±5%
-          const s = w.avgSpeed || 0;
-          return { x: w.weekKey, p05: s * 0.9, p15: s * 0.95, p50: s, p85: s * 1.05, p95: s * 1.1 };
-        }
-        return {
-          x: w.weekKey,
-          p05: Math.round(pctFn(speeds, 5)  * 10) / 10,
-          p15: Math.round(pctFn(speeds, 15) * 10) / 10,
-          p50: Math.round(pctFn(speeds, 50) * 10) / 10,
-          p85: Math.round(pctFn(speeds, 85) * 10) / 10,
-          p95: Math.round(pctFn(speeds, 95) * 10) / 10,
-        };
-      });
-    }
-
-    // Recent window data (the primary "now" view)
-    const recentData = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12));
-    // Baseline data for compare mode
-    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : []);
-
+    const routeRows    = ttAllRows.filter(r => r.label_short === selectedRoute);
+    const recentData   = buildBands(recentWeeks.length > 0 ? recentWeeks : allRouteWeeks.slice(-12), routeRows);
+    const baselineData = buildBands(baselineWeeks.length > 0 ? baselineWeeks : [], routeRows);
     return { trafficNowData: recentData, trafficNowCompare: baselineData };
   }, [ttAllRows, selectedRoute, recentWeeks, baselineWeeks, allRouteWeeks]);
 
@@ -2704,7 +2668,7 @@ function DashboardInner() {
 
                   {/* ── Speed Forecast Bands ── */}
                   {trafficNowData.length > 0 && (
-                    <div className="chart-card animate-fade-in"
+                    <div data-testid="forecast-bands-card" className="chart-card animate-fade-in"
                       style={thm.key !== "colour"
                         ? { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", background: thm.cardBg, border: thm.cardBorder, boxShadow: thm.cardShadow, padding: "1.25rem 1.5rem" }
                         : { position: "relative", zIndex: 1, overflow: "hidden", backgroundClip: "padding-box", padding: "1.25rem 1.5rem" }}>

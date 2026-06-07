@@ -111,7 +111,6 @@ function CalendarWidget({
   const [calYear,  setCalYear]  = useState(initYM.y);
   const [calMonth, setCalMonth] = useState(initYM.m);
   const [fadeKey,  setFadeKey]  = useState(0);
-  const [calOpen,  setCalOpen]  = useState(false);
 
   useEffect(() => {
     if (!lastStr) return;
@@ -344,61 +343,45 @@ function CalendarWidget({
   return (
     <>
       <div style={{ position:"relative" }}>
-        {/* ── Header row: title + chevron + (when open) month nav ── */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-          marginBottom: calOpen ? 14 : 0 }}>
-          <button onClick={() => setCalOpen(o => !o)} style={{
-            display:"flex", alignItems:"center", gap:8,
-            background:"none", border:"none", cursor:"pointer", padding:0,
-          }}>
-            <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:17,
-              color: thm.textPrimary, margin:0 }}>📅 Daily Speeds by Month</p>
-            <span style={{ fontSize:16, color: thm.textMuted, display:"inline-block",
-              transform: calOpen ? "rotate(180deg)" : "rotate(0deg)",
-              transition:"transform 0.2s ease" }}>▾</span>
-          </button>
-          {calOpen && (
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              {navBtn("‹", canBack, prevMo)}
-              <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
-                minWidth:150, textAlign:"center" }}>{monthLabel}</span>
-              {navBtn("›", canFwd, nextMo)}
-            </div>
-          )}
+        {/* ── Month nav (always visible; Dashboard-level toggle controls card visibility) ── */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end",
+          marginBottom: 14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {navBtn("‹", canBack, prevMo)}
+            <span style={{ fontWeight:700, fontSize:14, color: thm.textPrimary,
+              minWidth:150, textAlign:"center" }}>{monthLabel}</span>
+            {navBtn("›", canFwd, nextMo)}
+          </div>
         </div>
 
-        {calOpen && (
-          <>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
-              {DAY_HDR.map(d => (
-                <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
-                  textTransform:"uppercase", letterSpacing:"0.06em",
-                  color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
-              ))}
-            </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
+          {DAY_HDR.map(d => (
+            <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
+              textTransform:"uppercase", letterSpacing:"0.06em",
+              color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
+          ))}
+        </div>
 
-            <div key={fadeKey}
-              onMouseMove={handleGridMove}
-              onMouseLeave={hideTip}
-              style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
-                animation:"cal-fade-in 0.2s ease" }}>
-              {cells}
-            </div>
+        <div key={fadeKey}
+          onMouseMove={handleGridMove}
+          onMouseLeave={hideTip}
+          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+            animation:"cal-fade-in 0.2s ease" }}>
+          {cells}
+        </div>
 
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
-              justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
-              <span>Slow</span>
-              <div style={{ width:88, height:7, borderRadius:4,
-                background: thm.key === "gray"
-                  ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
-                  : thm.key === "pastel"
-                  ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
-                  : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
-              }} />
-              <span>Fast (km/h)</span>
-            </div>
-          </>
-        )}
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
+          justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
+          <span>Slow</span>
+          <div style={{ width:88, height:7, borderRadius:4,
+            background: thm.key === "gray"
+              ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
+              : thm.key === "pastel"
+              ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
+              : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
+          }} />
+          <span>Fast (km/h)</span>
+        </div>
       </div>
       {createPortal(
         <div ref={tooltipRef} style={{
@@ -1288,6 +1271,7 @@ function DashboardInner() {
     return next;
   });
   const [calendarCardOpen, setCalendarCardOpen] = useState(true);
+  const [baselineOpen, setBaselineOpen] = useState(true);
 
   // Unified chart data array based on granularity
   const chartDataKey = chartGranularity === 'daily' ? 'dateKey' : 'weekKey';
@@ -2116,16 +2100,26 @@ function DashboardInner() {
                     </svg>
                   </div>}
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 14,
+                  {/* Header row: title + toggle + InfoTip — TrafficNOW! style */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: baselineOpen ? 14 : 0,
                     opacity: showIntro ? 0 : 1,
                   }}>
-                    <p style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:15,
-                      color: thm.textPrimary, margin: 0 }}>
-                      Compare with this earlier period 
-                    </p>
-                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
+                    <button onClick={() => setBaselineOpen(o => !o)} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      background: "none", border: "none", cursor: "pointer", padding: 0,
+                    }}>
+                      <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
+                        📊 Baseline — Compare with this earlier period
+                      </p>
+                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.baselineSlider.body}</InfoTip>
+                      <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                        transform: baselineOpen ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.2s ease" }}>▾</span>
+                    </button>
                   </div>
 
+                  {baselineOpen && (
+                  <>
                   <div style={{ padding:"28px 0 4px", position:"relative" }}>
                     {/* Slider interior — hidden until real data loads so placeholder
                         [0,1] thumb positions are never visible */}
@@ -2262,6 +2256,8 @@ function DashboardInner() {
                       Baseline can't overlap with the recent period 🙅
                     </p>
                   )}
+                  </>
+                  )}
                 </div>
           )}
 
@@ -2294,11 +2290,11 @@ function DashboardInner() {
                       color: thm.verdictText(v.tc), margin: 0 }}>
                       📊 Verdict
                     </p>
+                    <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
                     <span style={{ fontSize: 16, color: thm.verdictText(v.tc), opacity: 0.6, display: "inline-block",
                       transform: verdictOpen ? "rotate(180deg)" : "rotate(0deg)",
                       transition: "transform 0.2s ease" }}>▾</span>
                   </button>
-                  <InfoTip thm={thm}>{TOOLTIP_CONTENT.verdict.body}</InfoTip>
                 </div>
                 {verdictOpen && (
                   <>
@@ -2374,11 +2370,11 @@ function DashboardInner() {
                         <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
                           ⚡ Avg Speed
                         </p>
+                        <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
                         <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
                           transform: kpiOpen[0] ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "transform 0.2s ease" }}>▾</span>
                       </button>
-                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiAvgSpeed.body}</InfoTip>
                     </div>
                     {kpiOpen[0] && (
                       <>
@@ -2401,11 +2397,11 @@ function DashboardInner() {
                         <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
                           🕐 Median Trip
                         </p>
+                        <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
                         <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
                           transform: kpiOpen[1] ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "transform 0.2s ease" }}>▾</span>
                       </button>
-                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiMedianTrip.body}</InfoTip>
                     </div>
                     {kpiOpen[1] && (
                       <>
@@ -2424,11 +2420,11 @@ function DashboardInner() {
                         <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
                           🔥 Bad Day Trip
                         </p>
+                        <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
                         <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
                           transform: kpiOpen[2] ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "transform 0.2s ease" }}>▾</span>
                       </button>
-                      <InfoTip thm={thm}>{fillTemplate(TOOLTIP_CONTENT.kpiBadDay.body, { badDayN, percentile: cfg.percentile.worst_case })}</InfoTip>
                     </div>
                     {kpiOpen[2] && (
                       <>
@@ -2447,11 +2443,11 @@ function DashboardInner() {
                         <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
                           📊 No. of Trips
                         </p>
+                        <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
                         <span style={{ fontSize: 14, color: thm.textMuted, display: "inline-block",
                           transform: kpiOpen[3] ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "transform 0.2s ease" }}>▾</span>
                       </button>
-                      <InfoTip thm={thm}>{TOOLTIP_CONTENT.kpiNumTrips.body}</InfoTip>
                     </div>
                     {kpiOpen[3] && (
                       <>
@@ -2489,16 +2485,16 @@ function DashboardInner() {
                               color: thm.textPrimary, margin: 0 }}>
                               {chartView === 'speed' ? '⚡ Speed Over Time' : '🐌 Trip Duration Over Time'}
                             </p>
-                            <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
-                              transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
-                              transition: "transform 0.2s ease" }}>▾</span>
-                          </button>
-                          <InfoTip thm={thm} maxWidth={280}>
+                            <InfoTip thm={thm} maxWidth={280}>
                             {chartView === 'speed'
                               ? TOOLTIP_CONTENT.chartSpeed.body
                               : TOOLTIP_CONTENT.chartDuration.body
                             }
                           </InfoTip>
+                          <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
+                            transform: chartOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s ease" }}>▾</span>
+                        </button>
                         </div>
                         {chartOpen && (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2787,20 +2783,18 @@ function DashboardInner() {
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
                             📅 Daily Speeds by Month
                           </p>
+                          <InfoTip thm={thm}>
+                            {TOOLTIP_CONTENT.dailyCalendar.body}
+                          </InfoTip>
                           <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                             transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
                             transition: "transform 0.2s ease" }}>▾</span>
                         </button>
-                        <InfoTip thm={thm}>
-                          {TOOLTIP_CONTENT.dailyCalendar.body}
-                        </InfoTip>
                       </div>
-                      {calendarCardOpen && (
-                        <CalendarWidget
-                          dailyStats={dailyStats}
-                          fmtDur={fmtDuration}
-                        />
-                      )}
+                      <CalendarWidget
+                        dailyStats={dailyStats}
+                        fmtDur={fmtDuration}
+                      />
                     </div>
                   }
                 </>

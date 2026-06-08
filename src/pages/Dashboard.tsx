@@ -11,7 +11,7 @@ import { Share2, Plus, Minus } from "lucide-react";
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
@@ -892,7 +892,6 @@ function DashboardInner() {
 
   const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
   const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
-  const allDayStats = useDailyStatsAllDay(allRows, selectedRoute);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -2393,12 +2392,10 @@ function DashboardInner() {
                       {calendarCardOpen && (
                         <CalendarWidget
                           dailyStats={calendarDailyStats}
-                          allDayStats={allDayStats}
                           allRows={allRows}
                           selectedRoute={selectedRoute}
                           tod={tod}
                           cutoffDate={tt.isActive ? tt.simulatedNow : null}
-                          fmtDur={fmtDuration}
                           widgetCalYear={widgetCalYear}
                           widgetCalMonth={widgetCalMonth}
                           onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}

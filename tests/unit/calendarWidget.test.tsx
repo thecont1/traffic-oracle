@@ -77,7 +77,6 @@ function buildRows(speed: number, count: number, year: number, month: number): T
 
 function renderCal(
   dailyStats: Map<string, DayStats>,
-  allDayStats?: Map<string, DayStats>,
   year?: number,
   month?: number,
   onDateClick?: (dk: string) => void,
@@ -88,11 +87,9 @@ function renderCal(
     <ThemeProvider initialTheme="colour">
       <CalendarWidget
         dailyStats={dailyStats}
-        allDayStats={allDayStats ?? dailyStats}
         allRows={allRows ?? []}
         selectedRoute="Test Route"
         tod="all"
-        fmtDur={(n: number) => `${Math.round(n)} min`}
         widgetCalYear={year ?? now.getFullYear()}
         widgetCalMonth={month ?? now.getMonth()}
         onDateClick={onDateClick}
@@ -109,7 +106,7 @@ describe("CalendarWidget integration", () => {
   it("renders 42 cells in the calendar grid", () => {
     const stats = buildStats(30, 30, 2025, 3);
     const rows = buildRows(30, 30, 2025, 3);
-    const { container } = renderCal(stats, stats, 2025, 3, undefined, rows);
+    const { container } = renderCal(stats, 2025, 3, undefined, rows);
 
     const grid = container.querySelector('[role="grid"]');
     expect(grid).toBeTruthy();
@@ -120,7 +117,7 @@ describe("CalendarWidget integration", () => {
 
   it("renders day headers Mon–Sun", () => {
     const stats = buildStats(30, 30, 2025, 3);
-    renderCal(stats, stats, 2025, 3);
+    renderCal(stats, 2025, 3);
 
     for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
       expect(screen.getByText(day)).toBeTruthy();
@@ -128,7 +125,7 @@ describe("CalendarWidget integration", () => {
   });
   it("shows legend with Slow/Fast labels", () => {
     const stats = buildStats(30, 30, 2025, 3);
-    renderCal(stats, stats, 2025, 3);
+    renderCal(stats, 2025, 3);
 
     expect(screen.getByText("Slow")).toBeTruthy();
     expect(screen.getByText("Fast")).toBeTruthy();
@@ -139,7 +136,7 @@ describe("CalendarWidget integration", () => {
     const rows = buildRows(30, 30, 2025, 3);
     stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
     rows.push(makeRow("2025-04-10", 35));
-    renderCal(stats, stats, 2025, 3, undefined, rows);
+    renderCal(stats, 2025, 3, undefined, rows);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
     expect(cell).toBeTruthy();
@@ -181,7 +178,7 @@ describe("CalendarWidget integration", () => {
     const rows = buildRows(30, 30, 2025, 3);
     stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
     rows.push(makeRow("2025-04-10", 35));
-    renderCal(stats, stats, 2025, 3, (dk) => clicked.push(dk), rows);
+    renderCal(stats, 2025, 3, (dk) => clicked.push(dk), rows);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
     expect(cell).toBeTruthy();
@@ -193,7 +190,7 @@ describe("CalendarWidget integration", () => {
     const stats = new Map<string, DayStats>();
     stats.set("2025-04-10", { ...ds(30), dateKey: "2025-04-10" });
     // April 2025, no rows → insufficient lookback
-    renderCal(stats, stats, 2025, 3);
+    renderCal(stats, 2025, 3);
 
     // Find the cell for day 10 by its aria-label (contains "Insufficient")
     const allCells = document.querySelectorAll('[role="gridcell"]');
@@ -213,7 +210,7 @@ describe("CalendarWidget integration", () => {
   it("calendar has accessible grid role", () => {
     const stats = buildStats(30, 30, 2025, 3);
     const rows = buildRows(30, 30, 2025, 3);
-    const { container } = renderCal(stats, stats, 2025, 3, undefined, rows);
+    const { container } = renderCal(stats, 2025, 3, undefined, rows);
 
     expect(container.querySelector('[role="grid"]')).toBeTruthy();
     expect(container.querySelector('[role="columnheader"]')).toBeTruthy();
@@ -225,7 +222,7 @@ describe("CalendarWidget integration", () => {
     const rows = buildRows(30, 30, 2025, 3);
     stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
     rows.push(makeRow("2025-04-10", 35));
-    renderCal(stats, stats, 2025, 3, undefined, rows);
+    renderCal(stats, 2025, 3, undefined, rows);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
     expect(cell).toBeTruthy();

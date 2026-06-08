@@ -86,15 +86,13 @@ interface CellTip {
 }
 
 export function CalendarWidget({
-  dailyStats, allDayStats, allRows, selectedRoute, tod,
-  fmtDur, widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
+  dailyStats, allRows, selectedRoute, tod,
+  widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
 }: {
   dailyStats: Map<string, DayStats>;
-  allDayStats: Map<string, DayStats>;
   allRows: TrafficRow[];
   selectedRoute: string;
   tod: TimeOfDay;
-  fmtDur: (n: number) => string;
   widgetCalYear: number;
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;

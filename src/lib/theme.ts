@@ -72,40 +72,46 @@ export interface AppTheme {
 
 /* ── Calendar colour helpers ────────────────────────────────────── */
 
-/** Colour theme: orange → green gradient, warm & cozy */
+/**
+ * 5-band calendar colours — hard edges, no blending.
+ *   t <  0.20  →  worst   (hard red)
+ *   t >= 0.20  →  worse   (orange)
+ *   t >= 0.40  →  middle  (yellow/amber)
+ *   t >= 0.60  →  better  (medium green)
+ *   t >= 0.80  →  best    (hard green)
+ */
+function band5(t: number): number {
+  return Math.max(0, Math.min(1, t));
+}
+
+/** Colour theme: red → orange → yellow → green → hard green */
 function calColour(kmh: number, p10: number, p90: number): string {
-  const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
-  const tc = Math.max(0, Math.min(1, t));
-  if (tc < 0.5) {
-    const s = tc * 2;
-    // From #F08A5D (orange/worse) → warm midpoint
-    return `rgba(${Math.round(240+(220-240)*s)},${Math.round(138+(170-138)*s)},${Math.round(93+(120-93)*s)},0.92)`;
-  }
-  const s = (tc - 0.5) * 2;
-  // Warm midpoint → #8BCB7E (green/better)
-  return `rgba(${Math.round(220+(139-220)*s)},${Math.round(170+(203-170)*s)},${Math.round(120+(126-120)*s)},0.92)`;
+  const tc = band5(p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5);
+  if (tc >= 0.80) return "#22c55e";  // best — hard green
+  if (tc >= 0.60) return "#86efac";  // better — medium green
+  if (tc >= 0.40) return "#fbbf24";  // middle — yellow/amber
+  if (tc >= 0.20) return "#f97316";  // worse — orange
+  return "#ef4444";                  // worst — hard red
 }
 
-/** Gray theme: dark → light grayscale */
+/** Gray theme: 5 grayscale bands */
 function calGray(kmh: number, p10: number, p90: number): string {
-  const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
-  const tc = Math.max(0, Math.min(1, t));
-  const v  = Math.round(34 + tc * (240 - 34));
-  return `rgb(${v},${v},${v})`;
+  const tc = band5(p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5);
+  if (tc >= 0.80) return "#f0f0f0";  // best — near white
+  if (tc >= 0.60) return "#c0c0c0";  // better — light gray
+  if (tc >= 0.40) return "#808080";  // middle — mid gray
+  if (tc >= 0.20) return "#404040";  // worse — dark gray
+  return "#1a1a1a";                  // worst — near black
 }
 
-/** Pastel theme: orange → green gradient, warm & sunny */
+/** Pastel theme: 5 pastel bands */
 function calPastel(kmh: number, p10: number, p90: number): string {
-  const t  = p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5;
-  const tc = Math.max(0, Math.min(1, t));
-  if (tc < 0.5) {
-    const s = tc * 2;
-    // From #E06A3E (orange) → warm midpoint (#F6E7C8 area)
-    return `rgba(${Math.round(224+(246-224)*s)},${Math.round(106+(215-106)*s)},${Math.round(62+(170-62)*s)},0.92)`;
-  }
-  const s = (tc - 0.5) * 2;
-  // Warm midpoint → #6FAE63 (green)
-  return `rgba(${Math.round(246+(111-246)*s)},${Math.round(215+(174-215)*s)},${Math.round(170+(99-170)*s)},0.92)`;
+  const tc = band5(p90 > p10 ? (kmh - p10) / (p90 - p10) : 0.5);
+  if (tc >= 0.80) return "#86efac";  // best — pastel green
+  if (tc >= 0.60) return "#bef264";  // better — lime
+  if (tc >= 0.40) return "#fde68a";  // middle — pastel yellow
+  if (tc >= 0.20) return "#fdba74";  // worse — pastel orange
+  return "#fca5a5";                  // worst — pastel red
 }
 
 /* ── Chip tokens per theme ──────────────────────────────────────── */

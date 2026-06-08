@@ -6,6 +6,15 @@ import type { AppConfig } from "./config";
 
 const cfg = appConfig as AppConfig;
 const WORST_CASE_PCT: number = cfg.percentile.worst_case;
+
+/** Format a Date as "h:mm AM/PM" (no leading zero on hour). */
+function fmtTime(d: Date): string {
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
 const defaultCity = cfg.cities.find(c => c.data_source) ?? cfg.cities[0];
 /** Extract the bare filename from a GitHub raw URL and return a same-origin
  *  proxy path.  Works in both dev (Vite proxy) and prod (Worker). */
@@ -674,6 +683,8 @@ export interface DayStats {
   avgSpeed: number;
   minSpeed: number;
   maxSpeed: number;
+  minTime: string;   // time of slowest reading, e.g. "5:30 PM"
+  maxTime: string;   // time of fastest reading
   p05Speed: number;
   p95Speed: number;
   avgDuration: number;
@@ -706,11 +717,15 @@ export function useDailyStats(
       const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
       const sortedSpeeds = [...speeds].sort((a, b) => a - b);
+      const minRow = dayRows.reduce((a, b) => a.speed_kmh <= b.speed_kmh ? a : b);
+      const maxRow = dayRows.reduce((a, b) => a.speed_kmh >= b.speed_kmh ? a : b);
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
         minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
         maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
+        minTime: fmtTime(minRow.timestamp),
+        maxTime: fmtTime(maxRow.timestamp),
         p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
         p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
         avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
@@ -746,11 +761,15 @@ export function useDailyStatsAllDay(
       const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
       const sortedSpeeds = [...speeds].sort((a, b) => a - b);
+      const minRow = dayRows.reduce((a, b) => a.speed_kmh <= b.speed_kmh ? a : b);
+      const maxRow = dayRows.reduce((a, b) => a.speed_kmh >= b.speed_kmh ? a : b);
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
         minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
         maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
+        minTime: fmtTime(minRow.timestamp),
+        maxTime: fmtTime(maxRow.timestamp),
         p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
         p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
         avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
@@ -849,11 +868,15 @@ export function useFilteredData(
         const speeds = dayRows.map((r) => r.speed_kmh);
         const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
         const sortedSpeeds = [...speeds].sort((a, b) => a - b);
+        const minRow = dayRows.reduce((a, b) => a.speed_kmh <= b.speed_kmh ? a : b);
+        const maxRow = dayRows.reduce((a, b) => a.speed_kmh >= b.speed_kmh ? a : b);
         return {
           dateKey,
           avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
           minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
           maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
+          minTime: fmtTime(minRow.timestamp),
+          maxTime: fmtTime(maxRow.timestamp),
           p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
           p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
           avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,

@@ -88,6 +88,31 @@ function parseYM(s: string) {
   return { y: d.getFullYear(), m: d.getMonth() };
 }
 
+/** Trailing 30-day p10/p90 for a given date, NOT including the date itself. */
+function trailingPercentiles(
+  stats: Map<string, DayStats>,
+  dateKey: string,
+): { p10: number; p90: number; count: number } {
+  const dkMs = new Date(dateKey + "T12:00:00").getTime();
+  const wStart = dkMs - 30 * 86400000;
+  const speeds: number[] = [];
+  for (const [k, d] of stats.entries()) {
+    if (k === dateKey) continue;
+    const t = new Date(k + "T12:00:00").getTime();
+    if (t >= wStart && t < dkMs && d.avgSpeed > 0) {
+      speeds.push(d.avgSpeed);
+    }
+  }
+  speeds.sort((a, b) => a - b);
+  const at = (pct: number) => {
+    if (speeds.length < 2) return 25;
+    const idx = (pct / 100) * (speeds.length - 1);
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    return speeds[lo] + (speeds[hi] - speeds[lo]) * (idx - lo);
+  };
+  return { p10: at(10), p90: at(90), count: speeds.length };
+}
+
 function CalendarWidget({
   dailyStats, allDayStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick,
 }: {
@@ -105,18 +130,17 @@ function CalendarWidget({
     setFadeKey(k => k + 1);
   }, [widgetCalYear, widgetCalMonth]);
 
-  /* p10/p90 of full route dataset — gives visible colour spread across any month */
-  const { p10, p90 } = useMemo(() => {
-    const speeds = Array.from(dailyStats.values())
-      .map(d => d.avgSpeed).filter(s => s > 0).sort((a, b) => a - b);
-    if (speeds.length < 2) return { p10: 15, p90: 50 };
-    const at = (pct: number) => {
-      const idx = (pct / 100) * (speeds.length - 1);
-      const lo  = Math.floor(idx), hi = Math.ceil(idx);
-      return speeds[lo] + (speeds[hi] - speeds[lo]) * (idx - lo);
-    };
-    return { p10: at(10), p90: at(90) };
-  }, [dailyStats]);
+
+  /* ── Global scale (shared across all dates) ──────────────────── */
+  const globalScale = useMemo(() => {
+    let lo = Infinity, hi = -Infinity;
+    for (const d of allDayStats.values()) {
+      if (d.minSpeed > 0 && d.minSpeed < lo) lo = d.minSpeed;
+      if (d.maxSpeed > 0 && d.maxSpeed > hi) hi = d.maxSpeed;
+    }
+    if (!isFinite(lo) || !isFinite(hi) || lo >= hi) return { lo: 10, hi: 50 };
+    return { lo, hi };
+  }, [allDayStats]);
 
   /* ── Imperative tooltip ─────────────────────────────────────── */
   const tooltipRef  = useRef<HTMLDivElement>(null);
@@ -153,58 +177,59 @@ function CalendarWidget({
     }
     windowAll.sort((a, b) => a - b);
 
-    /* all three lines ranked against the combined 60-day distribution */
-    const pctRank = (speed: number) => windowAll.length > 0
-      ? Math.max(0, Math.min(100, Math.round((windowAll.filter(v => v < speed).length / windowAll.length) * 100)))
+    /* Position markers on the GLOBAL scale (full min–max range) */
+    const { lo: gLo, hi: gHi } = globalScale;
+    /* Inverted: fast speeds map to 0% (top), slow speeds to 100% (bottom) */
+    const posOf = (speed: number) => gHi > gLo
+      ? Math.max(0, Math.min(100, ((gHi - speed) / (gHi - gLo)) * 100))
       : 50;
     const markers = [
-      { label:"MIN", speed:s.minSpeed, pos:pctRank(s.minSpeed), color:"#ef4444" },
-      { label:"AVG", speed:s.avgSpeed,  pos:pctRank(s.avgSpeed),  color:"#ffffff" },
-      { label:"MAX", speed:s.maxSpeed,  pos:pctRank(s.maxSpeed),  color:"#22d3ee" },
+      { label:"MIN", time:s.minTime, speed:s.minSpeed, pos:posOf(s.minSpeed), color:"#ef4444" },
+      { label:"AVG", time:"",         speed:s.avgSpeed,  pos:posOf(s.avgSpeed),  color:"#ffffff" },
+      { label:"MAX", time:s.maxTime, speed:s.maxSpeed,  pos:posOf(s.maxSpeed),  color:"#22d3ee" },
     ];
 
     const markerLines = markers.map(m =>
       `<div style="position:absolute;left:0;right:0;height:2px;background:${m.color};opacity:0.85;` +
       `top:${m.pos}%;transform:translateY(-50%);z-index:1;"></div>` +
-      `<div style="position:absolute;right:-4px;top:${m.pos}%;transform:translate(100%,-50%);` +
-      `font-size:9px;font-weight:700;color:${m.color};white-space:nowrap;padding-left:4px;">` +
-      `${m.label}</div>`
+      `<div style="position:absolute;right:-6px;top:${m.pos}%;transform:translate(100%,-50%);` +
+      `font-size:11px;font-weight:700;color:${m.color};white-space:nowrap;line-height:1.2;">` +
+      `<span style="padding-left:4px;">${m.label}</span>` +
+      (m.time ? `<br><span style="font-size:9px;font-weight:600;color:#94A3B8;padding-left:4px;">${m.time}</span>` : "") +
+      `</div>`
     ).join("");
 
     el.innerHTML =
-      `<span style="display:inline-block;background:#141A24;border-radius:12px;padding:11px 14px;width:192px;` +
-      `box-shadow:0 8px 32px rgba(0,0,0,0.55);font-family:var(--app-font);font-size:12px;color:#F0F4F8;">` +
-      `<div style="font-weight:700;font-size:13px;margin-bottom:9px;color:#F0F4F8">${dayStr}</div>` +
-      `<div style="position:relative;height:100px;margin-left:32px;margin-right:32px;">` +
+      `<span style="display:inline-block;background:#141A24;border-radius:12px;padding:13px 17px;width:270px;` +
+      `box-shadow:0 8px 32px rgba(0,0,0,0.55);font-family:var(--app-font);font-size:14px;color:#F0F4F8;">` +
+      `<div style="font-weight:700;font-size:15px;margin-bottom:11px;color:#F0F4F8">${dayStr}</div>` +
+      `<div style="position:relative;height:160px;margin-left:38px;margin-right:38px;">` +
         `<div style="position:absolute;left:0;top:0;right:0;bottom:0;border-radius:4px;overflow:hidden;background:#1E293B;">` +
           `<div style="width:100%;height:100%;background:linear-gradient(to bottom,` +
             `rgba(100,116,139,0.15) 0%,rgba(100,116,139,0.6) 25%,` +
             `rgba(100,116,139,0.9) 50%,` +
             `rgba(100,116,139,0.6) 75%,rgba(100,116,139,0.15) 100%);"></div>` +
         `</div>` +
-        `<div style="position:absolute;top:0;left:-32px;width:28px;text-align:right;font-size:10px;font-weight:700;` +
+        `<div style="position:absolute;top:0;left:-38px;width:34px;text-align:right;font-size:12px;font-weight:700;` +
           `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(-50%);">` +
-          `P90</div>` +
-        `<div style="position:absolute;top:4px;left:-32px;width:28px;text-align:right;` +
-          `font-size:7px;font-weight:600;letter-spacing:0.05em;color:#94A3B8;">` +
-          `SLOWER</div>` +
-        `<div style="position:absolute;top:50%;left:-32px;width:28px;text-align:right;font-size:10px;font-weight:700;` +
-          `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(-50%);">` +
-          `P50</div>` +
-        `<div style="position:absolute;bottom:0;left:-32px;width:28px;text-align:right;font-size:10px;font-weight:700;` +
-          `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(50%);">` +
-          `P10</div>` +
-        `<div style="position:absolute;bottom:4px;left:-32px;width:28px;text-align:right;` +
-          `font-size:7px;font-weight:600;letter-spacing:0.05em;color:#94A3B8;">` +
+          `${Math.round(gHi)}</div>` +
+        `<div style="position:absolute;top:4px;left:-38px;width:34px;text-align:right;` +
+          `font-size:8px;font-weight:600;letter-spacing:0.05em;color:#94A3B8;">` +
           `FASTER</div>` +
+        `<div style="position:absolute;bottom:0;left:-38px;width:34px;text-align:right;font-size:12px;font-weight:700;` +
+          `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(50%);">` +
+          `${Math.round(gLo)}</div>` +
+        `<div style="position:absolute;bottom:4px;left:-38px;width:34px;text-align:right;` +
+          `font-size:8px;font-weight:600;letter-spacing:0.05em;color:#94A3B8;">` +
+          `SLOWER</div>` +
         markerLines +
       `</div>` +
       `</span>` +
       `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
 
     const rect   = cellEl.getBoundingClientRect();
-    const TW     = el.offsetWidth  || 200;
-    const TH     = el.offsetHeight || 140;
+    const TW     = el.offsetWidth  || 280;
+    const TH     = el.offsetHeight || 210;
     const TAIL   = 9;
     const GAP    = 8;
     const vw     = window.innerWidth;
@@ -240,7 +265,7 @@ function CalendarWidget({
     el.style.left    = left + "px";
     el.style.top     = top  + "px";
     el.style.opacity = "1";
-  }, [allDayStats, hideTip]);
+  }, [allDayStats, globalScale, hideTip]);
 
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
@@ -297,9 +322,10 @@ function CalendarWidget({
           circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
           txtClr = thm.textMuted;
         } else if (isPast && s) {
-          /* past date with data — solid speed colour */
-          const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
-          circleStyle = { background: thm.calColor(s.avgSpeed, p10, p90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
+          /* past date with data — colour relative to trailing 30 days */
+          const { p10: lp10, p90: lp90 } = trailingPercentiles(dailyStats, dateKey);
+          const t = lp90 > lp10 ? Math.max(0, Math.min(1, (s.avgSpeed - lp10) / (lp90 - lp10))) : 0.5;
+          circleStyle = { background: thm.calColor(s.avgSpeed, lp10, lp90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
           txtClr = thm.calTextColor(t);
         } else {
           /* past date with no data — dashed grey outline */
@@ -307,10 +333,11 @@ function CalendarWidget({
           txtClr = thm.textMuted;
         }
       } else {
-        /* any other month — existing solid behaviour */
+        /* any other month — colour relative to trailing 30 days */
         if (s) {
-          const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
-          circleStyle = { background: thm.calColor(s.avgSpeed, p10, p90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
+          const { p10: lp10, p90: lp90 } = trailingPercentiles(dailyStats, dateKey);
+          const t = lp90 > lp10 ? Math.max(0, Math.min(1, (s.avgSpeed - lp10) / (lp90 - lp10))) : 0.5;
+          circleStyle = { background: thm.calColor(s.avgSpeed, lp10, lp90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
           txtClr = thm.calTextColor(t);
         } else {
           circleStyle = { background: thm.emptyCalCircle };
@@ -340,7 +367,7 @@ function CalendarWidget({
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, widgetCalYear, widgetCalMonth]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, widgetCalYear, widgetCalMonth]);
 
   const CAL_MUTED = thm.textMuted;
 
@@ -369,10 +396,10 @@ function CalendarWidget({
           <span>Slow</span>
           <div style={{ width:88, height:7, borderRadius:4,
             background: thm.key === "gray"
-              ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
+              ? "linear-gradient(90deg,#1a1a1a,#404040,#808080,#c0c0c0,#f0f0f0)"
               : thm.key === "pastel"
-              ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
-              : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
+              ? "linear-gradient(90deg,#fca5a5,#fdba74,#fde68a,#bef264,#86efac)"
+              : "linear-gradient(90deg,#ef4444,#f97316,#fbbf24,#86efac,#22c55e)"
           }} />
           <span>Fast (km/h)</span>
         </div>
@@ -1229,21 +1256,9 @@ function DashboardInner() {
   const calAllDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
-  const calInitYM = useMemo(() => {
-    return calLastStr ? parseYM(calLastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
-  }, [calLastStr]);
-  const [widgetCalYear, setWidgetCalYear] = useState(calInitYM.y);
-  const [widgetCalMonth, setWidgetCalMonth] = useState(calInitYM.m);
-  useEffect(() => {
-    if (!calLastStr) return;
-    const base = parseYM(calLastStr);
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) { setWidgetCalYear(base.y - 1); setWidgetCalMonth(11); }
-      else              { setWidgetCalYear(base.y);      setWidgetCalMonth(base.m - 1); }
-    } else {
-      setWidgetCalYear(base.y); setWidgetCalMonth(base.m);
-    }
-  }, [calLastStr]);
+
+  const [widgetCalYear, setWidgetCalYear] = useState(() => new Date().getFullYear());
+  const [widgetCalMonth, setWidgetCalMonth] = useState(() => new Date().getMonth());
 
   const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
   const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;

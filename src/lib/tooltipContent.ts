@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Tooltip content for all dashboard cards and sections.
 // Edit this file to change tooltip text — no code changes needed.
-// Each entry: max 4 sentences, friendly tone, technically sound.
+// Style: clear headline, plain description, bullet points where relevant.
 // ---------------------------------------------------------------------------
 
 export const TOOLTIP_CONTENT = {
@@ -9,115 +9,153 @@ export const TOOLTIP_CONTENT = {
   routeBrowserPane: {
     title: "Traffic NOW!",
     body: [
-      "See if traffic is normal right now.",
-      "The coloured diamond shows your current speed, and the neutral band shows what is typical for this time of day (based on 90 days of data).",
-      "Diamond inside the band means typical, left of band means slower, right means faster.",
-      "Tap any route to explore it on the main charts.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "This shows whether traffic right now is faster or slower than usual for this time of day.",
+      "",
+      "• The coloured diamond is your current speed",
+      "• The shaded band is the typical range for this hour",
+      "• Diamond inside the band — traffic is normal",
+      "• Diamond to the left — slower than usual",
+      "• Diamond to the right — faster than usual",
+    ].join("\n"),
   },
 
   // ── Verdict Card ────────────────────────────────────────────────
   verdict: {
-    title: "How this verdict works",
+    title: "Verdict",
     body: [
-      "This verdict compares your selected baseline period with the most recent data.",
-      "The comparison uses a statistical threshold to determine if traffic has meaningfully improved, worsened, or stayed the same.",
-      "Tap the chips above to explore different questions.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "This is the headline finding — a plain-English answer to whether traffic has improved, worsened, or stayed the same on this route.",
+      "",
+      "It compares your chosen baseline period (older data) against the most recent data of the same length, and makes a call based on the difference in average speeds.",
+      "",
+      "• A meaningful change in either direction is flagged clearly",
+      "• Small fluctuations that could be random are called \"no significant change\"",
+    ].join("\n"),
   },
 
   // ── Baseline Slider ─────────────────────────────────────────────
   baselineSlider: {
-    title: "Baseline period",
+    title: "Compare with this earlier period",
     body: [
-      "Drag the two thumbs to select a baseline period in the past.",
-      "The verdict above will compare this baseline with your most recent data to see if traffic has improved or worsened.",
-      "Choose a period when traffic was typical for a fair comparison.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "This slider lets you pick a reference period from the past — your \"baseline.\" The Verdict section will then compare that quieter or busier period to recent traffic, so you can see if things have genuinely improved or gotten worse.",
+      "",
+      "Drag the two handles to set the start and end of your baseline window.",
+    ].join("\n"),
   },
 
   // ── KPI: Avg Speed ──────────────────────────────────────────────
   kpiAvgSpeed: {
-    title: "Average speed",
+    title: "Avg Speed",
     body: [
-      "The average speed across all trips on this route during your selected period and time slot.",
-      "Higher is faster.",
-      "For reference, the baseline average is shown below.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "The average speed of all trips recorded on this route during your selected time period and time slot. Think of it as the typical pace of traffic — higher is better.",
+    ].join("\n"),
   },
 
   // ── KPI: Median Trip ────────────────────────────────────────────
   kpiMedianTrip: {
-    title: "Median trip duration",
+    title: "Median Trip",
     body: [
-      "The middle value: half of all trips were faster than this, half were slower.",
-      "It is a better everyday estimate than the average because it is not skewed by extreme delays.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "If you lined up all trips from slowest to fastest, the median is the one in the middle. Half of all trips were faster than this, half were slower.",
+      "",
+      "It's often a more honest estimate of your typical journey than the average, because it isn't skewed by a handful of very slow or very fast outliers.",
+    ].join("\n"),
   },
 
   // ── KPI: Bad Day Trip ───────────────────────────────────────────
   kpiBadDay: {
-    title: "Bad day trip",
+    title: "Bad Day Trip",
     body: [
-      "On a bad day, your trip could take this long.",
-      "Specifically, 1 in every {badDayN} trips (the {percentile}th percentile) is at least this slow.",
-      "Think of it as a realistic worst-case, not a freak event.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "This is how long your trip could take on a genuinely bad day — not a worst-ever outlier, but the kind of delay that happens roughly once every 25 journeys.",
+      "",
+      "Use this number when you need to plan for the unexpected and can't afford to be late.",
+    ].join("\n"),
   },
 
   // ── KPI: No. of Trips ───────────────────────────────────────────
   kpiNumTrips: {
-    title: "Number of trips",
+    title: "No. of Trips",
     body: [
-      "The total number of hourly traffic readings used to calculate the figures above.",
-      "More readings mean more reliable statistics.",
-      "The time window and granularity (daily or weekly) are shown below.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "The total number of traffic readings used to calculate everything on this page. More readings means the figures above are more reliable. A low count means treat the numbers with some caution.",
+    ].join("\n"),
   },
 
   // ── Speed/Duration Chart ────────────────────────────────────────
   chartSpeed: {
-    title: "How to read this chart",
+    title: "Trip Duration Over Time",
     body: [
-      "This chart shows how traffic speed changes over time for your selected route, period, and time of day.",
-      "The solid line is the average speed per time slot. The dashed green line (Best) shows the 95th percentile — the fastest 5% of trips when roads are clear. The dashed red line (Worst) shows the 5th percentile — the slowest 5% during heavy traffic.",
-      "Switch to Trip Duration to see how long trips take instead of how fast traffic moves. The lines flip: Best becomes the 5th percentile (shortest trips) and Worst becomes the 95th percentile (longest trips).",
-      "Use the Daily / Weekly toggle to change the time granularity. Daily shows every single day, which can look noisy. Weekly smooths the data by averaging each week, making trends easier to spot.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "This chart shows how your journey time has changed day by day over the selected period.",
+      "",
+      "• Solid line — average trip duration each day",
+      "• Green dashed line (Best) — how fast trips were on good days",
+      "• Red dashed line (Worst) — how slow trips were on bad days",
+      "",
+      "A wide gap between Best and Worst means traffic is unpredictable on this route. A narrow gap means it's consistent.",
+      "",
+      "Switch between Duration and Speed views using the toggle.",
+    ].join("\n"),
   },
 
   chartDuration: {
-    title: "How to read this chart",
+    title: "Trip Duration Over Time",
     body: [
-      "This chart shows how trip duration changes over time for your selected route, period, and time of day.",
-      "The solid line is the average trip duration per time slot. The dashed green line (Best) shows the 5th percentile — the quickest 5% of trips when traffic flows smoothly. The dashed red line (Worst) shows the 95th percentile — the longest 5% when delays pile up.",
-      "Switch to Speed to see how fast traffic moves instead of how long trips take. The lines flip: Best becomes the 95th percentile (fastest trips) and Worst becomes the 5th percentile (slowest trips).",
-      "Use the Daily / Weekly toggle to change the time granularity. Daily shows every single day, which can look noisy. Weekly smooths the data by averaging each week, making trends easier to spot.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "This chart shows how your journey time has changed day by day over the selected period.",
+      "",
+      "• Solid line — average trip duration each day",
+      "• Green dashed line (Best) — how fast trips were on good days",
+      "• Red dashed line (Worst) — how slow trips were on bad days",
+      "",
+      "A wide gap between Best and Worst means traffic is unpredictable on this route. A narrow gap means it's consistent.",
+      "",
+      "Switch between Duration and Speed views using the toggle.",
+    ].join("\n"),
   },
 
   // ── Weekly Speed Distribution ────────────────────────────────────
   forecastBands: {
     title: "Weekly speed distribution",
     body: [
+      "What am I looking at?",
+      "",
       "This chart shows how speeds were distributed across each week, filtered to your selected time bracket.",
-      "The dark centre line is the median (50th percentile) — the typical trip speed that week.",
-      "The inner band (15th–85th percentile) captures the core range where most trips fell.",
-      "The outer band (5th–95th percentile) shows the full spread including unusually fast and slow trips.",
+      "",
+      "• The dark centre line is the typical trip speed that week",
+      "• The inner band shows the core range where most trips fell",
+      "• The outer band shows the full spread including unusually fast and slow trips",
+      "",
       "Use the baseline slider to compare a reference period against recent weeks.",
-    ].join(" "),
+    ].join("\n"),
   },
 
   // ── Daily Speeds Calendar ───────────────────────────────────────
   dailyCalendar: {
-    title: "Daily speeds calendar",
+    title: "Good Days and Bad Days",
     body: [
-      "Each circle is coloured by average speed for the selected time period — hover any day to see how its speeds compare to the last 30 days of all-day traffic on this route.",
-      "The popup shows three horizontal lines on a gradient: MIN (red) is the slowest trip, AVG (white) is the average, and MAX (cyan) is the fastest trip that day.",
-      "Their vertical position tells you where that day falls in the 30-day distribution — clustered at the top means a slow day, clustered at the bottom means a fast day, wide spread means high variability.",
-      "Click any past day to load it in the Time Traveller.",
-      "Use the arrows to navigate between months; today and future days show dashed outlines with no data.",
-    ].join(" "),
+      "What am I looking at?",
+      "",
+      "Each circle is a day on this calendar. Its colour shows how fast or slow traffic was compared to similar days — green means faster than usual, red means slower than usual.",
+      "",
+      "• Hover any filled day to see that day's speed and how it ranks historically",
+      "• Click any past day to open it in the Time Traveller for a detailed breakdown",
+      "",
+      "Days shown with a dashed outline are today or in the future — no data yet.",
+    ].join("\n"),
   },
 } as const;
 

@@ -78,10 +78,10 @@ test.describe("Calendar widget — fixture data", () => {
     expect(errors).toEqual([]);
   });
 
-  test("legend text says 'vs 30d' (relative, not absolute)", async ({ page }) => {
+  test("legend text says Fast/Slow with gray gradient", async ({ page }) => {
     await page.goto(CAL_URL);
     await page.waitForSelector("text=Mon");
-    await expect(page.getByText("Slower vs 30d")).toBeVisible();
-    await expect(page.getByText("Faster vs 30d")).toBeVisible();
+    await expect(page.getByText("Fast")).toBeVisible();
+    await expect(page.getByText("Slow")).toBeVisible();
   });
 });

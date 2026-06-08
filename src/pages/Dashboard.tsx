@@ -892,6 +892,7 @@ function DashboardInner() {
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
   const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
+  const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
   const allDayStats = useDailyStatsAllDay(allRows, selectedRoute);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
@@ -925,7 +926,7 @@ function DashboardInner() {
   const [baselineOpen, setBaselineOpen] = useState(true);
 
   // Calendar month state (lifted from CalendarWidget)
-  const calAllDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
+  const calAllDates = useMemo(() => Array.from(calendarDailyStats.keys()).sort(), [calendarDailyStats]);
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
 
@@ -2392,7 +2393,7 @@ function DashboardInner() {
                       </div>
                       {calendarCardOpen && (
                         <CalendarWidget
-                          dailyStats={dailyStats}
+                          dailyStats={calendarDailyStats}
                           allDayStats={allDayStats}
                           fmtDur={fmtDuration}
                           widgetCalYear={widgetCalYear}

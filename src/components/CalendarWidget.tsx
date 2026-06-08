@@ -8,7 +8,7 @@ const CIRCLE_D = 38;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 export function CalendarWidget({
-  dailyStats, allDayStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick,
+  dailyStats, allDayStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
 }: {
   dailyStats: Map<string, DayStats>;
   allDayStats: Map<string, DayStats>;
@@ -16,6 +16,7 @@ export function CalendarWidget({
   widgetCalYear: number;
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;
+  cutoffDate?: Date | null;
 }) {
   const { theme: thm } = useTheme();
 
@@ -184,6 +185,11 @@ export function CalendarWidget({
     const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
     const isCurrentMo = widgetCalYear === todayD.getFullYear() && widgetCalMonth === todayD.getMonth();
 
+    /* TT cutoff: dates strictly after this render as "future" */
+    const cutoffDateStr = cutoffDate
+      ? `${cutoffDate.getFullYear()}-${String(cutoffDate.getMonth()+1).padStart(2,"0")}-${String(cutoffDate.getDate()).padStart(2,"0")}`
+      : null;
+
     /* reduce rgba/rgb color to 0.5 alpha for the stripe overlay */
     const fadeColor = (c: string) =>
       c.startsWith("rgba") ? c.replace(/,\s*[\d.]+\)$/, ", 0.5)")
@@ -207,13 +213,18 @@ export function CalendarWidget({
 
       const dateKey  = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;
       const s        = dailyStats.get(dateKey);
-      const isFuture = isCurrentMo && dateKey >= todayStr;
-      const isPast   = isCurrentMo && dateKey < todayStr;
+      const isBeyondCutoff = !!cutoffDateStr && dateKey > cutoffDateStr;
+      const isFuture = !isBeyondCutoff && isCurrentMo && dateKey >= todayStr;
+      const isPast   = !isBeyondCutoff && isCurrentMo && dateKey < todayStr;
 
       let circleStyle: React.CSSProperties;
       let txtClr: string;
 
-      if (isCurrentMo) {
+      if (isBeyondCutoff) {
+        /* TT cutoff: this date hasn't "happened" yet in the simulation */
+        circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+        txtClr = thm.textMuted;
+      } else if (isCurrentMo) {
         if (isFuture) {
           /* future date — dashed outline, no fill */
           circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
@@ -255,10 +266,10 @@ export function CalendarWidget({
       return (
         <div
           key={dateKey}
-          data-dk={s && !isFuture ? dateKey : undefined}
-          onClick={s && !isFuture && onDateClick ? () => onDateClick(dateKey) : undefined}
+          data-dk={s && !isFuture && !isBeyondCutoff ? dateKey : undefined}
+          onClick={s && !isFuture && !isBeyondCutoff && onDateClick ? () => onDateClick(dateKey) : undefined}
           style={{ display:"flex", alignItems:"center", justifyContent:"center",
-            padding:"5px 0", cursor:(s && !isFuture) ? "pointer" : "default" }}
+            padding:"5px 0", cursor:(s && !isFuture && !isBeyondCutoff) ? "pointer" : "default" }}
         >
           <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%",
             display:"flex", alignItems:"center", justifyContent:"center",
@@ -274,7 +285,7 @@ export function CalendarWidget({
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, widgetCalYear, widgetCalMonth]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, widgetCalYear, widgetCalMonth, cutoffDate]);
 
   const CAL_MUTED = thm.textMuted;
 

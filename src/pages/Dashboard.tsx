@@ -2395,6 +2395,7 @@ function DashboardInner() {
                         <CalendarWidget
                           dailyStats={calendarDailyStats}
                           allDayStats={allDayStats}
+                          cutoffDate={tt.isActive ? tt.simulatedNow : null}
                           fmtDur={fmtDuration}
                           widgetCalYear={widgetCalYear}
                           widgetCalMonth={widgetCalMonth}

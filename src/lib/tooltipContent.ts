@@ -112,12 +112,11 @@ export const TOOLTIP_CONTENT = {
   dailyCalendar: {
     title: "Daily speeds calendar",
     body: [
-      "Each circle represents a day, coloured by average speed — darker or greener means faster, lighter or redder means slower.",
-      "Hover over any day to see a speed distribution chart with three lines: MIN (red) is the slowest trip that day, AVG (white) is the average, and MAX (cyan) is the fastest.",
-      "The lines are positioned against the combined 60-day distribution of all daily minimums, averages, and maximums — so you can see how that day's speeds stack up against recent history.",
-      "The spread between MIN and MAX tells you about variability: a wide gap means big speed swings, a narrow gap means consistent conditions.",
-      "Click any past date to load it in the Time Traveller.",
-      "Future days show a dashed outline; today and future days have no data. Use the arrows to navigate between months.",
+      "Each circle is coloured by average speed for the selected time period — hover any day to see how its speeds compare to the last 30 days of all-day traffic on this route.",
+      "The popup shows three horizontal lines on a gradient: MIN (red) is the slowest trip, AVG (white) is the average, and MAX (cyan) is the fastest trip that day.",
+      "Their vertical position tells you where that day falls in the 30-day distribution — clustered at the top means a slow day, clustered at the bottom means a fast day, wide spread means high variability.",
+      "Click any past day to load it in the Time Traveller.",
+      "Use the arrows to navigate between months; today and future days show dashed outlines with no data.",
     ].join(" "),
   },
 } as const;

@@ -147,11 +147,11 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
   colour: {
     key: "colour",
     isDark: true,
-    bodyBg: "linear-gradient(135deg,#0F1218 0%,#141A24 40%,#0D1117 100%)",
+    bodyBg: "#141A24",
     textPrimary:   "#F0F4F8",
     textSecondary: "#94A3B8",
     textMuted:     "#94A3B8",
-    headerBg: "rgba(15,18,24,0.92)",
+    headerBg: "#141A24",
     sectionBg: "#141A24",
     cardBg:    "#1A2030",
     cardBorder: "1px solid #2A3545",

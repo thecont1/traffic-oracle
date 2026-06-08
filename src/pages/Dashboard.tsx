@@ -11,7 +11,7 @@ import { Share2, Plus, Minus } from "lucide-react";
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
-  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
+  useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useDailyStatsAllDay, useWeatherData,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
@@ -89,9 +89,10 @@ function parseYM(s: string) {
 }
 
 function CalendarWidget({
-  dailyStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick,
+  dailyStats, allDayStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick,
 }: {
   dailyStats: Map<string, DayStats>;
+  allDayStats: Map<string, DayStats>;
   fmtDur: (n: number) => string;
   widgetCalYear: number;
   widgetCalMonth: number;
@@ -129,22 +130,22 @@ function CalendarWidget({
   const showTip = useCallback((dateKey: string, cellEl: HTMLElement) => {
     const el = tooltipRef.current;
     if (!el) return;
-    const s = dailyStats.get(dateKey);
+    const s = allDayStats.get(dateKey);
     if (!s) { hideTip(); return; }
 
     const date   = new Date(dateKey + "T12:00:00");
     const dayStr = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
 
-    /* 60-day window (not including this date) */
+    /* 30-day window of all-day data (not including this date) */
     const dkDate = new Date(dateKey + "T12:00:00");
     const windowEnd = dkDate.getTime();
-    const windowStart = windowEnd - 60 * 86400000;
+    const windowStart = windowEnd - 30 * 86400000;
     const windowAll: number[] = [];
-    for (const k of dailyStats.keys()) {
+    for (const k of allDayStats.keys()) {
       if (k === dateKey) continue;
       const t = new Date(k + "T12:00:00").getTime();
       if (t >= windowStart && t < windowEnd) {
-        const d = dailyStats.get(k)!;
+        const d = allDayStats.get(k)!;
         if (d.avgSpeed > 0) {
           windowAll.push(d.minSpeed, d.avgSpeed, d.maxSpeed);
         }
@@ -239,7 +240,7 @@ function CalendarWidget({
     el.style.left    = left + "px";
     el.style.top     = top  + "px";
     el.style.opacity = "1";
-  }, [dailyStats, hideTip]);
+  }, [allDayStats, hideTip]);
 
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
@@ -1192,6 +1193,7 @@ function DashboardInner() {
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
   const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
+  const allDayStats = useDailyStatsAllDay(allRows, selectedRoute);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -1228,12 +1230,7 @@ function DashboardInner() {
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
   const calInitYM = useMemo(() => {
-    const base = calLastStr ? parseYM(calLastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) return { y: base.y - 1, m: 11 };
-      return { y: base.y, m: base.m - 1 };
-    }
-    return base;
+    return calLastStr ? parseYM(calLastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
   }, [calLastStr]);
   const [widgetCalYear, setWidgetCalYear] = useState(calInitYM.y);
   const [widgetCalMonth, setWidgetCalMonth] = useState(calInitYM.m);
@@ -2709,6 +2706,7 @@ function DashboardInner() {
                       {calendarCardOpen && (
                         <CalendarWidget
                           dailyStats={dailyStats}
+                          allDayStats={allDayStats}
                           fmtDur={fmtDuration}
                           widgetCalYear={widgetCalYear}
                           widgetCalMonth={widgetCalMonth}

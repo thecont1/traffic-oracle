@@ -89,12 +89,13 @@ function parseYM(s: string) {
 }
 
 function CalendarWidget({
-  dailyStats, fmtDur, widgetCalYear, widgetCalMonth,
+  dailyStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick,
 }: {
   dailyStats: Map<string, DayStats>;
   fmtDur: (n: number) => string;
   widgetCalYear: number;
   widgetCalMonth: number;
+  onDateClick?: (dateKey: string) => void;
 }) {
   const { theme: thm } = useTheme();
 
@@ -133,22 +134,71 @@ function CalendarWidget({
 
     const date   = new Date(dateKey + "T12:00:00");
     const dayStr = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
-    const rows   = ([
-      ["⚡ Avg Speed",    `${s.avgSpeed} km/h`],
-      ["🕐 Median Trip",  fmtDur(s.medianDuration)],
-      ["🔥 Bad Day Trip", fmtDur(s.p95Duration)],
-      ["# Trips",        String(s.count)],
-    ] as [string,string][]).map(([lbl, val]) =>
-      `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
-      `<span style="color:#94A3B8">${lbl}</span>` +
-      `<span style="font-weight:600;color:#F0F4F8">${val}</span></div>`
+
+    /* 60-day window (not including this date) */
+    const dkDate = new Date(dateKey + "T12:00:00");
+    const windowEnd = dkDate.getTime();
+    const windowStart = windowEnd - 60 * 86400000;
+    const windowAll: number[] = [];
+    for (const k of dailyStats.keys()) {
+      if (k === dateKey) continue;
+      const t = new Date(k + "T12:00:00").getTime();
+      if (t >= windowStart && t < windowEnd) {
+        const d = dailyStats.get(k)!;
+        if (d.avgSpeed > 0) {
+          windowAll.push(d.minSpeed, d.avgSpeed, d.maxSpeed);
+        }
+      }
+    }
+    windowAll.sort((a, b) => a - b);
+
+    /* all three lines ranked against the combined 60-day distribution */
+    const pctRank = (speed: number) => windowAll.length > 0
+      ? Math.max(0, Math.min(100, Math.round((windowAll.filter(v => v < speed).length / windowAll.length) * 100)))
+      : 50;
+    const markers = [
+      { label:"MIN", speed:s.minSpeed, pos:pctRank(s.minSpeed), color:"#ef4444" },
+      { label:"AVG", speed:s.avgSpeed,  pos:pctRank(s.avgSpeed),  color:"#ffffff" },
+      { label:"MAX", speed:s.maxSpeed,  pos:pctRank(s.maxSpeed),  color:"#22d3ee" },
+    ];
+
+    const markerLines = markers.map(m =>
+      `<div style="position:absolute;left:0;right:0;height:2px;background:${m.color};opacity:0.85;` +
+      `top:${m.pos}%;transform:translateY(-50%);z-index:1;"></div>` +
+      `<div style="position:absolute;right:-4px;top:${m.pos}%;transform:translate(100%,-50%);` +
+      `font-size:9px;font-weight:700;color:${m.color};white-space:nowrap;padding-left:4px;">` +
+      `${m.label}</div>`
     ).join("");
 
     el.innerHTML =
-      `<div style="background:#141A24;border-radius:12px;padding:11px 14px;` +
-      `box-shadow:0 8px 32px rgba(0,0,0,0.55);">` +
-      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#F0F4F8">${dayStr}</div>` +
-      rows + `</div>` +
+      `<span style="display:inline-block;background:#141A24;border-radius:12px;padding:11px 14px;width:192px;` +
+      `box-shadow:0 8px 32px rgba(0,0,0,0.55);font-family:var(--app-font);font-size:12px;color:#F0F4F8;">` +
+      `<div style="font-weight:700;font-size:13px;margin-bottom:9px;color:#F0F4F8">${dayStr}</div>` +
+      `<div style="position:relative;height:100px;margin-left:32px;margin-right:32px;">` +
+        `<div style="position:absolute;left:0;top:0;right:0;bottom:0;border-radius:4px;overflow:hidden;background:#1E293B;">` +
+          `<div style="width:100%;height:100%;background:linear-gradient(to bottom,` +
+            `rgba(100,116,139,0.15) 0%,rgba(100,116,139,0.6) 25%,` +
+            `rgba(100,116,139,0.9) 50%,` +
+            `rgba(100,116,139,0.6) 75%,rgba(100,116,139,0.15) 100%);"></div>` +
+        `</div>` +
+        `<div style="position:absolute;top:0;left:-32px;width:28px;text-align:right;font-size:10px;font-weight:700;` +
+          `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(-50%);">` +
+          `P90</div>` +
+        `<div style="position:absolute;top:4px;left:-32px;width:28px;text-align:right;` +
+          `font-size:7px;font-weight:600;letter-spacing:0.05em;color:#94A3B8;">` +
+          `SLOWER</div>` +
+        `<div style="position:absolute;top:50%;left:-32px;width:28px;text-align:right;font-size:10px;font-weight:700;` +
+          `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(-50%);">` +
+          `P50</div>` +
+        `<div style="position:absolute;bottom:0;left:-32px;width:28px;text-align:right;font-size:10px;font-weight:700;` +
+          `color:#F0F4F8;text-shadow:0 0 3px rgba(0,0,0,0.9);transform:translateY(50%);">` +
+          `P10</div>` +
+        `<div style="position:absolute;bottom:4px;left:-32px;width:28px;text-align:right;` +
+          `font-size:7px;font-weight:600;letter-spacing:0.05em;color:#94A3B8;">` +
+          `FASTER</div>` +
+        markerLines +
+      `</div>` +
+      `</span>` +
       `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
 
     const rect   = cellEl.getBoundingClientRect();
@@ -189,7 +239,7 @@ function CalendarWidget({
     el.style.left    = left + "px";
     el.style.top     = top  + "px";
     el.style.opacity = "1";
-  }, [dailyStats, fmtDur, hideTip]);
+  }, [dailyStats, hideTip]);
 
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
@@ -234,8 +284,8 @@ function CalendarWidget({
 
       const dateKey  = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;
       const s        = dailyStats.get(dateKey);
-      const isFuture = isCurrentMo && dateKey > todayStr;
-      const isPast   = isCurrentMo && dateKey <= todayStr;
+      const isFuture = isCurrentMo && dateKey >= todayStr;
+      const isPast   = isCurrentMo && dateKey < todayStr;
 
       let circleStyle: React.CSSProperties;
       let txtClr: string;
@@ -246,9 +296,9 @@ function CalendarWidget({
           circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
           txtClr = thm.textMuted;
         } else if (isPast && s) {
-          /* past date with data — diagonal stripes over faded speed colour */
+          /* past date with data — solid speed colour */
           const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
-          circleStyle = { background:`${stripePattern}, ${fadeColor(thm.calColor(s.avgSpeed, p10, p90))}` };
+          circleStyle = { background: thm.calColor(s.avgSpeed, p10, p90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
           txtClr = thm.calTextColor(t);
         } else {
           /* past date with no data — dashed grey outline */
@@ -271,6 +321,7 @@ function CalendarWidget({
         <div
           key={dateKey}
           data-dk={s && !isFuture ? dateKey : undefined}
+          onClick={s && !isFuture && onDateClick ? () => onDateClick(dateKey) : undefined}
           style={{ display:"flex", alignItems:"center", justifyContent:"center",
             padding:"5px 0", cursor:(s && !isFuture) ? "pointer" : "default" }}
         >
@@ -2661,6 +2712,7 @@ function DashboardInner() {
                           fmtDur={fmtDuration}
                           widgetCalYear={widgetCalYear}
                           widgetCalMonth={widgetCalMonth}
+                          onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
                         />
                       )}
                     </div>

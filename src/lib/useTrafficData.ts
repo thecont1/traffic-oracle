@@ -672,6 +672,8 @@ export function useWeatherData(paused?: boolean): Map<string, WeatherRow> {
 export interface DayStats {
   dateKey: string;
   avgSpeed: number;
+  minSpeed: number;
+  maxSpeed: number;
   p05Speed: number;
   p95Speed: number;
   avgDuration: number;
@@ -707,6 +709,8 @@ export function useDailyStats(
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
+        maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
         p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
         p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
         avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
@@ -745,6 +749,8 @@ export function useDailyStatsAllDay(
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
+        maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
         p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
         p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
         avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
@@ -846,6 +852,8 @@ export function useFilteredData(
         return {
           dateKey,
           avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+          minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
+          maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
           p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
           p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
           avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,

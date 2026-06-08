@@ -2359,7 +2359,7 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── Daily Speeds by Month calendar ── */}
+                  {/* ── Good Days and Bad Days calendar ── */}
                   {
                     <div className="chart-card animate-fade-in"
                       style={{
@@ -2375,7 +2375,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            ✳︎ Daily Speeds by Month
+                            ✳︎ Good Days and Bad Days
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.dailyCalendar.body}
@@ -2394,6 +2394,9 @@ function DashboardInner() {
                         <CalendarWidget
                           dailyStats={calendarDailyStats}
                           allDayStats={allDayStats}
+                          allRows={allRows}
+                          selectedRoute={selectedRoute}
+                          tod={tod}
                           cutoffDate={tt.isActive ? tt.simulatedNow : null}
                           fmtDur={fmtDuration}
                           widgetCalYear={widgetCalYear}

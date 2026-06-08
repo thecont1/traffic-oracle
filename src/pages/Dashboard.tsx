@@ -23,6 +23,7 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
+import { CalendarWidget } from "@/components/CalendarWidget";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -86,257 +87,6 @@ const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 function parseYM(s: string) {
   const d = new Date(s + "T12:00:00");
   return { y: d.getFullYear(), m: d.getMonth() };
-}
-
-function CalendarWidget({
-  dailyStats, fmtDur, widgetCalYear, widgetCalMonth,
-}: {
-  dailyStats: Map<string, DayStats>;
-  fmtDur: (n: number) => string;
-  widgetCalYear: number;
-  widgetCalMonth: number;
-}) {
-  const { theme: thm } = useTheme();
-
-  const [fadeKey, setFadeKey] = useState(0);
-  useEffect(() => {
-    setFadeKey(k => k + 1);
-  }, [widgetCalYear, widgetCalMonth]);
-
-  /* p10/p90 of full route dataset — gives visible colour spread across any month */
-  const { p10, p90 } = useMemo(() => {
-    const speeds = Array.from(dailyStats.values())
-      .map(d => d.avgSpeed).filter(s => s > 0).sort((a, b) => a - b);
-    if (speeds.length < 2) return { p10: 15, p90: 50 };
-    const at = (pct: number) => {
-      const idx = (pct / 100) * (speeds.length - 1);
-      const lo  = Math.floor(idx), hi = Math.ceil(idx);
-      return speeds[lo] + (speeds[hi] - speeds[lo]) * (idx - lo);
-    };
-    return { p10: at(10), p90: at(90) };
-  }, [dailyStats]);
-
-  /* ── Imperative tooltip ─────────────────────────────────────── */
-  const tooltipRef  = useRef<HTMLDivElement>(null);
-  const lastKeyRef  = useRef<string | null>(null);
-
-  const hideTip = useCallback(() => {
-    if (tooltipRef.current) tooltipRef.current.style.opacity = "0";
-    lastKeyRef.current = null;
-  }, []);
-
-  const showTip = useCallback((dateKey: string, cellEl: HTMLElement) => {
-    const el = tooltipRef.current;
-    if (!el) return;
-    const s = dailyStats.get(dateKey);
-    if (!s) { hideTip(); return; }
-
-    const date   = new Date(dateKey + "T12:00:00");
-    const dayStr = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
-    const rows   = ([
-      ["⚡ Avg Speed",    `${s.avgSpeed} km/h`],
-      ["🕐 Median Trip",  fmtDur(s.medianDuration)],
-      ["🔥 Bad Day Trip", fmtDur(s.p95Duration)],
-      ["# Trips",        String(s.count)],
-    ] as [string,string][]).map(([lbl, val]) =>
-      `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11.5px;margin-bottom:3px">` +
-      `<span style="color:#94A3B8">${lbl}</span>` +
-      `<span style="font-weight:600;color:#F0F4F8">${val}</span></div>`
-    ).join("");
-
-    el.innerHTML =
-      `<div style="background:#141A24;border-radius:12px;padding:11px 14px;` +
-      `box-shadow:0 8px 32px rgba(0,0,0,0.55);">` +
-      `<div style="font-weight:700;font-size:13px;margin-bottom:7px;color:#F0F4F8">${dayStr}</div>` +
-      rows + `</div>` +
-      `<div id="cal-tip-tail" style="position:absolute;width:0;height:0;pointer-events:none;"></div>`;
-
-    const rect   = cellEl.getBoundingClientRect();
-    const TW     = el.offsetWidth  || 200;
-    const TH     = el.offsetHeight || 140;
-    const TAIL   = 9;
-    const GAP    = 8;
-    const vw     = window.innerWidth;
-
-    const rawLeft  = rect.left + rect.width / 2 - TW / 2;
-    const left     = rawLeft + TW > vw - 8 ? Math.max(8, rect.right - TW) : Math.max(8, rawLeft);
-    const wouldTop = rect.top - TH - TAIL - GAP;
-    const isAbove  = wouldTop >= 0;
-    const top      = isAbove ? wouldTop : rect.bottom + TAIL + GAP;
-
-    const tailLeft = Math.max(14, Math.min(TW - 14, rect.left + rect.width / 2 - left));
-    const tail = el.querySelector("#cal-tip-tail") as HTMLElement | null;
-    if (tail) {
-      tail.style.left      = tailLeft + "px";
-      tail.style.transform = "translateX(-50%)";
-      if (isAbove) {
-        tail.style.bottom       = -TAIL + "px";
-        tail.style.top          = "";
-        tail.style.borderLeft   = "9px solid transparent";
-        tail.style.borderRight  = "9px solid transparent";
-        tail.style.borderTop    = `${TAIL}px solid #141A24`;
-        tail.style.borderBottom = "";
-      } else {
-        tail.style.top          = -TAIL + "px";
-        tail.style.bottom       = "";
-        tail.style.borderLeft   = "9px solid transparent";
-        tail.style.borderRight  = "9px solid transparent";
-        tail.style.borderBottom = `${TAIL}px solid #141A24`;
-        tail.style.borderTop    = "";
-      }
-    }
-
-    el.style.left    = left + "px";
-    el.style.top     = top  + "px";
-    el.style.opacity = "1";
-  }, [dailyStats, fmtDur, hideTip]);
-
-  const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
-    if (!cell) { hideTip(); return; }
-    const dk = cell.dataset.dk!;
-    if (dk === lastKeyRef.current) return;
-    lastKeyRef.current = dk;
-    showTip(dk, cell);
-  }, [showTip, hideTip]);
-
-  /* ── Calendar math ──────────────────────────────────────────── */
-  const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
-  const firstDay   = (new Date(widgetCalYear, widgetCalMonth, 1).getDay() + 6) % 7; // Monday = 0
-  const daysInMo   = new Date(widgetCalYear, widgetCalMonth + 1, 0).getDate();
-
-  /* Memoised cells — always 42 cells (6 rows × 7 cols), no height jumping */
-  const cells = useMemo(() => {
-    const todayD   = new Date();
-    const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
-    const isCurrentMo = widgetCalYear === todayD.getFullYear() && widgetCalMonth === todayD.getMonth();
-
-    /* reduce rgba/rgb color to 0.5 alpha for the stripe overlay */
-    const fadeColor = (c: string) =>
-      c.startsWith("rgba") ? c.replace(/,\s*[\d.]+\)$/, ", 0.5)")
-      : c.startsWith("rgb(") ? c.replace("rgb(", "rgba(").replace(")", ", 0.5)")
-      : c;
-
-    const stripePattern = "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.4) 4px,rgba(255,255,255,0.4) 8px)";
-
-    return Array.from({ length: 42 }, (_, i) => {
-      const dayNum = i - firstDay + 1;
-
-      /* outside the month — blank spacer cell, same height as a day cell */
-      if (dayNum < 1 || dayNum > daysInMo) {
-        return (
-          <div key={`e${i}`} style={{ display:"flex", alignItems:"center",
-            justifyContent:"center", padding:"5px 0" }}>
-            <div style={{ width:CIRCLE_D, height:CIRCLE_D }} />
-          </div>
-        );
-      }
-
-      const dateKey  = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;
-      const s        = dailyStats.get(dateKey);
-      const isFuture = isCurrentMo && dateKey > todayStr;
-      const isPast   = isCurrentMo && dateKey <= todayStr;
-
-      let circleStyle: React.CSSProperties;
-      let txtClr: string;
-
-      if (isCurrentMo) {
-        if (isFuture) {
-          /* future date — dashed outline, no fill */
-          circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
-          txtClr = thm.textMuted;
-        } else if (isPast && s) {
-          /* past date with data — diagonal stripes over faded speed colour */
-          const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
-          circleStyle = { background:`${stripePattern}, ${fadeColor(thm.calColor(s.avgSpeed, p10, p90))}` };
-          txtClr = thm.calTextColor(t);
-        } else {
-          /* past date with no data — dashed grey outline */
-          circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
-          txtClr = thm.textMuted;
-        }
-      } else {
-        /* any other month — existing solid behaviour */
-        if (s) {
-          const t = p90 > p10 ? Math.max(0, Math.min(1, (s.avgSpeed - p10) / (p90 - p10))) : 0.5;
-          circleStyle = { background: thm.calColor(s.avgSpeed, p10, p90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
-          txtClr = thm.calTextColor(t);
-        } else {
-          circleStyle = { background: thm.emptyCalCircle };
-          txtClr = thm.textMuted;
-        }
-      }
-
-      return (
-        <div
-          key={dateKey}
-          data-dk={s && !isFuture ? dateKey : undefined}
-          style={{ display:"flex", alignItems:"center", justifyContent:"center",
-            padding:"5px 0", cursor:(s && !isFuture) ? "pointer" : "default" }}
-        >
-          <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            transition:"transform 0.13s, box-shadow 0.13s",
-            ...circleStyle,
-          }}>
-            <span style={{ fontSize:13, fontWeight:800, color:txtClr,
-              lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1 }}>
-              {dayNum}
-            </span>
-          </div>
-        </div>
-      );
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, p10, p90, widgetCalYear, widgetCalMonth]);
-
-  const CAL_MUTED = thm.textMuted;
-
-  return (
-    <>
-      <div style={{ position:"relative" }}>
-
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
-          {DAY_HDR.map(d => (
-            <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700,
-              textTransform:"uppercase", letterSpacing:"0.06em",
-              color: CAL_MUTED, padding:"4px 0" }}>{d}</div>
-          ))}
-        </div>
-
-        <div key={fadeKey}
-          onMouseMove={handleGridMove}
-          onMouseLeave={hideTip}
-          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
-            animation:"cal-fade-in 0.2s ease" }}>
-          {cells}
-        </div>
-
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
-          justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
-          <span>Slow</span>
-          <div style={{ width:88, height:7, borderRadius:4,
-            background: thm.key === "gray"
-              ? "linear-gradient(90deg,#222,#888,#f0f0f0)"
-              : thm.key === "pastel"
-              ? "linear-gradient(90deg,rgba(224,106,62,0.9),rgba(246,231,200,0.9),rgba(111,174,99,0.9))"
-              : "linear-gradient(90deg,rgba(240,138,93,0.88),rgba(246,200,160,0.88),rgba(139,203,126,0.88))"
-          }} />
-          <span>Fast (km/h)</span>
-        </div>
-      </div>
-      {createPortal(
-        <div ref={tooltipRef} style={{
-          position:"fixed", pointerEvents:"none",
-          opacity:0, transition:"opacity 0.15s ease",
-          zIndex:9999, overflow:"visible",
-          fontFamily:"var(--app-font)", fontSize:12,
-          top:0, left:0,
-        }} />,
-        document.body
-      )}
-    </>
-  );
 }
 
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
@@ -1141,6 +891,7 @@ function DashboardInner() {
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
   const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
+  const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -1173,29 +924,12 @@ function DashboardInner() {
   const [baselineOpen, setBaselineOpen] = useState(true);
 
   // Calendar month state (lifted from CalendarWidget)
-  const calAllDates = useMemo(() => Array.from(dailyStats.keys()).sort(), [dailyStats]);
+  const calAllDates = useMemo(() => Array.from(calendarDailyStats.keys()).sort(), [calendarDailyStats]);
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
-  const calInitYM = useMemo(() => {
-    const base = calLastStr ? parseYM(calLastStr) : { y: new Date().getFullYear(), m: new Date().getMonth() };
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) return { y: base.y - 1, m: 11 };
-      return { y: base.y, m: base.m - 1 };
-    }
-    return base;
-  }, [calLastStr]);
-  const [widgetCalYear, setWidgetCalYear] = useState(calInitYM.y);
-  const [widgetCalMonth, setWidgetCalMonth] = useState(calInitYM.m);
-  useEffect(() => {
-    if (!calLastStr) return;
-    const base = parseYM(calLastStr);
-    if (new Date().getDate() < 10) {
-      if (base.m === 0) { setWidgetCalYear(base.y - 1); setWidgetCalMonth(11); }
-      else              { setWidgetCalYear(base.y);      setWidgetCalMonth(base.m - 1); }
-    } else {
-      setWidgetCalYear(base.y); setWidgetCalMonth(base.m);
-    }
-  }, [calLastStr]);
+
+  const [widgetCalYear, setWidgetCalYear] = useState(() => new Date().getFullYear());
+  const [widgetCalMonth, setWidgetCalMonth] = useState(() => new Date().getMonth());
 
   const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
   const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;
@@ -1399,7 +1133,7 @@ function DashboardInner() {
           <div style={{ margin:"0 auto", padding:"0.75rem 1rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
             {/* Left: Logo + City name */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+            <a href="/" style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, textDecoration:"none" }}>
               <div style={{ position: "relative", display: "inline-block" }}>
                 <img
                   src="/trafficoracle-light.png"
@@ -1429,7 +1163,7 @@ function DashboardInner() {
                   </text>
                 </svg>
               </div>
-            </div>
+            </a>
 
             {/* Right: Cities + Routes + Time Travel + Share + Zoom + Theme */}
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>
@@ -2624,7 +2358,7 @@ function DashboardInner() {
                     </div>
                   </div>
 
-                  {/* ── Daily Speeds by Month calendar ── */}
+                  {/* ── Good Days and Bad Days calendar ── */}
                   {
                     <div className="chart-card animate-fade-in"
                       style={{
@@ -2640,7 +2374,7 @@ function DashboardInner() {
                           background: "none", border: "none", cursor: "pointer", padding: 0,
                         }}>
                           <p style={{ fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 17, color: thm.textPrimary, margin: 0 }}>
-                            ✳︎ Daily Speeds by Month
+                            ✳︎ Good Days and Bad Days
                           </p>
                           <InfoTip thm={thm}>
                             {TOOLTIP_CONTENT.dailyCalendar.body}
@@ -2657,10 +2391,14 @@ function DashboardInner() {
                       </div>
                       {calendarCardOpen && (
                         <CalendarWidget
-                          dailyStats={dailyStats}
-                          fmtDur={fmtDuration}
+                          dailyStats={calendarDailyStats}
+                          allRows={allRows}
+                          selectedRoute={selectedRoute}
+                          tod={tod}
+                          cutoffDate={tt.isActive ? tt.simulatedNow : null}
                           widgetCalYear={widgetCalYear}
                           widgetCalMonth={widgetCalMonth}
+                          onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
                         />
                       )}
                     </div>

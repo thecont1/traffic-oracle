@@ -1,4 +1,2 @@
-# Bun configuration
-install.lockfile = true
-install.minimumReleaseAge = 86400
-install.autoInstallPeers = false
+[test]
+preload = ["./tests/setup.ts"]

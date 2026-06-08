@@ -7,7 +7,6 @@ import {
 } from "recharts";
 import { computeBaselineStats, computeChartDomain } from "@/lib/chartHelpers";
 import type { BaselineChartStats, ChartDomain } from "@/lib/chartHelpers";
-import { trailingPercentiles } from "@/lib/trailingPercentiles";
 import { Share2, Plus, Minus } from "lucide-react";
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
@@ -892,8 +891,21 @@ function DashboardInner() {
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
   const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
-  const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
   const allDayStats = useDailyStatsAllDay(allRows, selectedRoute);
+
+  /** All speed readings per date for the selected route (full dataset, no ToD filter). */
+  const daySpeeds = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const r of allRows) {
+      if (r.label_short !== selectedRoute) continue;
+      const d = r.timestamp;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      let arr = map.get(key);
+      if (!arr) { arr = []; map.set(key, arr); }
+      arr.push(r.speed_kmh);
+    }
+    return map;
+  }, [allRows, selectedRoute]);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -926,7 +938,7 @@ function DashboardInner() {
   const [baselineOpen, setBaselineOpen] = useState(true);
 
   // Calendar month state (lifted from CalendarWidget)
-  const calAllDates = useMemo(() => Array.from(calendarDailyStats.keys()).sort(), [calendarDailyStats]);
+  const calAllDates = useMemo(() => Array.from(daySpeeds.keys()).sort(), [daySpeeds]);
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
 
@@ -2393,7 +2405,7 @@ function DashboardInner() {
                       </div>
                       {calendarCardOpen && (
                         <CalendarWidget
-                          dailyStats={calendarDailyStats}
+                          daySpeeds={daySpeeds}
                           allDayStats={allDayStats}
                           cutoffDate={tt.isActive ? tt.simulatedNow : null}
                           fmtDur={fmtDuration}

@@ -212,7 +212,7 @@ export function CalendarWidget({
       const s             = dailyStats.get(dateKey);
       const entry         = dayBands.get(dateKey);
       const isBeyondCutoff = !!cutoffDateStr && dateKey > cutoffDateStr;
-      const isFuture      = !isBeyondCutoff && isCurrentMo && dateKey >= todayStr;
+      const isFuture      = !isBeyondCutoff && isCurrentMo && dateKey > todayStr;
       const hasData       = !!s && !!entry && entry.band >= 0 && !isFuture && !isBeyondCutoff;
       const band          = entry?.band ?? -1;
 

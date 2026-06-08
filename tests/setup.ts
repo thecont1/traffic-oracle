@@ -1,3 +1,8 @@
-// bun:test setup — shim globals that Vite's SSR transform expects
-// when processing files with /// <reference types="vite/client" />
-(globalThis as any).__vite_ssr_exportName__ = () => {};
+/**
+ * Bun test preload — sets up jsdom + jest-dom matchers for React component tests.
+ */
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
+// bun:test already provides describe/it/expect; we just need a DOM.
+// happy-dom is lighter and bun-native; use it instead of jsdom.
+GlobalRegistrator.register();

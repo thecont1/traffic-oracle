@@ -1135,7 +1135,7 @@ function DashboardInner() {
           <div style={{ margin:"0 auto", padding:"0.75rem 1rem",
             display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
             {/* Left: Logo + City name */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+            <a href="/" style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, textDecoration:"none" }}>
               <div style={{ position: "relative", display: "inline-block" }}>
                 <img
                   src="/trafficoracle-light.png"
@@ -1165,7 +1165,7 @@ function DashboardInner() {
                   </text>
                 </svg>
               </div>
-            </div>
+            </a>
 
             {/* Right: Cities + Routes + Time Travel + Share + Zoom + Theme */}
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>

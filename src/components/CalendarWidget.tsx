@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "@/lib/ThemeContext";
+import { trailingPercentiles } from "@/lib/trailingPercentiles";
 import type { DayStats } from "@/lib/useTrafficData";
 
-const SQUARE = 50;
+const CIRCLE_D = 38;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const MIN_READINGS = 15;
 
 export function CalendarWidget({
-  daySpeeds, allDayStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
+  dailyStats, allDayStats, fmtDur, widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
 }: {
-  daySpeeds: Map<string, number[]>;
+  dailyStats: Map<string, DayStats>;
   allDayStats: Map<string, DayStats>;
   fmtDur: (n: number) => string;
   widgetCalYear: number;
@@ -48,13 +48,32 @@ export function CalendarWidget({
   const showTip = useCallback((dateKey: string, cellEl: HTMLElement) => {
     const el = tooltipRef.current;
     if (!el) return;
-    const speeds = daySpeeds.get(dateKey);
-    const s = allDayStats.get(dateKey);
-    if (!speeds || speeds.length < MIN_READINGS || !s) { hideTip(); return; }
+    const s = dailyStats.get(dateKey);
+    if (!s) { hideTip(); return; }
 
     const date   = new Date(dateKey + "T12:00:00");
     const dayStr = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
 
+    /* 30-day window of filtered (ToD-aware) data (not including this date) */
+    const dkDate = new Date(dateKey + "T12:00:00");
+    const windowEnd = dkDate.getTime();
+    const windowStart = windowEnd - 30 * 86400000;
+    const windowAll: number[] = [];
+    for (const k of dailyStats.keys()) {
+      if (k === dateKey) continue;
+      const t = new Date(k + "T12:00:00").getTime();
+      if (t >= windowStart && t < windowEnd) {
+        const d = dailyStats.get(k)!;
+        if (d.avgSpeed > 0) {
+          windowAll.push(d.minSpeed, d.avgSpeed, d.maxSpeed);
+        }
+      }
+    }
+    windowAll.sort((a, b) => a - b);
+    /* Number of days with data in the trailing 30-day window */
+    const trailingDayCount = Math.round(windowAll.length / 3);
+
+    /* Position markers on the GLOBAL scale (full min–max range) */
     const { lo: gLo, hi: gHi } = globalScale;
     const posOf = (speed: number) => gHi > gLo
       ? Math.max(0, Math.min(100, ((gHi - speed) / (gHi - gLo)) * 100))
@@ -78,8 +97,8 @@ export function CalendarWidget({
     el.innerHTML =
       `<span style="display:inline-block;background:#141A24;border-radius:12px;padding:13px 17px;width:270px;` +
       `box-shadow:0 8px 32px rgba(0,0,0,0.55);font-family:var(--app-font);font-size:14px;color:#F0F4F8;">` +
-      `<div style="font-weight:700;font-size:15px;margin-bottom:4px;color:#F0F4F8">${dayStr}</div>` +
-      `<div style="font-size:11px;font-weight:600;color:#64748B;margin-bottom:11px;">${speeds.length} readings</div>` +
+      `<div style="font-weight:700;font-size:15px;margin-bottom:11px;color:#F0F4F8">${dayStr}` +
+      ` <span style="font-size:11px;font-weight:600;color:#64748B;">n=${trailingDayCount}</span></div>` +
       `<div style="position:relative;height:160px;margin-left:38px;margin-right:38px;">` +
         `<div style="position:absolute;left:0;top:0;right:0;bottom:0;border-radius:4px;overflow:hidden;background:#1E293B;">` +
           `<div style="width:100%;height:100%;background:linear-gradient(to bottom,` +
@@ -142,7 +161,7 @@ export function CalendarWidget({
     el.style.left    = left + "px";
     el.style.top     = top  + "px";
     el.style.opacity = "1";
-  }, [daySpeeds, allDayStats, globalScale, hideTip]);
+  }, [dailyStats, globalScale, hideTip]);
 
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
@@ -170,135 +189,103 @@ export function CalendarWidget({
       ? `${cutoffDate.getFullYear()}-${String(cutoffDate.getMonth()+1).padStart(2,"0")}-${String(cutoffDate.getDate()).padStart(2,"0")}`
       : null;
 
+    /* reduce rgba/rgb color to 0.5 alpha for the stripe overlay */
+    const fadeColor = (c: string) =>
+      c.startsWith("rgba") ? c.replace(/,\s*[\d.]+\)$/, ", 0.5)")
+      : c.startsWith("rgb(") ? c.replace("rgb(", "rgba(").replace(")", ", 0.5)")
+      : c;
+
+    const stripePattern = "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.4) 4px,rgba(255,255,255,0.4) 8px)";
+
     return Array.from({ length: 42 }, (_, i) => {
       const dayNum = i - firstDay + 1;
 
-      /* outside the month — blank spacer cell */
+      /* outside the month — blank spacer cell, same height as a day cell */
       if (dayNum < 1 || dayNum > daysInMo) {
         return (
           <div key={`e${i}`} style={{ display:"flex", alignItems:"center",
-            justifyContent:"center" }}>
-            <div style={{ width:SQUARE, height:SQUARE }} />
+            justifyContent:"center", padding:"5px 0" }}>
+            <div style={{ width:CIRCLE_D, height:CIRCLE_D }} />
           </div>
         );
       }
 
       const dateKey  = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;
-      const speeds   = daySpeeds.get(dateKey);
+      const s        = dailyStats.get(dateKey);
       const isBeyondCutoff = !!cutoffDateStr && dateKey > cutoffDateStr;
       const isFuture = !isBeyondCutoff && isCurrentMo && dateKey >= todayStr;
-      const hasEnough = !!speeds && speeds.length >= MIN_READINGS;
+      const isPast   = !isBeyondCutoff && isCurrentMo && dateKey < todayStr;
 
-      let squareStyle: React.CSSProperties;
-      let marks: React.ReactNode = null;
-      let dayOverlay: React.ReactNode = null;
+      let circleStyle: React.CSSProperties;
+      let txtClr: string;
 
-      if (isBeyondCutoff || isFuture) {
-        /* future / beyond-TT-cutoff — dashed outline */
-        squareStyle = {
-          width: SQUARE, height: SQUARE, borderRadius: 4,
-          border: `2px dashed ${thm.textMuted}`,
-          background: "transparent",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-        };
-        dayOverlay = (
-          <span style={{
-            fontSize: 13, fontWeight: 800, color: thm.textMuted,
-            lineHeight: 1, userSelect: "none", opacity: 0.4,
-            zIndex: 3, position: "relative",
-          }}>
-            {dayNum}
-          </span>
-        );
-      } else if (hasEnough) {
-        /* data square — theme gradient background, speed marks, day number */
-        const sorted = speeds!.slice().sort((a, b) => a - b);
-        const range = gHi - gLo || 1;
-
-        squareStyle = {
-          width: SQUARE, height: SQUARE, borderRadius: 4,
-          background: thm.calGradient,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-        };
-
-        marks = sorted.map((spd, idx) => {
-          const pct = Math.max(0, Math.min(100, ((gHi - spd) / range) * 100));
-          return (
-            <div key={idx} style={{
-              position: "absolute",
-              top: `${pct}%`,
-              left: 0,
-              right: 0,
-              height: 2,
-              background: thm.calMarkColor,
-              boxShadow: thm.isDark
-                ? "0 0 2px rgba(0,0,0,0.4)"
-                : "0 0 2px rgba(255,255,255,0.4)",
-              zIndex: 1,
-              pointerEvents: "none",
-            }} />
-          );
-        });
-
-        dayOverlay = (
-          <span style={{
-            fontSize: 13, fontWeight: 800,
-            color: thm.calDayTextOnBackdrop,
-            lineHeight: 1, userSelect: "none",
-            zIndex: 3, position: "relative",
-            background: thm.calDayBackdrop,
-            borderRadius: 4,
-            padding: "2px 5px",
-          }}>
-            {dayNum}
-          </span>
-        );
+      if (isBeyondCutoff) {
+        /* TT cutoff: this date hasn't "happened" yet in the simulation */
+        circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+        txtClr = thm.textMuted;
+      } else if (isCurrentMo) {
+        if (isFuture) {
+          /* future date — dashed outline, no fill */
+          circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+          txtClr = thm.textMuted;
+        } else if (isPast && s) {
+          /* past date with data — colour relative to trailing 30 days */
+          const { p10: lp10, p90: lp90, insufficient } = trailingPercentiles(dailyStats, dateKey);
+          if (insufficient) {
+            circleStyle = { border:`2px dashed #6b7280`, background:"transparent" };
+            txtClr = "#6b7280";
+          } else {
+            const t = lp90 > lp10 ? Math.max(0, Math.min(1, (s.avgSpeed - lp10) / (lp90 - lp10))) : 0.5;
+            circleStyle = { background: thm.calColor(s.avgSpeed, lp10, lp90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
+            txtClr = thm.calTextColor(t);
+          }
+        } else {
+          /* past date with no data — dashed grey outline */
+          circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+          txtClr = thm.textMuted;
+        }
       } else {
-        /* insufficient data — dashed outline */
-        squareStyle = {
-          width: SQUARE, height: SQUARE, borderRadius: 4,
-          border: "2px dashed #6b7280",
-          background: "transparent",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-        };
-        dayOverlay = (
-          <span style={{
-            fontSize: 13, fontWeight: 800, color: "#6b7280",
-            lineHeight: 1, userSelect: "none", opacity: 0.6,
-            zIndex: 3, position: "relative",
-          }}>
-            {dayNum}
-          </span>
-        );
+        /* any other month — colour relative to trailing 30 days */
+        if (s) {
+          const { p10: lp10, p90: lp90, insufficient } = trailingPercentiles(dailyStats, dateKey);
+          if (insufficient) {
+            circleStyle = { border:"2px dashed #6b7280", background:"transparent" };
+            txtClr = "#6b7280";
+          } else {
+            const t = lp90 > lp10 ? Math.max(0, Math.min(1, (s.avgSpeed - lp10) / (lp90 - lp10))) : 0.5;
+            circleStyle = { background: thm.calColor(s.avgSpeed, lp10, lp90), boxShadow:"0 2px 8px rgba(0,0,0,0.15)" };
+            txtClr = thm.calTextColor(t);
+          }
+        } else {
+          circleStyle = { background: thm.emptyCalCircle };
+          txtClr = thm.textMuted;
+        }
       }
-
-      const interactable = hasEnough && !isFuture && !isBeyondCutoff;
 
       return (
         <div
           key={dateKey}
-          data-dk={interactable ? dateKey : undefined}
-          onClick={interactable && onDateClick ? () => onDateClick(dateKey) : undefined}
+          data-dk={s && !isFuture && !isBeyondCutoff ? dateKey : undefined}
+          onClick={s && !isFuture && !isBeyondCutoff && onDateClick ? () => onDateClick(dateKey) : undefined}
           style={{ display:"flex", alignItems:"center", justifyContent:"center",
-            cursor: interactable ? "pointer" : "default" }}
+            padding:"5px 0", cursor:(s && !isFuture && !isBeyondCutoff) ? "pointer" : "default" }}
         >
-          <div style={{
-            position: "relative", overflow: "hidden",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "transform 0.13s, box-shadow 0.13s",
-            ...squareStyle,
+          <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            transition:"transform 0.13s, box-shadow 0.13s",
+            ...circleStyle,
           }}>
-            {marks}
-            {dayOverlay}
+            <span style={{ fontSize:13, fontWeight:800, color:txtClr,
+              lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1 }}>
+              {dayNum}
+            </span>
           </div>
         </div>
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daySpeeds, firstDay, daysInMo, prefixStr, thm.key, thm.isDark,
-      thm.textMuted, thm.textPrimary, thm.calGradient, thm.calMarkColor,
-      thm.calDayBackdrop, thm.calDayTextOnBackdrop,
-      widgetCalYear, widgetCalMonth, cutoffDate, gLo, gHi]);
+  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, thm.textMuted, thm.textPrimary,
+      widgetCalYear, widgetCalMonth, cutoffDate]);
 
   const CAL_MUTED = thm.textMuted;
 
@@ -317,18 +304,22 @@ export function CalendarWidget({
         <div key={fadeKey}
           onMouseMove={handleGridMove}
           onMouseLeave={hideTip}
-          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2,
+          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
             animation:"cal-fade-in 0.2s ease" }}>
           {cells}
         </div>
 
         <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12,
           justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
-          <span>Fast</span>
-          <div style={{ width:7, height:44, borderRadius:3,
-            background: thm.calGradient,
+          <span>Slower vs 30d</span>
+          <div style={{ width:88, height:7, borderRadius:4,
+            background: thm.key === "gray"
+              ? "linear-gradient(90deg,#1a1a1a,#404040,#808080,#c0c0c0,#f0f0f0)"
+              : thm.key === "pastel"
+              ? "linear-gradient(90deg,#fca5a5,#fdba74,#fde68a,#bef264,#86efac)"
+              : "linear-gradient(90deg,#ef4444,#f97316,#fbbf24,#86efac,#22c55e)"
           }} />
-          <span>Slow</span>
+          <span>Faster vs 30d</span>
         </div>
       </div>
       {createPortal(

@@ -57,10 +57,6 @@ export interface AppTheme {
 
   calColor: (kmh: number, p10: number, p90: number) => string;
   calTextColor: (t: number) => string;
-  calGradient: string;
-  calMarkColor: string;
-  calDayBackdrop: string;
-  calDayTextOnBackdrop: string;
 
   verdictBg:     (vBg: string)     => string;
   verdictBorder: (vBorder: string) => string;
@@ -188,10 +184,6 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chart: { line1:"#22D3EE", line2:"#F472B6", line3:"#A78BFA", line4:"#F97316" },
     calColor: calColour,
     calTextColor: () => "#F0F4F8",
-    calGradient: "linear-gradient(to bottom, #22c55e 0%, #fbbf24 40%, #f97316 70%, #ef4444 100%)",
-    calMarkColor: "rgba(255,255,255,0.85)",
-    calDayBackdrop: "rgba(0,0,0,0.25)",
-    calDayTextOnBackdrop: "#ffffff",
     verdictBg:     ()  => "rgba(20,26,36,0.92)",
     verdictBorder: (b) => b,
     verdictText:   ()  => "#F0F4F8",
@@ -232,10 +224,6 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chart: { line1:"#111111", line2:"#888888", line3:"#111111", line4:"#888888" },
     calColor: calGray,
     calTextColor: (t) => t > 0.5 ? "#111111" : "#ffffff",
-    calGradient: "linear-gradient(to bottom, #f0f0f0 0%, #808080 50%, #1a1a1a 100%)",
-    calMarkColor: "rgba(0,0,0,0.65)",
-    calDayBackdrop: "rgba(255,255,255,0.25)",
-    calDayTextOnBackdrop: "#111111",
     verdictBg:     ()  => "#ffffff",
     verdictBorder: ()  => "#111111",
     verdictText:   ()  => "#111111",
@@ -281,10 +269,6 @@ export const THEMES: Record<ThemeKey, AppTheme> = {
     chart: { line1:"#3A86C8", line2:"#8F98A3", line3:"#8F98A3", line4:"#E06A3E" },
     calColor: calPastel,
     calTextColor: () => "#2B2924",
-    calGradient: "linear-gradient(to bottom, #86efac 0%, #fde68a 50%, #fca5a5 100%)",
-    calMarkColor: "rgba(0,0,0,0.65)",
-    calDayBackdrop: "rgba(255,255,255,0.45)",
-    calDayTextOnBackdrop: "#2B2924",
     verdictBg:     (vBg)     => vBg,
     verdictBorder: (vBorder) => vBorder,
     verdictText:   (vTc)     => vTc,

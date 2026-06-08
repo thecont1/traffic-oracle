@@ -4,7 +4,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import type { DayStats, TrafficRow, TimeOfDay } from "@/lib/useTrafficData";
 import { matchesToD } from "@/lib/useTrafficData";
 
-const CIRCLE_D = 38;
+const CIRCLE_D = 46;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const LOOKBACK_DAYS = 100;
 const MIN_LOOKBACK_ROWS = 3;
@@ -22,7 +22,7 @@ function pct(sorted: number[], p: number): number {
 /* ── Centralised decile palettes ───────────────────────────────── */
 /*   band 0 = p0–p10 (slowest)  →  band 9 = p90–p100 (fastest)     */
 const PALETTES: Record<string, string[]> = {
-  colour: ["#dc2626","#ea580c","#f97316","#f59e0b","#eab308","#a3e635","#4ade80","#22c55e","#16a34a","#15803d"],
+  colour: ["#E8354A","#F0673A","#F5973A","#F7C244","#EDD97A","#C8DC6A","#96CC54","#5DB96A","#2EA878","#0D8C52"],
   gray:   ["#0a0a0a","#171717","#262626","#404040","#525252","#737373","#a3a3a3","#d4d4d4","#e5e5e5","#fafafa"],
   pastel: ["#fca5a5","#fdba74","#fcd34d","#fde68a","#d9f99d","#bef264","#86efac","#4ade80","#22c55e","#16a34a"],
 };
@@ -55,12 +55,23 @@ const TOD_LABELS: Record<TimeOfDay, string> = {
   all:               "All Times",
 };
 
-/* ── Plain-language verdict ─────────────────────────────────────── */
-function verdict(diff: number, band: number): { text: string; color: string } {
+/* ── Plain-language verdict (band-based) ──────────────────────── */
+const VERDICT_TEXT = [
+  "Much slower than usual",  // band 0
+  "Much slower than usual",  // band 1
+  "Slower than usual",       // band 2
+  "Slower than usual",       // band 3
+  "Typical for this time",   // band 4
+  "Typical for this time",   // band 5
+  "Faster than usual",       // band 6
+  "Faster than usual",       // band 7
+  "Much faster than usual",  // band 8
+  "Much faster than usual",  // band 9
+];
+
+function verdict(band: number, themeKey: string): { text: string; color: string } {
   if (band < 0) return { text:"Not enough data", color:"#94A3B8" };
-  if (diff > 3)  return { text:"Faster than usual", color:"#4ade80" };
-  if (diff < -3) return { text:"Slower than usual", color:"#f87171" };
-  return { text:"Typical for this time", color:"#fbbf24" };
+  return { text: VERDICT_TEXT[band], color: decileColor(themeKey, band) };
 }
 
 /* ── Tooltip data carried per cell ─────────────────────────────── */
@@ -260,7 +271,7 @@ export function CalendarWidget({
             transition:"transform 0.13s, box-shadow 0.13s",
             ...circleStyle,
           }}>
-            <span style={{ fontSize:13, fontWeight:800, color:txtClr,
+            <span style={{ fontSize:16, fontWeight:800, color:txtClr,
               lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1 }}>
               {dayNum}
             </span>
@@ -276,9 +287,11 @@ export function CalendarWidget({
   const renderTooltip = () => {
     if (!tip) return null;
     const d = tip.data;
-    const v = verdict(d.diff, d.band);
-    const diffSign = d.diff >= 0 ? "+" : "";
+    const v = verdict(d.band, thm.key);
+    const diffDir = d.diff >= 0 ? "faster" : "slower";
     const isGray = thm.key === "gray";
+    const dowName = ["Sundays","Mondays","Tuesdays","Wednesdays","Thursdays","Fridays","Saturdays"]
+      [new Date(d.dateKey + "T12:00:00").getDay()];
 
     /* Theme-adaptive tooltip surface */
     const tipBg      = isGray ? "#FAFAFA" : "#0F172A";
@@ -295,15 +308,15 @@ export function CalendarWidget({
         aria-live="polite"
         style={{
           position:"fixed",
-          left: Math.max(8, Math.min(tip.x - 130, window.innerWidth - 268)),
+          left: Math.max(8, Math.min(tip.x - 156, window.innerWidth - 320)),
           top: tip.y - 8,
           transform:"translateY(-100%)",
-          width:260,
-          padding:"12px 14px",
+          width:312,
+          padding:"14px 17px",
           background:tipBg,
           color:tipText,
           borderRadius:0,
-          fontSize:12,
+          fontSize:14,
           lineHeight:1.5,
           fontFamily:"var(--app-font)",
           boxShadow:tipShadow,
@@ -312,59 +325,69 @@ export function CalendarWidget({
           border:`1px solid ${tipBorder}`,
         }}
       >
-        {/* ── Headline ── */}
-        <div style={{ fontWeight:700, fontSize:14, marginBottom:2 }}>
+        {/* ── Date ── */}
+        <div style={{ fontWeight:700, fontSize:17, marginBottom:2 }}>
           {new Date(d.dateKey + "T12:00:00").toLocaleDateString("en-IN", {
             weekday:"short", day:"numeric", month:"short", year:"2-digit",
           })}
         </div>
-        <div style={{ color:tipMuted, fontSize:11, marginBottom:10 }}>
+
+        {/* ── Route · Time slot ── */}
+        <div style={{ color:tipMuted, fontSize:13, marginBottom:12 }}>
           {selectedRoute} · {TOD_LABELS[tod]}
         </div>
 
-        {/* ── Verdict chip ── */}
-        <div style={{ display:"inline-block", padding:"3px 8px", marginBottom:10,
+        <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
+
+        {/* ── Verdict badge ── */}
+        <div style={{ display:"inline-block", padding:"4px 10px", marginBottom:12,
           background:v.color + "22", border:`1px solid ${v.color}44`, borderRadius:0,
-          fontSize:11, fontWeight:700, color:v.color }}>
+          fontSize:13, fontWeight:700, color:v.color }}>
           {d.band >= 0 ? `${v.text} · ${d.band + 1}/${DECILES}` : v.text}
         </div>
 
-        {/* ── Key number ── */}
-        <div style={{ fontSize:24, fontWeight:800, lineHeight:1.1, marginBottom:2 }}>
-          {Math.round(d.avgSpeed)} <span style={{ fontSize:12, fontWeight:600, color:tipMuted }}>km/h</span>
+        <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
+
+        {/* ── Avg speed (large) ── */}
+        <div style={{ fontSize:29, fontWeight:800, lineHeight:1.1, marginBottom:2 }}>
+          {Math.round(d.avgSpeed)} <span style={{ fontSize:14, fontWeight:600, color:tipMuted }}>km/h</span>
         </div>
-        <div style={{ color:tipMuted, fontSize:11, marginBottom:10 }}>
+        <div style={{ color:tipMuted, fontSize:13, marginBottom:12 }}>
           avg speed this day
         </div>
 
-        {/* ── Decile strip ── */}
+        <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
+
+        {/* ── Delta line ── */}
+        {d.lookbackCount > 0 && (
+          <div style={{ marginBottom:7 }}>
+            <span style={{ fontWeight:700, color:v.color }}>
+              {d.diff >= 0 ? "+" : ""}{Math.round(d.diff)} km/h {diffDir}
+            </span>
+            <span style={{ color:tipMuted }}> than typical ({Math.round(d.lookbackAvg)} km/h)</span>
+          </div>
+        )}
+
+        {/* ── Band strip ── */}
         {d.band >= 0 && (
-          <div style={{ display:"flex", gap:1, marginBottom:10 }}>
+          <div style={{ display:"flex", gap:1, marginBottom:12 }}>
             {pal.map((c, i) => (
               <div key={i} style={{
-                flex:1, height:8, background:c,
-                outline: i === d.band ? `2px solid ${isGray ? "#111" : "#fff"}` : "none",
-                outlineOffset: -1,
+                flex:1, height:10, background:c,
+                transform: i === d.band ? "scaleY(1.4)" : "none",
+                border: i === d.band ? "2px solid #fff" : "none",
+                boxSizing: "border-box",
               }} />
             ))}
           </div>
         )}
 
-        {/* ── Baseline comparison ── */}
+        <div style={{ height:1, background:tipDivider, marginBottom:10 }} />
+
+        {/* ── Footnote ── */}
         {d.lookbackCount > 0 && (
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-            padding:"6px 0", borderTop:`1px solid ${tipDivider}` }}>
-            <div>
-              <div style={{ fontSize:10, color:tipMuted, textTransform:"uppercase", letterSpacing:"0.05em" }}>
-                vs baseline ({Math.round(d.lookbackAvg)} km/h)
-              </div>
-              <div style={{ fontWeight:700, fontSize:14, color:v.color, marginTop:1 }}>
-                {diffSign}{Math.round(d.diff)} km/h
-              </div>
-            </div>
-            <div style={{ fontSize:10, color:tipMuted }}>
-              {d.lookbackCount} samples
-            </div>
+          <div style={{ fontSize:12, color:tipMuted }}>
+            Based on {d.lookbackCount} similar {dowName}
           </div>
         )}
 
@@ -402,19 +425,21 @@ export function CalendarWidget({
         {cells}
       </div>
 
-      {/* Legend: 10 decile blocks */}
+      {/* Legend: Slow [10 blocks] Fast */}
       <div role="img" aria-label={legendAria}
-        style={{ display:"flex", alignItems:"flex-start", gap:0, marginTop:12,
-          justifyContent:"flex-end", flexWrap:"wrap" }}>
-        {pal.map((c, i) => (
-          <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center" }}>
-            <div style={{ width:14, height:14, background:c, marginLeft: i > 0 ? 2 : 0 }} />
-            <span style={{ fontSize:8, color:thm.textMuted, marginTop:2,
-              whiteSpace:"nowrap", marginLeft: i > 0 ? 2 : 0 }}>
-              p{i * 10}
-            </span>
+        style={{ display:"flex", alignItems:"center", gap:6, marginTop:12,
+          justifyContent:"flex-end", fontSize:10, color:thm.textMuted, fontWeight:600 }}>
+        <span>Slow</span>
+        <div>
+          <div style={{ display:"flex", gap:2 }}>
+            {pal.map((c, i) => (
+              <div key={i} style={{ width:17, height:17, background:c }} />
+            ))}
           </div>
-        ))}
+          <div style={{ height:2, marginTop:2,
+            background:`linear-gradient(to right, ${pal[0]}, ${pal[9]})` }} />
+        </div>
+        <span>Fast</span>
       </div>
 
       {/* Tooltip — portalled to body to escape card overflow:hidden */}

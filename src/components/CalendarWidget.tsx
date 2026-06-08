@@ -36,6 +36,16 @@ export function CalendarWidget({
     return { lo, hi };
   }, [allDayStats]);
 
+  /* ── Global speed-spread scale (p95 − p05) from allDayStats ── */
+  const globalMaxSpread = useMemo(() => {
+    let max = 0;
+    for (const d of allDayStats.values()) {
+      const spread = d.p95Speed - d.p05Speed;
+      if (spread > max) max = spread;
+    }
+    return max;
+  }, [allDayStats]);
+
   /* ── Imperative tooltip ─────────────────────────────────────── */
   const tooltipRef  = useRef<HTMLDivElement>(null);
   const lastKeyRef  = useRef<string | null>(null);
@@ -94,11 +104,16 @@ export function CalendarWidget({
       `</div>`
     ).join("");
 
+    const spread = s.p95Speed - s.p05Speed;
+    const dotPx = globalMaxSpread > 0 ? 2 + (spread / globalMaxSpread) * 12 : 2;
+    const consistencyLabel = dotPx <= 5 ? "Consistent" : dotPx <= 10 ? "Moderate variation" : "Highly variable";
+
     el.innerHTML =
       `<span style="display:inline-block;background:#141A24;border-radius:12px;padding:13px 17px;width:270px;` +
       `box-shadow:0 8px 32px rgba(0,0,0,0.55);font-family:var(--app-font);font-size:14px;color:#F0F4F8;">` +
       `<div style="font-weight:700;font-size:15px;margin-bottom:11px;color:#F0F4F8">${dayStr}` +
-      ` <span style="font-size:11px;font-weight:600;color:#64748B;">n=${trailingDayCount}</span></div>` +
+      ` <span style="font-size:11px;font-weight:600;color:#64748B;">n=${trailingDayCount}</span>` +
+      ` <span style="font-size:11px;font-weight:600;color:${consistencyLabel === "Consistent" ? "#22d3ee" : consistencyLabel === "Moderate variation" ? "#fbbf24" : "#ef4444"};margin-left:6px;">${consistencyLabel}</span></div>` +
       `<div style="position:relative;height:160px;margin-left:38px;margin-right:38px;">` +
         `<div style="position:absolute;left:0;top:0;right:0;bottom:0;border-radius:4px;overflow:hidden;background:#1E293B;">` +
           `<div style="width:100%;height:100%;background:linear-gradient(to bottom,` +
@@ -161,7 +176,7 @@ export function CalendarWidget({
     el.style.left    = left + "px";
     el.style.top     = top  + "px";
     el.style.opacity = "1";
-  }, [dailyStats, globalScale, hideTip]);
+  }, [dailyStats, globalScale, globalMaxSpread, hideTip]);
 
   const handleGridMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-dk]");
@@ -262,6 +277,17 @@ export function CalendarWidget({
         }
       }
 
+      /* Compute consistency dot diameter (spread = p95 − p05) */
+      const hasColor = !!(s && circleStyle.background && circleStyle.background !== "transparent");
+      let dotPx = 0;
+      if (hasColor && s && globalMaxSpread > 0) {
+        const spread = s.p95Speed - s.p05Speed;
+        dotPx = Math.round(2 + (spread / globalMaxSpread) * 12);
+      }
+
+      /* Dot colour: white for dark themes, dark for light/pastel */
+      const dotColor = thm.key === "pastel" ? "#2B2924" : "#ffffff";
+
       return (
         <div
           key={dateKey}
@@ -272,19 +298,29 @@ export function CalendarWidget({
         >
           <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%",
             display:"flex", alignItems:"center", justifyContent:"center",
+            position:"relative",
             transition:"transform 0.13s, box-shadow 0.13s",
             ...circleStyle,
           }}>
             <span style={{ fontSize:13, fontWeight:800, color:txtClr,
-              lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1 }}>
+              lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1, zIndex:2 }}>
               {dayNum}
             </span>
+            {dotPx > 0 && (
+              <div style={{
+                position:"absolute", top:"50%", left:"50%",
+                width:dotPx, height:dotPx, borderRadius:"50%",
+                background:dotColor, opacity:0.7,
+                transform:"translate(-50%,-50%)", zIndex:1,
+                pointerEvents:"none",
+              }} />
+            )}
           </div>
         </div>
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, firstDay, daysInMo, prefixStr, thm.key, thm.textMuted, thm.textPrimary,
+  }, [dailyStats, globalMaxSpread, firstDay, daysInMo, prefixStr, thm.key, thm.textMuted, thm.textPrimary,
       widgetCalYear, widgetCalMonth, cutoffDate]);
 
   const CAL_MUTED = thm.textMuted;

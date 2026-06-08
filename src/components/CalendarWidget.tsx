@@ -139,8 +139,8 @@ export function CalendarWidget({
     for (const [dateKey, s] of dailyStats.entries()) {
       if (s.avgSpeed <= 0) continue;
 
-      const dow = new Date(dateKey + "T12:00:00").getDay();
-      const lookbackEnd = new Date(dateKey + "T12:00:00").getTime();
+      const dow = new Date(dateKey + "T00:00:00").getDay();
+      const lookbackEnd = new Date(dateKey + "T00:00:00").getTime();
       const lookbackStart = lookbackEnd - LOOKBACK_DAYS * 86400000;
 
       const speeds: number[] = [];

@@ -1,14 +1,15 @@
 /**
- * Integration tests for CalendarWidget (bar-based design).
+ * Integration tests for CalendarWidget (square spectra design).
  *
  * Renders the component inside a ThemeProvider with known fixture data
  * and asserts:
  *   1. 42 cells rendered (6 rows × 7 cols).
  *   2. Day headers (Mon–Sun) are present.
  *   3. Legend shows Fast/Slow labels.
- *   4. Dates with enough readings (≥15) render a bar with marks.
+ *   4. Dates with enough readings (≥15) render a 50×50 square with marks.
  *   5. Dates with fewer than 15 readings get dashed outline.
- *   6. Clicking a date with enough data fires onDateClick.
+ *   6. Day number is rendered inside the square (centred).
+ *   7. Clicking a date with enough data fires onDateClick.
  */
 
 import { describe, it, expect, beforeEach } from "bun:test";
@@ -51,7 +52,7 @@ function buildDaySpeeds(
     const key = d.toISOString().slice(0, 10);
     const speeds: number[] = [];
     for (let j = 0; j < readingsPerDay; j++) {
-      speeds.push(baseSpeed + (j % 10) - 5); // spread ±5 around base
+      speeds.push(baseSpeed + (j % 10) - 5);
     }
     map.set(key, speeds);
   }
@@ -101,27 +102,37 @@ function renderCal(
 
 /* ── Tests ───────────────────────────────────────────────────────── */
 
-describe("CalendarWidget integration (bar design)", () => {
+describe("CalendarWidget integration (square spectra)", () => {
   beforeEach(() => cleanup());
 
   it("renders 42 cells in the calendar grid", () => {
-    const speeds = buildDaySpeeds(30, 20, 2025, 3); // April 2025, 20 readings each
+    const speeds = buildDaySpeeds(30, 20, 2025, 3);
     const { container } = renderCal(speeds, undefined, 2025, 3);
 
-    // Find the grid that contains day cells
-    const dayNums = container.querySelectorAll("span");
-    const cellParents: Element[] = [];
-    dayNums.forEach(span => {
-      const num = parseInt(span.textContent || "", 10);
-      if (num >= 1 && num <= 31) {
-        const wrapper = span.parentElement;
-        if (wrapper && wrapper.parentElement) cellParents.push(wrapper);
-      }
+    // April 2025 has 30 days + needs 42 total cells (6 weeks × 7).
+    // Count spans with numeric day text — each day cell has exactly one.
+    // Plus spacer cells for leading/trailing blanks.
+    // Find the grid by looking for the element with exactly 42 children
+    // that contains the day-number spans.
+    const spans = container.querySelectorAll("span");
+    const daySpans = Array.from(spans).filter(s => {
+      const n = parseInt(s.textContent || "", 10);
+      return n >= 1 && n <= 31 && s.textContent === String(n);
     });
-    const grids = new Set(cellParents.map(el => el.parentElement));
-    expect(grids.size).toBe(1);
-    const grid = grids.values().next().value!;
-    expect(grid.children.length).toBe(42);
+    // Should have 30 day numbers (April has 30 days)
+    expect(daySpans.length).toBe(30);
+    // Each day span's outermost cell wrapper should share one grid parent
+    const cellWrappers = daySpans.map(s => {
+      let el: Element | null = s;
+      // Walk up to the direct child of the grid (has data-dk or is a cell)
+      while (el && el.parentElement && el.parentElement.children.length < 42) {
+        el = el.parentElement;
+      }
+      return el;
+    });
+    const grid = cellWrappers[0]?.parentElement;
+    expect(grid).toBeTruthy();
+    expect(grid!.children.length).toBe(42);
   });
 
   it("renders day headers Mon–Sun", () => {
@@ -139,6 +150,26 @@ describe("CalendarWidget integration (bar design)", () => {
     expect(screen.getByText("Slow")).toBeTruthy();
   });
 
+  it("day number is rendered inside the square (centred)", () => {
+    const speeds = buildDaySpeeds(30, 20, 2025, 3);
+    renderCal(speeds, undefined, 2025, 3);
+
+    // Day 10 should have its number as text content
+    const spans = document.querySelectorAll("span");
+    let day10Found = false;
+    spans.forEach(span => {
+      if (span.textContent === "10") {
+        // The span should be inside a 50×50 container
+        const parent = span.parentElement;
+        if (parent) {
+          const w = parent.style.width;
+          if (w === "50px") day10Found = true;
+        }
+      }
+    });
+    expect(day10Found).toBe(true);
+  });
+
   it("dates with ≥15 readings get data-dk attribute (tooltip target)", () => {
     const speeds = buildDaySpeeds(30, 20, 2025, 3);
     speeds.set("2025-04-10", Array.from({ length: 20 }, (_, i) => 25 + i));
@@ -150,12 +181,11 @@ describe("CalendarWidget integration (bar design)", () => {
 
   it("dates with <15 readings get no data-dk (dashed outline)", () => {
     const speeds = buildDaySpeeds(30, 20, 2025, 3);
-    // Override April 10 with only 5 readings — below threshold
     speeds.set("2025-04-10", [20, 21, 22, 23, 24]);
     renderCal(speeds, undefined, 2025, 3);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
-    expect(cell).toBeNull(); // no data-dk because < 15 readings
+    expect(cell).toBeNull();
   });
 
   it("fires onDateClick when clicking a date with enough data", () => {
@@ -177,7 +207,6 @@ describe("CalendarWidget integration (bar design)", () => {
     const speeds = buildDaySpeeds(30, 20, year, month);
     renderCal(speeds, undefined, year, month);
 
-    // Find a future date — day number > today
     const today = now.getDate();
     if (today < 28) {
       const futureDay = today + 1;
@@ -185,12 +214,16 @@ describe("CalendarWidget integration (bar design)", () => {
       let futureCell: HTMLElement | null = null;
       spans.forEach(span => {
         if (span.textContent === String(futureDay)) {
-          futureCell = span.parentElement as HTMLElement;
+          // Walk up to find the cell wrapper with data-dk
+          let el: HTMLElement | null = span.parentElement;
+          while (el && !el.hasAttribute("data-dk") && el !== document.body) {
+            el = el.parentElement;
+          }
+          if (el && el.hasAttribute("data-dk")) futureCell = el;
         }
       });
-      expect(futureCell).toBeTruthy();
-      // Future dates should have no data-dk
-      expect(futureCell!.getAttribute("data-dk")).toBeNull();
+      // Future date should NOT have data-dk
+      expect(futureCell).toBeNull();
     }
   });
 });

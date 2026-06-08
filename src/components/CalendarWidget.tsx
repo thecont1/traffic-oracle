@@ -3,9 +3,7 @@ import { createPortal } from "react-dom";
 import { useTheme } from "@/lib/ThemeContext";
 import type { DayStats } from "@/lib/useTrafficData";
 
-const BAR_W = 10;
-const BAR_H = 38;
-const CIRCLE_D = BAR_H; // keep same height for grid alignment
+const SQUARE = 50;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const MIN_READINGS = 15;
 
@@ -57,7 +55,6 @@ export function CalendarWidget({
     const date   = new Date(dateKey + "T12:00:00");
     const dayStr = date.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short", year:"2-digit" });
 
-    /* Position markers on the GLOBAL scale (full min–max range) */
     const { lo: gLo, hi: gHi } = globalScale;
     const posOf = (speed: number) => gHi > gLo
       ? Math.max(0, Math.min(100, ((gHi - speed) / (gHi - gLo)) * 100))
@@ -180,8 +177,8 @@ export function CalendarWidget({
       if (dayNum < 1 || dayNum > daysInMo) {
         return (
           <div key={`e${i}`} style={{ display:"flex", alignItems:"center",
-            justifyContent:"center", padding:"5px 0" }}>
-            <div style={{ width:CIRCLE_D, height:CIRCLE_D }} />
+            justifyContent:"center" }}>
+            <div style={{ width:SQUARE, height:SQUARE }} />
           </div>
         );
       }
@@ -192,26 +189,39 @@ export function CalendarWidget({
       const isFuture = !isBeyondCutoff && isCurrentMo && dateKey >= todayStr;
       const hasEnough = !!speeds && speeds.length >= MIN_READINGS;
 
-      let circleStyle: React.CSSProperties;
-      let txtClr: string;
-      let barMarks: React.ReactNode = null;
+      let squareStyle: React.CSSProperties;
+      let marks: React.ReactNode = null;
+      let dayOverlay: React.ReactNode = null;
 
       if (isBeyondCutoff || isFuture) {
         /* future / beyond-TT-cutoff — dashed outline */
-        circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
-        txtClr = thm.textMuted;
+        squareStyle = {
+          width: SQUARE, height: SQUARE, borderRadius: 4,
+          border: `2px dashed ${thm.textMuted}`,
+          background: "transparent",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+        };
+        dayOverlay = (
+          <span style={{
+            fontSize: 13, fontWeight: 800, color: thm.textMuted,
+            lineHeight: 1, userSelect: "none", opacity: 0.4,
+            zIndex: 3, position: "relative",
+          }}>
+            {dayNum}
+          </span>
+        );
       } else if (hasEnough) {
-        /* data bar — gray gradient background, speed marks */
+        /* data square — theme gradient background, speed marks, day number */
         const sorted = speeds!.slice().sort((a, b) => a - b);
         const range = gHi - gLo || 1;
 
-        circleStyle = {
-          background: `linear-gradient(to bottom, #d1d5db 0%, #6b7280 50%, #1f2937 100%)`,
-          borderRadius: 3,
+        squareStyle = {
+          width: SQUARE, height: SQUARE, borderRadius: 4,
+          background: thm.calGradient,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
         };
-        txtClr = thm.textPrimary;
 
-        barMarks = sorted.map((spd, idx) => {
+        marks = sorted.map((spd, idx) => {
           const pct = Math.max(0, Math.min(100, ((gHi - spd) / range) * 100));
           return (
             <div key={idx} style={{
@@ -220,15 +230,46 @@ export function CalendarWidget({
               left: 0,
               right: 0,
               height: 2,
-              background: thm.isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)",
+              background: thm.calMarkColor,
+              boxShadow: thm.isDark
+                ? "0 0 2px rgba(0,0,0,0.4)"
+                : "0 0 2px rgba(255,255,255,0.4)",
+              zIndex: 1,
               pointerEvents: "none",
             }} />
           );
         });
+
+        dayOverlay = (
+          <span style={{
+            fontSize: 13, fontWeight: 800,
+            color: thm.calDayTextOnBackdrop,
+            lineHeight: 1, userSelect: "none",
+            zIndex: 3, position: "relative",
+            background: thm.calDayBackdrop,
+            borderRadius: 4,
+            padding: "2px 5px",
+          }}>
+            {dayNum}
+          </span>
+        );
       } else {
         /* insufficient data — dashed outline */
-        circleStyle = { border:`2px dashed #6b7280`, background:"transparent" };
-        txtClr = "#6b7280";
+        squareStyle = {
+          width: SQUARE, height: SQUARE, borderRadius: 4,
+          border: "2px dashed #6b7280",
+          background: "transparent",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+        };
+        dayOverlay = (
+          <span style={{
+            fontSize: 13, fontWeight: 800, color: "#6b7280",
+            lineHeight: 1, userSelect: "none", opacity: 0.6,
+            zIndex: 3, position: "relative",
+          }}>
+            {dayNum}
+          </span>
+        );
       }
 
       const interactable = hasEnough && !isFuture && !isBeyondCutoff;
@@ -239,26 +280,24 @@ export function CalendarWidget({
           data-dk={interactable ? dateKey : undefined}
           onClick={interactable && onDateClick ? () => onDateClick(dateKey) : undefined}
           style={{ display:"flex", alignItems:"center", justifyContent:"center",
-            gap: 4, padding:"5px 0", cursor: interactable ? "pointer" : "default" }}
+            cursor: interactable ? "pointer" : "default" }}
         >
-          <div style={{ width:BAR_W, height:BAR_H, borderRadius:3,
-            display:"flex", alignItems:"center", justifyContent:"center",
+          <div style={{
             position: "relative", overflow: "hidden",
-            transition:"transform 0.13s, box-shadow 0.13s",
-            ...circleStyle,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "transform 0.13s, box-shadow 0.13s",
+            ...squareStyle,
           }}>
-            {barMarks}
+            {marks}
+            {dayOverlay}
           </div>
-          <span style={{ fontSize:11, fontWeight:700, color:txtClr,
-            lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1,
-            minWidth: 16, textAlign: "left" }}>
-            {dayNum}
-          </span>
         </div>
       );
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daySpeeds, firstDay, daysInMo, prefixStr, thm.key, thm.isDark, thm.textMuted, thm.textPrimary,
+  }, [daySpeeds, firstDay, daysInMo, prefixStr, thm.key, thm.isDark,
+      thm.textMuted, thm.textPrimary, thm.calGradient, thm.calMarkColor,
+      thm.calDayBackdrop, thm.calDayTextOnBackdrop,
       widgetCalYear, widgetCalMonth, cutoffDate, gLo, gHi]);
 
   const CAL_MUTED = thm.textMuted;
@@ -278,7 +317,7 @@ export function CalendarWidget({
         <div key={fadeKey}
           onMouseMove={handleGridMove}
           onMouseLeave={hideTip}
-          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+          style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2,
             animation:"cal-fade-in 0.2s ease" }}>
           {cells}
         </div>
@@ -287,7 +326,7 @@ export function CalendarWidget({
           justifyContent:"flex-end", fontSize:11, color: CAL_MUTED }}>
           <span>Fast</span>
           <div style={{ width:7, height:44, borderRadius:3,
-            background:"linear-gradient(to bottom, #d1d5db 0%, #6b7280 50%, #1f2937 100%)"
+            background: thm.calGradient,
           }} />
           <span>Slow</span>
         </div>

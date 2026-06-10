@@ -263,24 +263,25 @@ function RouteCard({
         </span>
       </div>
       
-      {/* Row 2: origin → destination */}
-      <p style={{
+      {/* Row 2: origin → destination + Google Maps link */}
+      <div style={{
         fontSize: 10, color: thm.textMuted,
         lineHeight: 1.3, margin: 0,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        overflow: "hidden",
         display: "flex", alignItems: "center", gap: 4,
       }}>
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{endpoints}</span>
-        {card.map_link && (
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{endpoints}</span>
+        {card.map_link ? (
           <a
             href={card.map_link}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0, textDecoration: "none" }}
-          >↗</a>
-        )}
-      </p>
+            style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0, textDecoration: "none", lineHeight: 1 }}
+            title="Open in Google Maps"
+          >&#x2197;</a>
+        ) : null}
+      </div>
 
       {/* Row 2b: weather strip */}
       {card.weather && (

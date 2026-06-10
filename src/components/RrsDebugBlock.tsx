@@ -2,14 +2,15 @@
  * R³S² Debug Block — detailed audit section for the R³S² score.
  *
  * Shows:
- * - Summary fields (route, TOD, window, score, rank, completeness)
+ * - Summary fields (route, TOD, window, score, rank, completeness, volatility)
  * - Per-day audit table for the selected route in the rolling window
- * - Collapsible all-routes ranking table
+ * - Collapsible all-routes ranking table with volatility badges
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { RrsContext } from "@/lib/rrsData";
 import type { TimeOfDay } from "@/lib/useTrafficData";
+import { getRouteConditionCopy, classifyVolatilityTier } from "@/lib/routeConditionCopy";
 
 const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
 
@@ -39,6 +40,26 @@ function sigmaColor(band: string): string {
   return "#94a3b8";
 }
 
+function volatilityBadgeColor(tier: string): string {
+  switch (tier) {
+    case "steady":        return "#22c55e";
+    case "fairly_steady": return "#86efac";
+    case "choppy":        return "#fdba74";
+    case "erratic":       return "#ef4444";
+    default:              return "#94a3b8";
+  }
+}
+
+function volatilityBadgeLabel(tier: string): string {
+  switch (tier) {
+    case "steady":        return "steady";
+    case "fairly_steady": return "fairly steady";
+    case "choppy":        return "choppy";
+    case "erratic":       return "erratic";
+    default:              return tier;
+  }
+}
+
 interface Props {
   ctx: RrsContext;
   selectedRoute: string;
@@ -61,6 +82,18 @@ export function RrsDebugBlock({ ctx, selectedRoute, tod, widgetCalMonth, widgetC
   const headerBg = isGray ? "#e5e5e5" : "#EDE9FE";
 
   const monthLabel = new Date(widgetCalYear, widgetCalMonth).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+
+  // Derive message copy for debug
+  const copy = useMemo(() => getRouteConditionCopy({
+    rrsRank: ctx.rank,
+    totalRoutes: ctx.totalRoutes,
+    cv: ctx.cv,
+    speedSd: ctx.speedSd,
+    isBenchmarkRoute: ctx.isBenchmarkRoute,
+    todLabel: TOD_LABELS[tod]?.toLowerCase() ?? tod,
+  }), [ctx, tod]);
+
+  const volTier = classifyVolatilityTier(ctx.cv);
 
   return (
     <div style={{
@@ -86,7 +119,12 @@ export function RrsDebugBlock({ ctx, selectedRoute, tod, widgetCalMonth, widgetC
         <div><strong>Dates present:</strong> {ctx.datesPresent}</div>
         <div><strong>Trip count in window:</strong> {ctx.rawData?.trip_count_window ?? 0}</div>
         <div><strong>Mean speed in window:</strong> {ctx.meanSpeed.toFixed(1)} km/h</div>
-        <div><strong>Speed SD:</strong> {ctx.speedSd.toFixed(2)}</div>
+        <div><strong>Speed SD:</strong> {ctx.speedSd.toFixed(2)} km/h</div>
+        <div><strong>CV:</strong> {ctx.cv.toFixed(4)}</div>
+        <div><strong>Volatility label:</strong> <span style={{ color: volatilityBadgeColor(volTier), fontWeight: 700 }}>{volatilityBadgeLabel(volTier)}</span></div>
+        <div><strong>Volatility copy:</strong> {copy.volatilityText}</div>
+        <div><strong>Message family:</strong> {copy.messageFamily}</div>
+        <div><strong>Benchmark note applied:</strong> <span style={{ color: ctx.isBenchmarkRoute ? "#DC2626" : "#16a34a", fontWeight: 700 }}>{String(ctx.isBenchmarkRoute)}</span></div>
         <div><strong>Final rolling R³S² score:</strong> <span style={{ fontWeight: 800, color: ctx.score > 0 ? "#16a34a" : ctx.score < 0 ? "#ef4444" : "#1F2937" }}>{ctx.score > 0 ? "+" : ""}{ctx.score.toFixed(1)}</span></div>
         <div><strong>R³S² rank:</strong> {ctx.rank} / {ctx.totalRoutes}</div>
         <div><strong>Completeness:</strong> {(ctx.completeness * 100).toFixed(0)}% ({ctx.datesPresent}/{ctx.datesExpected})</div>
@@ -155,16 +193,19 @@ export function RrsDebugBlock({ ctx, selectedRoute, tod, widgetCalMonth, widgetC
                 <th style={{ padding: "3px 6px" }}>Route</th>
                 <th style={{ padding: "3px 6px", textAlign: "right" }}>Score</th>
                 <th style={{ padding: "3px 6px", textAlign: "right" }}>Mean Speed</th>
-                <th style={{ padding: "3px 6px", textAlign: "right" }}>SD</th>
+                <th style={{ padding: "3px 6px", textAlign: "right" }}>Swing</th>
                 <th style={{ padding: "3px 6px", textAlign: "right" }}>CV</th>
+                <th style={{ padding: "3px 6px" }}>Volatility</th>
                 <th style={{ padding: "3px 6px", textAlign: "right" }}>Days</th>
-                <th style={{ padding: "3px 6px", textAlign: "right" }}>Completeness</th>
+                <th style={{ padding: "3px 6px", textAlign: "right" }}>Complete</th>
                 <th style={{ padding: "3px 6px" }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {ctx.allRoutes.map((r, i) => {
                 const isSelected = r.route_code === selectedRoute;
+                const tier = classifyVolatilityTier(r.speed_cv);
+                const badgeColor = volatilityBadgeColor(tier);
                 return (
                   <tr key={r.route_code} style={{
                     borderBottom: `1px solid ${borderColor}33`,
@@ -177,8 +218,13 @@ export function RrsDebugBlock({ ctx, selectedRoute, tod, widgetCalMonth, widgetC
                       {r.rrs_rolling_score > 0 ? "+" : ""}{r.rrs_rolling_score.toFixed(1)}
                     </td>
                     <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.mean_speed_window.toFixed(1)}</td>
-                    <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.speed_sd_window.toFixed(2)}</td>
+                    <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.speed_sd_window.toFixed(1)}</td>
                     <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.speed_cv.toFixed(4)}</td>
+                    <td style={{ padding: "2px 6px" }}>
+                      <span style={{ display: "inline-block", padding: "1px 5px", background: badgeColor + "22", border: `1px solid ${badgeColor}44`, color: badgeColor, fontWeight: 600, fontSize: 9 }}>
+                        {volatilityBadgeLabel(tier)}
+                      </span>
+                    </td>
                     <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.dates_present}/{r.dates_expected}</td>
                     <td style={{ padding: "2px 6px", textAlign: "right" }}>{(r.completeness_ratio * 100).toFixed(0)}%</td>
                     <td style={{ padding: "2px 6px", color: r.score_status === "ok" ? "#16a34a" : "#ef4444", fontWeight: 600 }}>

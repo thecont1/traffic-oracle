@@ -149,12 +149,48 @@ export const TOOLTIP_CONTENT = {
     body: [
       "What am I looking at?",
       "",
-      "Each circle is a day on this calendar. Its colour shows how this route compared to the city's longest road (the benchmark) on the same day and time — green means it kept pace with the best road, red means it fell far behind.",
+      "Each circle is a day. Its colour shows how this road stacked up against Bangalore's benchmark route on the same day and at the same time.",
+      "",
+      "Green means it kept up. Red means it fell badly behind.",
       "",
       "• Hover any filled day to see the speed ratio, side-by-side comparison, and a verdict",
       "• Click any past day to open it in the Time Traveller for a detailed breakdown",
       "",
       "Days shown with a dashed outline are today or in the future — no data yet.",
+    ].join("\n"),
+  },
+
+  // ── Daily Calendar — Benchmark Route Special Case ──────────────
+  dailyCalendarBenchmark: {
+    title: "Good Days and Bad Days",
+    body: [
+      "What am I looking at?",
+      "",
+      "This is Bangalore's benchmark route — the road the rest of the city is judged against.",
+      "",
+      "These dots show how this road itself behaved day to day.",
+      "They are not a comparison against a better road.",
+      "",
+      "• Hover any filled day to see its speed and a verdict",
+      "• Click any past day to open it in the Time Traveller",
+      "",
+      "Days shown with a dashed outline are today or in the future — no data yet.",
+    ].join("\n"),
+  },
+
+  // ── R³S² Explainer ─────────────────────────────────────────────
+  rrsExplainer: {
+    title: "R³S² Route Quality Score",
+    body: [
+      "What am I looking at?",
+      "",
+      "R³S² is a rolling route-quality score. It compares this road with the rest of the city over the last 14 days.",
+      "",
+      "• Higher scores mean it has been consistently faster than its peers",
+      "• Lower scores mean it has been struggling",
+      "• Rank 1 means the fastest road in the city for this time slot",
+      "",
+      "\"Traffic swings\" shows how much speeds vary day to day — a low number means steady traffic, a high number means erratic.",
     ].join("\n"),
   },
 } as const;

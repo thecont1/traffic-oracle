@@ -27,6 +27,8 @@ const PALETTES: Record<string, string[]> = {
   colour: ["#E8354A","#F0673A","#F5973A","#F7C244","#EDD97A","#C8DC6A","#96CC54","#5DB96A","#2EA878","#0D8C52"],
   gray:   ["#0a0a0a","#171717","#262626","#404040","#525252","#737373","#a3a3a3","#d4d4d4","#e5e5e5","#fafafa"],
   pastel: ["#fca5a5","#fdba74","#fcd34d","#fde68a","#d9f99d","#bef264","#86efac","#4ade80","#22c55e","#16a34a"],
+  /* Benchmark special case: teal/blue tones for Airport Expy self-view */
+  benchmark: ["#0e7490","#0891b2","#06b6d4","#22d3ee","#67e8f9","#a5f3fc","#0d9488","#14b8a6","#2dd4bf","#5eead4"],
 };
 
 function paletteFor(key: string): string[] {
@@ -91,6 +93,7 @@ export function CalendarWidget({
   benchmarkDailyStats, benchmarkRouteLabel,
   bandThresholds,
   widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
+  isBenchmarkRoute = false,
 }: {
   dailyStats: Map<string, DayStats>;
   allRows: TrafficRow[];
@@ -103,6 +106,7 @@ export function CalendarWidget({
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;
   cutoffDate?: Date | null;
+  isBenchmarkRoute?: boolean;
 }) {
   const { theme: thm } = useTheme();
 
@@ -202,7 +206,8 @@ export function CalendarWidget({
         circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
         txtClr = thm.textMuted;
       } else if (hasData) {
-        const bg = decileColor(thm.key, band);
+        const effectiveTheme = isBenchmarkRoute ? "benchmark" : thm.key;
+        const bg = decileColor(effectiveTheme, band);
         circleStyle = { background:bg, border:`2px solid ${bg}`, boxShadow:"0 2px 8px rgba(0,0,0,0.12)" };
         txtClr = textOn(bg);
       } else if (s) {
@@ -216,8 +221,9 @@ export function CalendarWidget({
       const ariaLabel = hasData && entry
         ? `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ` +
           `${Math.round(entry.tip.avgSpeed)} km/h. ` +
-          `Decile ${band + 1} of 10. ` +
-          `${Math.round(entry.tip.ratio * 100)}% of benchmark.`
+          (isBenchmarkRoute
+            ? `Benchmark reference. Day ${band + 1} of ${DECILES}.`
+            : `Decile ${band + 1} of 10. ${Math.round(entry.tip.ratio * 100)}% of benchmark.`)
         : isFuture ? `${dayLabel}. Future date.`
         : isBeyondCutoff ? `${dayLabel}. Beyond cutoff.`
         : s ? `${dayLabel}. No benchmark data for this day.`
@@ -317,7 +323,10 @@ export function CalendarWidget({
         <div style={{ display:"inline-block", padding:"4px 10px", marginBottom:12,
           background:v.color + "22", border:`1px solid ${v.color}44`, borderRadius:0,
           fontSize:13, fontWeight:700, color:v.color }}>
-          {d.band >= 0 ? `${v.text} · ${d.band + 1}/${DECILES}` : v.text}
+          {isBenchmarkRoute
+            ? (d.band >= 0 ? `Benchmark reference · ${d.band + 1}/${DECILES}` : "Benchmark reference")
+            : (d.band >= 0 ? `${v.text} · ${d.band + 1}/${DECILES}` : v.text)
+          }
         </div>
 
         <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
@@ -350,7 +359,7 @@ export function CalendarWidget({
                 background:`linear-gradient(90deg, ${pal[0]}, ${pal[4]}, ${pal[9]})` }} />
             </div>
             <div style={{ fontSize:12, color:tipMuted, marginBottom:8, fontWeight:600 }}>
-              {ratioPct}% of benchmark
+              {isBenchmarkRoute ? "benchmark reference" : `${ratioPct}% of benchmark`}
             </div>
           </>
         )}
@@ -373,7 +382,10 @@ export function CalendarWidget({
 
         {/* ── Footnote ── */}
         <div style={{ fontSize:12, color:tipMuted }}>
-          Compared to {benchmarkRouteLabel} · same conditions
+          {isBenchmarkRoute
+            ? `This is Bangalore's benchmark route · ${TOD_LABELS[tod]}`
+            : `Compared to ${benchmarkRouteLabel} · same conditions`
+          }
         </div>
 
         {/* Tail */}
@@ -435,7 +447,8 @@ export function CalendarWidget({
           if (!bmOk) { missingBm++; continue; }
           const ratio = s.avgSpeed / bm!.avgSpeed;
           const band = ratioToDecile(ratio);
-          rows.push({ dateKey, subjectSpeed: s.avgSpeed, bmSpeed: bm!.avgSpeed, ratio, band, color: decileColor(thm.key, band) });
+          const effectiveDbgTheme = isBenchmarkRoute ? "benchmark" : thm.key;
+          rows.push({ dateKey, subjectSpeed: s.avgSpeed, bmSpeed: bm!.avgSpeed, ratio, band, color: decileColor(effectiveDbgTheme, band) });
         }
 
         const dateFmt = (dk: string) => new Date(dk + "T12:00:00").toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short" });
@@ -456,6 +469,14 @@ export function CalendarWidget({
               <div><strong>Total dates with subject data:</strong> {subjDateKeys.length}</div>
               <div><strong>Total dates with benchmark data:</strong> {bmDateKeys.length}</div>
               <div><strong>Dates where benchmark data was missing:</strong> {missingBm}</div>
+              <div><strong>benchmark_self_comparison:</strong> <span style={{ color: isBenchmarkRoute ? "#DC2626" : "#16a34a", fontWeight: 700 }}>{String(isBenchmarkRoute)}</span></div>
+              <div><strong>calendar_render_mode:</strong> {isBenchmarkRoute ? "benchmark_reference_mode" : "relative_benchmark"}</div>
+              <div><strong>dot_palette_mode:</strong> {isBenchmarkRoute ? "benchmark_special_case" : "standard"}</div>
+              {isBenchmarkRoute && (
+                <div style={{ color: "#DC2626", fontWeight: 600, marginTop: 4 }}>
+                  ⚠ Selected route is the benchmark route; relative ratio is self-referential.
+                </div>
+              )}
             </div>
             <div style={{ marginBottom:10, padding:"8px", background:"#FEE2E2", border:"1px solid #FCA5A5" }}>
               <div style={{ fontWeight:700, marginBottom:4 }}>Empirical Thresholds ({bandThresholds.observationCount} observations, {bandThresholds.computedAt ? new Date(bandThresholds.computedAt).toLocaleString() : "not computed"})</div>

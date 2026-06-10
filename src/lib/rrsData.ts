@@ -62,11 +62,13 @@ export interface RrsContext {
   datesExpected: number;
   meanSpeed: number;
   speedSd: number;
+  cv: number;
   completeness: number;
   scoreStatus: string;
   volatilityLabel: string;
   routeLabel: string;
   windowEndDate: string;
+  isBenchmarkRoute: boolean;
   /** Per-day audit data for the selected route in the window */
   dailyAudit: RrsDailyAuditRow[];
   /** All routes in the window, for the collapsible debug table */
@@ -234,6 +236,7 @@ export function useRrsContext(
   routeDay: RrsRouteDay[],
   routeCode: string,
   tod: TimeOfDay,
+  benchmarkRouteLabel?: string,
 ): RrsContext | null {
   return useMemo(() => {
     if (!routeWindow.length || !routeCode) return null;
@@ -283,6 +286,8 @@ export function useRrsContext(
       };
     });
 
+    const isBenchmark = !!(benchmarkRouteLabel && row.route_label === benchmarkRouteLabel);
+
     return {
       rank: row.rrs_rank,
       totalRoutes: row.routes_in_window,
@@ -292,14 +297,16 @@ export function useRrsContext(
       datesExpected: row.dates_expected,
       meanSpeed: row.mean_speed_window,
       speedSd: row.speed_sd_window,
+      cv: row.speed_cv,
       completeness: row.completeness_ratio,
       scoreStatus: row.score_status,
       volatilityLabel: classifyVolatility(row.speed_cv),
       routeLabel: row.route_label || routeCode,
       windowEndDate: row.window_end_date,
+      isBenchmarkRoute: isBenchmark,
       dailyAudit,
       allRoutes: allRoutesForTod,
       rawData: row,
     };
-  }, [routeWindow, routeDay, routeCode, tod]);
+  }, [routeWindow, routeDay, routeCode, tod, benchmarkRouteLabel]);
 }

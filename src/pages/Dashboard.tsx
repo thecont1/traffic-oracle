@@ -905,7 +905,7 @@ function DashboardInner() {
   // ── R³S² data loading and context ─────────────────────────────
   const selectedRouteCode = selectedRouteInfo?.route_code ?? "";
   const rrsData = useRrsData();
-  const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod);
+  const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod, benchmarkRouteLabel);
   const bandThresholds = useEmpiricalBandThresholds(allRows, benchmarkRoutes);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
@@ -2392,7 +2392,10 @@ function DashboardInner() {
                             ✳︎ Good Days and Bad Days
                           </p>
                           <InfoTip thm={thm}>
-                            {TOOLTIP_CONTENT.dailyCalendar.body}
+                            {selectedRoute === benchmarkRouteLabel
+                              ? TOOLTIP_CONTENT.dailyCalendarBenchmark.body
+                              : TOOLTIP_CONTENT.dailyCalendar.body
+                            }
                           </InfoTip>
                           <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                             transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
@@ -2418,10 +2421,11 @@ function DashboardInner() {
                             widgetCalYear={widgetCalYear}
                             widgetCalMonth={widgetCalMonth}
                             onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
+                            isBenchmarkRoute={selectedRoute === benchmarkRouteLabel}
                           />
                           {/* ── R³S² Context Block ── */}
                           {rrsCtx && (
-                            <RrsContextBlock ctx={rrsCtx} theme={thm} />
+                            <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
                           )}
                           {/* ── R³S² DEBUG Block ── */}
                           {rrsCtx && (

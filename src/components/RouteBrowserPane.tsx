@@ -270,7 +270,7 @@ function RouteCard({
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         display: "flex", alignItems: "center", gap: 4,
       }}>
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{endpoints}</span>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{endpoints}</span>
         {card.map_link && (
           <a
             href={card.map_link}

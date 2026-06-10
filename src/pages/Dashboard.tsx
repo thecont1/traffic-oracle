@@ -827,24 +827,6 @@ function DashboardInner() {
   /* ── Route browser pane state ─────────────────────────────────── */
   const allRouteCardsRef = useRef<RouteCardData[] | null>(null);
   const [allRouteCards, setAllRouteCards] = useState<RouteCardData[] | null>(null);
-
-  // ── Enrich route cards with R³S² rank/score ───────────────────
-  // Build a lookup from route label → R³S² rank/score for the active TOD
-  const rrsLookup = useMemo(() => {
-    const map = new Map<string, { rank: number; score: number }>();
-    if (!rrsData.routeWindow.length) return map;
-    for (const row of rrsData.routeWindow) {
-      if (row.tod_bucket !== tod) continue;
-      const label = row.route_label;
-      if (!label) continue;
-      // If multiple rows for same label (shouldn't happen), keep the better rank
-      const existing = map.get(label);
-      if (!existing || row.rrs_rank < existing.rank) {
-        map.set(label, { rank: row.rrs_rank, score: row.rrs_rolling_score });
-      }
-    }
-    return map;
-  }, [rrsData.routeWindow, tod]);
   const prevBaselineKeyForPane = useRef("");
 
   useEffect(() => {
@@ -853,28 +835,19 @@ function DashboardInner() {
     const weatherChanged = effectiveWeatherMap.size > 0;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
     const computed = computeAllRouteCards(ttAllRows, routeOptions, routes, effectiveWeatherMap);
-    // Enrich with R³S² rank/score for the active TOD
-    const enriched = computed.map(card => {
-      const rrs = rrsLookup.get(card.label);
-      return {
-        ...card,
-        rrsRank: rrs?.rank ?? null,
-        rrsScore: rrs?.score ?? null,
-      };
-    });
-    allRouteCardsRef.current = enriched;
-    setAllRouteCards(enriched);
+    allRouteCardsRef.current = computed;
+    setAllRouteCards(computed);
     prevBaselineKeyForPane.current = key;
-  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, effectiveWeatherMap, rrsLookup]);
+  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, effectiveWeatherMap]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
   // When R³S² data is available, cycle in rank order (rank 1 first).
   // Otherwise fall back to allRouteCards order or alphabetical.
   const routeOrder = useMemo(() => {
-    if (allRouteCards && allRouteCards.length > 0) {
-      const hasRrs = allRouteCards.some(c => c.rrsRank != null);
+    if (enrichedRouteCards && enrichedRouteCards.length > 0) {
+      const hasRrs = enrichedRouteCards.some(c => c.rrsRank != null);
       if (hasRrs) {
-        return [...allRouteCards]
+        return [...enrichedRouteCards]
           .sort((a, b) => {
             if (a.rrsRank == null && b.rrsRank == null) return 0;
             if (a.rrsRank == null) return 1;
@@ -883,10 +856,10 @@ function DashboardInner() {
           })
           .map(c => c.label);
       }
-      return allRouteCards.map(c => c.label);
+      return enrichedRouteCards.map(c => c.label);
     }
     return routeOptions;
-  }, [allRouteCards, routeOptions]);
+  }, [enrichedRouteCards, routeOptions]);
 
   const routeOrderIdx = useMemo(() => {
     const idx = routeOrder.indexOf(selectedRoute);
@@ -948,6 +921,32 @@ function DashboardInner() {
   const selectedRouteCode = selectedRouteInfo?.route_code ?? "";
   const rrsData = useRrsData();
   const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod, benchmarkRouteLabel);
+
+  // ── R³S² route lookup for the active TOD ────────────────────
+  const rrsLookup = useMemo(() => {
+    const map = new Map<string, { rank: number; score: number }>();
+    if (!rrsData.routeWindow.length) return map;
+    for (const row of rrsData.routeWindow) {
+      if (row.tod_bucket !== tod) continue;
+      const label = row.route_label;
+      if (!label) continue;
+      const existing = map.get(label);
+      if (!existing || row.rrs_rank < existing.rank) {
+        map.set(label, { rank: row.rrs_rank, score: row.rrs_rolling_score });
+      }
+    }
+    return map;
+  }, [rrsData.routeWindow, tod]);
+
+  // Enriched cards: base cards + R³S² rank/score
+  const enrichedRouteCards = useMemo(() => {
+    if (!allRouteCards) return null;
+    if (rrsLookup.size === 0) return allRouteCards;
+    return allRouteCards.map(card => {
+      const rrs = rrsLookup.get(card.label);
+      return { ...card, rrsRank: rrs?.rank ?? null, rrsScore: rrs?.score ?? null };
+    });
+  }, [allRouteCards, rrsLookup]);
   const bandThresholds = useEmpiricalBandThresholds(allRows, benchmarkRoutes);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
@@ -2599,7 +2598,7 @@ function DashboardInner() {
           {!isMobile && citySource && (
             <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
               <RouteBrowserPane
-                cards={allRouteCards}
+                cards={enrichedRouteCards}
                 selectedRoute={selectedRoute}
                 onRouteSelect={handleRouteSelectFromPane}
                 dataTimestamp={effectiveDataTimestamp}
@@ -2620,7 +2619,7 @@ function DashboardInner() {
       {isMobile && citySource && (
         <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", zoom: ZOOM_STEPS[zoomIdx] }}>
           <RouteBrowserPane
-            cards={allRouteCards}
+            cards={enrichedRouteCards}
             selectedRoute={selectedRoute}
             onRouteSelect={handleRouteSelectFromPane}
             dataTimestamp={effectiveDataTimestamp}

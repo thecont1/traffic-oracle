@@ -783,6 +783,76 @@ export function useDailyStatsAllDay(
   }, [allRows, selectedRoute]);
 }
 
+/* ── Benchmark route identification ─────────────────────────────── */
+
+/** Rank routes by average distance per trip (descending).
+ *  The first element is the "longest" route — the natural benchmark.
+ *  Programmatically derived so it survives future route additions. */
+export function useBenchmarkRoutes(allRows: TrafficRow[]): string[] {
+  return useMemo(() => {
+    if (allRows.length === 0) return [];
+    const distSum   = new Map<string, number>();
+    const distCount = new Map<string, number>();
+    for (const r of allRows) {
+      distSum.set(r.label_short, (distSum.get(r.label_short) ?? 0) + r.distance_km);
+      distCount.set(r.label_short, (distCount.get(r.label_short) ?? 0) + 1);
+    }
+    const ranked = Array.from(distSum.entries())
+      .map(([label, total]) => ({ label, avgDist: total / (distCount.get(label) ?? 1) }))
+      .sort((a, b) => b.avgDist - a.avgDist);
+    return ranked.map(r => r.label);
+  }, [allRows]);
+}
+
+/** Daily stats for the benchmark route, using the same ToD filter.
+ *  When multiple benchmark candidates exist, the caller can pass
+ *  `benchmarkRoutes` (ranked descending by avg distance) so we pick
+ *  the first route that has rows for a given day. */
+export function useBenchmarkDailyStats(
+  allRows: TrafficRow[],
+  benchmarkRoutes: string[],
+  tod: TimeOfDay,
+): Map<string, DayStats> {
+  return useMemo(() => {
+    if (benchmarkRoutes.length === 0) return new Map<string, DayStats>();
+
+    // Pick the single best benchmark route from the ranked list.
+    // We use the one with the most rows (ties broken by distance rank).
+    const primary = benchmarkRoutes[0];
+    if (!primary) return new Map<string, DayStats>();
+
+    const rows = allRows.filter(
+      (r) => r.label_short === primary && matchesToD(r.hour, r.dayOfWeek, tod),
+    );
+    const byDay = new Map<string, TrafficRow[]>();
+    for (const r of rows) {
+      const d = r.timestamp;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const arr = byDay.get(key) ?? [];
+      arr.push(r);
+      byDay.set(key, arr);
+    }
+    const result = new Map<string, DayStats>();
+    for (const [dateKey, dayRows] of byDay.entries()) {
+      const speeds = dayRows.map((r) => r.speed_kmh);
+      const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
+      const sortedSpeeds = [...speeds].sort((a, b) => a - b);
+      result.set(dateKey, {
+        dateKey,
+        avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
+        p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
+        avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
+        p05Duration: Math.round(percentile(durations, 5) * 10) / 10,
+        medianDuration: Math.round(percentile(durations, 50) * 10) / 10,
+        p95Duration: Math.round(percentile(durations, WORST_CASE_PCT) * 10) / 10,
+        count: dayRows.length,
+      });
+    }
+    return result;
+  }, [allRows, benchmarkRoutes, tod]);
+}
+
 /** Full dataset weekly aggregates for a route + tod — no period cutoff.
  *  Used by the baseline slider so it always spans all available history. */
 export function useAllRouteWeeks(

@@ -6,21 +6,23 @@ import { matchesToD } from "@/lib/useTrafficData";
 
 const CIRCLE_D = 46;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const LOOKBACK_DAYS = 100;
-const MIN_LOOKBACK_ROWS = 3;
 const DECILES = 10;
 
-/* ── Percentile helper ──────────────────────────────────────────── */
-function pct(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = (p / 100) * (sorted.length - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+/* ── Ratio → decile mapping (fixed, absolute thresholds) ─────── */
+const RATIO_THRESHOLDS: [number, number][] = [
+  [0.15, 0], [0.25, 1], [0.35, 2], [0.45, 3], [0.55, 4],
+  [0.65, 5], [0.75, 6], [0.85, 7], [0.95, 8],
+];
+
+function ratioToDecile(ratio: number): number {
+  for (const [threshold, band] of RATIO_THRESHOLDS) {
+    if (ratio < threshold) return band;
+  }
+  return 9;
 }
 
 /* ── Centralised decile palettes ───────────────────────────────── */
-/*   band 0 = p0–p10 (slowest)  →  band 9 = p90–p100 (fastest)     */
+/*   band 0 = red/slowest  →  band 9 = green/fastest              */
 const PALETTES: Record<string, string[]> = {
   colour: ["#E8354A","#F0673A","#F5973A","#F7C244","#EDD97A","#C8DC6A","#96CC54","#5DB96A","#2EA878","#0D8C52"],
   gray:   ["#0a0a0a","#171717","#262626","#404040","#525252","#737373","#a3a3a3","#d4d4d4","#e5e5e5","#fafafa"],
@@ -55,22 +57,22 @@ const TOD_LABELS: Record<TimeOfDay, string> = {
   all:               "All Times",
 };
 
-/* ── Plain-language verdict (band-based) ──────────────────────── */
+/* ── Benchmark-relative verdict labels ─────────────────────────── */
 const VERDICT_TEXT = [
-  "Much slower than usual",  // band 0
-  "Much slower than usual",  // band 1
-  "Slower than usual",       // band 2
-  "Slower than usual",       // band 3
-  "Typical for this time",   // band 4
-  "Typical for this time",   // band 5
-  "Faster than usual",       // band 6
-  "Faster than usual",       // band 7
-  "Much faster than usual",  // band 8
-  "Much faster than usual",  // band 9
+  "One of the worst roads in the city today",   // band 0
+  "One of the worst roads in the city today",   // band 1
+  "Slower than it should be",                   // band 2
+  "Slower than it should be",                   // band 3
+  "Typical city traffic",                       // band 4
+  "Typical city traffic",                       // band 5
+  "Reasonably good for Bangalore",              // band 6
+  "Reasonably good for Bangalore",              // band 7
+  "Among the best in the city today",           // band 8
+  "Among the best in the city today",           // band 9
 ];
 
 function verdict(band: number, themeKey: string): { text: string; color: string } {
-  if (band < 0) return { text:"Not enough data", color:"#94A3B8" };
+  if (band < 0) return { text:"No benchmark data", color:"#94A3B8" };
   return { text: VERDICT_TEXT[band], color: decileColor(themeKey, band) };
 }
 
@@ -79,20 +81,22 @@ interface CellTip {
   id: string;
   dateKey: string;
   avgSpeed: number;
+  benchmarkSpeed: number;
+  ratio: number;
   band: number;
-  lookbackCount: number;
-  lookbackAvg: number;
-  diff: number;
 }
 
 export function CalendarWidget({
   dailyStats, allRows, selectedRoute, tod,
+  benchmarkDailyStats, benchmarkRouteLabel,
   widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
 }: {
   dailyStats: Map<string, DayStats>;
   allRows: TrafficRow[];
   selectedRoute: string;
   tod: TimeOfDay;
+  benchmarkDailyStats: Map<string, DayStats>;
+  benchmarkRouteLabel: string;
   widgetCalYear: number;
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;
@@ -120,69 +124,39 @@ export function CalendarWidget({
     return () => window.removeEventListener("keydown", onKey);
   }, [tip, hideTip]);
 
-  /* ── Rows grouped by day-of-week (route + ToD filtered) ─────── */
-  const rowsByDow = useMemo(() => {
-    const groups: TrafficRow[][] = [[], [], [], [], [], [], []];
-    for (const r of allRows) {
-      if (r.label_short !== selectedRoute) continue;
-      if (!matchesToD(r.hour, r.dayOfWeek, tod)) continue;
-      groups[r.dayOfWeek].push(r);
-    }
-    return groups;
-  }, [allRows, selectedRoute, tod]);
-
   /* ── Band + tooltip metadata for every date in dailyStats ───── */
   const dayBands = useMemo(() => {
     const result = new Map<string, { band: number; tip: CellTip }>();
     for (const [dateKey, s] of dailyStats.entries()) {
       if (s.avgSpeed <= 0) continue;
 
-      const dow = new Date(dateKey + "T00:00:00").getDay();
-      const lookbackEnd = new Date(dateKey + "T00:00:00").getTime();
-      const lookbackStart = lookbackEnd - LOOKBACK_DAYS * 86400000;
-
-      const speeds: number[] = [];
-      for (const r of rowsByDow[dow]) {
-        const t = r.timestamp.getTime();
-        if (t >= lookbackStart && t < lookbackEnd) {
-          speeds.push(r.speed_kmh);
-        }
-      }
-
-      if (speeds.length < MIN_LOOKBACK_ROWS) {
-        result.set(dateKey, {
-          band: -1,
-          tip: { id:`tip-${dateKey}`, dateKey, avgSpeed:s.avgSpeed,
-            band:-1, lookbackCount:speeds.length, lookbackAvg:0, diff:0 },
-        });
-        continue;
-      }
-
-      speeds.sort((a, b) => a - b);
-      const boundaries: number[] = [];
-      for (let i = 1; i < DECILES; i++) boundaries.push(pct(speeds, i * 10));
-      const lookbackAvg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
-
-      let band = DECILES - 1;
-      for (let i = 0; i < boundaries.length; i++) {
-        if (s.avgSpeed < boundaries[i]) { band = i; break; }
-      }
+      const bm = benchmarkDailyStats.get(dateKey);
+      const bmOk = bm && bm.avgSpeed > 0;
+      const bmSpeed = bmOk ? bm!.avgSpeed : 0;
+      const ratio = bmOk ? s.avgSpeed / bm!.avgSpeed : 0;
+      const band = bmOk ? ratioToDecile(ratio) : -1;
 
       result.set(dateKey, {
         band,
-        tip: { id:`tip-${dateKey}`, dateKey, avgSpeed:s.avgSpeed,
-          band, lookbackCount:speeds.length, lookbackAvg, diff:s.avgSpeed - lookbackAvg },
+        tip: {
+          id: `tip-${dateKey}`,
+          dateKey,
+          avgSpeed: s.avgSpeed,
+          benchmarkSpeed: bmSpeed,
+          ratio,
+          band,
+        },
       });
     }
     return result;
-  }, [dailyStats, rowsByDow]);
+  }, [dailyStats, benchmarkDailyStats]);
 
   /* ── Calendar math ──────────────────────────────────────────── */
   const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
   const firstDay   = (new Date(widgetCalYear, widgetCalMonth, 1).getDay() + 6) % 7;
   const daysInMo   = new Date(widgetCalYear, widgetCalMonth + 1, 0).getDate();
   const pal        = paletteFor(thm.key);
-  const legendAria = `Legend: 10 speed deciles from p0–p10 (slowest, red) to p90–p100 (fastest, green)`;
+  const legendAria = `Legend: 10 speed deciles from red (slowest, worst relative to benchmark) to green (fastest, closest to benchmark)`;
 
   /* ── Memoised cells ─────────────────────────────────────────── */
   const cells = useMemo(() => {
@@ -241,10 +215,10 @@ export function CalendarWidget({
         ? `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ` +
           `${Math.round(entry.tip.avgSpeed)} km/h. ` +
           `Decile ${band + 1} of 10. ` +
-          `${entry.tip.diff >= 0 ? "+" : ""}${Math.round(entry.tip.diff)} km/h vs baseline.`
+          `${Math.round(entry.tip.ratio * 100)}% of benchmark.`
         : isFuture ? `${dayLabel}. Future date.`
         : isBeyondCutoff ? `${dayLabel}. Beyond cutoff.`
-        : s ? `${dayLabel}. Insufficient lookback data.`
+        : s ? `${dayLabel}. No benchmark data for this day.`
         : `${dayLabel}. No data.`;
 
       return (
@@ -286,10 +260,7 @@ export function CalendarWidget({
     if (!tip) return null;
     const d = tip.data;
     const v = verdict(d.band, thm.key);
-    const diffDir = d.diff >= 0 ? "faster" : "slower";
     const isGray = thm.key === "gray";
-    const dowName = ["Sundays","Mondays","Tuesdays","Wednesdays","Thursdays","Fridays","Saturdays"]
-      [new Date(d.dateKey + "T12:00:00").getDay()];
 
     /* Theme-adaptive tooltip surface */
     const tipBg      = isGray ? "#FAFAFA" : "#0F172A";
@@ -298,6 +269,9 @@ export function CalendarWidget({
     const tipBorder  = isGray ? "#D4D4D4" : "#334155";
     const tipShadow  = isGray ? "2px 2px 0 #000" : "4px 4px 0 rgba(0,0,0,0.35)";
     const tipDivider = isGray ? "#E5E5E5" : "#1E293B";
+
+    const ratioPct = d.benchmarkSpeed > 0 ? Math.round(d.ratio * 100) : 0;
+    const fillPct  = Math.min(100, Math.max(0, ratioPct));
 
     return (
       <div
@@ -346,29 +320,42 @@ export function CalendarWidget({
 
         <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
 
-        {/* ── Avg speed (large) ── */}
-        <div style={{ fontSize:29, fontWeight:800, lineHeight:1.1, marginBottom:2 }}>
-          {Math.round(d.avgSpeed)} <span style={{ fontSize:14, fontWeight:600, color:tipMuted }}>km/h</span>
-        </div>
-        <div style={{ color:tipMuted, fontSize:13, marginBottom:12 }}>
-          avg speed this day
-        </div>
-
-        <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
-
-        {/* ── Delta line ── */}
-        {d.lookbackCount > 0 && (
-          <div style={{ marginBottom:7 }}>
-            <span style={{ fontWeight:700, color:v.color }}>
-              {d.diff >= 0 ? "+" : ""}{Math.round(d.diff)} km/h {diffDir}
-            </span>
-            <span style={{ color:tipMuted }}> than typical ({Math.round(d.lookbackAvg)} km/h)</span>
+        {/* ── Speed comparison ── */}
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+          <div>
+            <div style={{ fontSize:29, fontWeight:800, lineHeight:1.1 }}>
+              {Math.round(d.avgSpeed)}
+              <span style={{ fontSize:14, fontWeight:600, color:tipMuted }}> km/h</span>
+            </div>
+            <div style={{ color:tipMuted, fontSize:12 }}>this route</div>
           </div>
+          {d.benchmarkSpeed > 0 && (
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:29, fontWeight:800, lineHeight:1.1 }}>
+                {Math.round(d.benchmarkSpeed)}
+                <span style={{ fontSize:14, fontWeight:600, color:tipMuted }}> km/h</span>
+              </div>
+              <div style={{ color:tipMuted, fontSize:12 }}>benchmark</div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Ratio bar ── */}
+        {d.benchmarkSpeed > 0 && (
+          <>
+            <div style={{ margin:"6px 0 4px", height:6, background:tipDivider, borderRadius:3, overflow:"hidden" }}>
+              <div style={{ width:`${fillPct}%`, height:"100%", borderRadius:3,
+                background:`linear-gradient(90deg, ${pal[0]}, ${pal[4]}, ${pal[9]})` }} />
+            </div>
+            <div style={{ fontSize:12, color:tipMuted, marginBottom:8, fontWeight:600 }}>
+              {ratioPct}% of benchmark
+            </div>
+          </>
         )}
 
         {/* ── Band strip ── */}
         {d.band >= 0 && (
-          <div style={{ display:"flex", gap:1, marginBottom:12 }}>
+          <div style={{ display:"flex", gap:1, marginBottom:8 }}>
             {pal.map((c, i) => (
               <div key={i} style={{
                 flex:1, height:10, background:c,
@@ -383,11 +370,9 @@ export function CalendarWidget({
         <div style={{ height:1, background:tipDivider, marginBottom:10 }} />
 
         {/* ── Footnote ── */}
-        {d.lookbackCount > 0 && (
-          <div style={{ fontSize:12, color:tipMuted }}>
-            Based on {d.lookbackCount} similar {dowName}
-          </div>
-        )}
+        <div style={{ fontSize:12, color:tipMuted }}>
+          Compared to {benchmarkRouteLabel} · same conditions
+        </div>
 
         {/* Tail */}
         <div style={{

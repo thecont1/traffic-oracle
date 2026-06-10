@@ -9,7 +9,7 @@
  *   4. Cells with data have a coloured background.
  *   5. Cells without data have a dashed border.
  *   6. Clicking a date with data fires onDateClick.
- *   7. Insufficient lookback renders dashed border.
+ *   7. No benchmark data renders dashed border.
  */
 
 import { describe, it, expect, beforeEach } from "bun:test";
@@ -24,10 +24,6 @@ function ds(avgSpeed: number, overrides: Partial<DayStats> = {}): DayStats {
   return {
     dateKey: "",
     avgSpeed,
-    minSpeed: avgSpeed - 5,
-    maxSpeed: avgSpeed + 5,
-    minTime: "8:00 AM",
-    maxTime: "10:00 PM",
     p05Speed: avgSpeed - 8,
     p95Speed: avgSpeed + 8,
     avgDuration: 0,
@@ -65,14 +61,13 @@ function buildStats(speed: number, count: number, year: number, month: number) {
   return map;
 }
 
-function buildRows(speed: number, count: number, year: number, month: number): TrafficRow[] {
-  const rows: TrafficRow[] = [];
-  const base = new Date(year, month, 15).getTime();
-  for (let i = 1; i <= count; i++) {
-    const d = new Date(base - i * 86400000);
-    rows.push(makeRow(d.toISOString().slice(0, 10), speed, 10));
+/** Build benchmark daily stats with a given speed for the same dates. */
+function buildBenchmarkStats(subjectStats: Map<string, DayStats>, bmSpeed: number) {
+  const map = new Map<string, DayStats>();
+  for (const [key, s] of subjectStats) {
+    map.set(key, { ...ds(bmSpeed), dateKey: key });
   }
-  return rows;
+  return map;
 }
 
 function renderCal(
@@ -80,16 +75,19 @@ function renderCal(
   year?: number,
   month?: number,
   onDateClick?: (dk: string) => void,
-  allRows?: TrafficRow[],
+  benchmarkDailyStats?: Map<string, DayStats>,
 ) {
   const now = new Date();
+  const bmStats = benchmarkDailyStats ?? buildBenchmarkStats(dailyStats, 50);
   return render(
     <ThemeProvider initialTheme="colour">
       <CalendarWidget
         dailyStats={dailyStats}
-        allRows={allRows ?? []}
+        allRows={[]}
         selectedRoute="Test Route"
         tod="all"
+        benchmarkDailyStats={bmStats}
+        benchmarkRouteLabel="Benchmark Route"
         widgetCalYear={year ?? now.getFullYear()}
         widgetCalMonth={month ?? now.getMonth()}
         onDateClick={onDateClick}
@@ -105,12 +103,10 @@ describe("CalendarWidget integration", () => {
 
   it("renders 42 cells in the calendar grid", () => {
     const stats = buildStats(30, 30, 2025, 3);
-    const rows = buildRows(30, 30, 2025, 3);
-    const { container } = renderCal(stats, 2025, 3, undefined, rows);
+    const { container } = renderCal(stats, 2025, 3);
 
     const grid = container.querySelector('[role="grid"]');
     expect(grid).toBeTruthy();
-    // Count gridcells (including empty spacer cells)
     const gridcells = grid!.querySelectorAll('[role="gridcell"]');
     expect(gridcells.length).toBe(42);
   });
@@ -123,6 +119,7 @@ describe("CalendarWidget integration", () => {
       expect(screen.getByText(day)).toBeTruthy();
     }
   });
+
   it("shows legend with Slow/Fast labels", () => {
     const stats = buildStats(30, 30, 2025, 3);
     renderCal(stats, 2025, 3);
@@ -133,15 +130,14 @@ describe("CalendarWidget integration", () => {
 
   it("dates with data get a coloured background", () => {
     const stats = buildStats(30, 30, 2025, 3);
-    const rows = buildRows(30, 30, 2025, 3);
+    const bmStats = buildBenchmarkStats(stats, 50);
     stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
-    rows.push(makeRow("2025-04-10", 35));
-    renderCal(stats, 2025, 3, undefined, rows);
+    bmStats.set("2025-04-10", { ...ds(50), dateKey: "2025-04-10" });
+    renderCal(stats, 2025, 3, undefined, bmStats);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
     expect(cell).toBeTruthy();
     const circle = cell!.querySelector("div")!;
-    // Should have a solid fill (not transparent, not dashed)
     expect(circle.style.background).not.toBe("transparent");
     expect(circle.style.background).not.toBe("");
     expect(circle.style.border).toContain("solid");
@@ -154,7 +150,7 @@ describe("CalendarWidget integration", () => {
     const stats = new Map<string, DayStats>();
     const d1Key = `${year}-${String(month + 1).padStart(2, "0")}-01`;
     stats.set(d1Key, { ...ds(30), dateKey: d1Key });
-    renderCal(stats, stats, year, month);
+    renderCal(stats, year, month);
 
     const day5 = now.getDate() > 5 ? (() => {
       const spans = document.querySelectorAll("span");
@@ -175,10 +171,10 @@ describe("CalendarWidget integration", () => {
   it("fires onDateClick when clicking a date with data", () => {
     const clicked: string[] = [];
     const stats = buildStats(30, 30, 2025, 3);
-    const rows = buildRows(30, 30, 2025, 3);
+    const bmStats = buildBenchmarkStats(stats, 50);
     stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
-    rows.push(makeRow("2025-04-10", 35));
-    renderCal(stats, 2025, 3, (dk) => clicked.push(dk), rows);
+    bmStats.set("2025-04-10", { ...ds(50), dateKey: "2025-04-10" });
+    renderCal(stats, 2025, 3, (dk) => clicked.push(dk), bmStats);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
     expect(cell).toBeTruthy();
@@ -186,18 +182,18 @@ describe("CalendarWidget integration", () => {
     expect(clicked).toEqual(["2025-04-10"]);
   });
 
-  it("insufficient lookback data renders dashed border", () => {
+  it("no benchmark data renders dashed border", () => {
     const stats = new Map<string, DayStats>();
     stats.set("2025-04-10", { ...ds(30), dateKey: "2025-04-10" });
-    // April 2025, no rows → insufficient lookback
-    renderCal(stats, 2025, 3);
+    // Empty benchmark map → no benchmark data for any day
+    const emptyBm = new Map<string, DayStats>();
+    renderCal(stats, 2025, 3, undefined, emptyBm);
 
-    // Find the cell for day 10 by its aria-label (contains "Insufficient")
     const allCells = document.querySelectorAll('[role="gridcell"]');
     let day10Cell: HTMLElement | null = null;
     allCells.forEach(c => {
       const label = c.getAttribute("aria-label") ?? "";
-      if (label.includes("Insufficient")) day10Cell = c as HTMLElement;
+      if (label.includes("No benchmark")) day10Cell = c as HTMLElement;
     });
     expect(day10Cell).toBeTruthy();
     if (day10Cell) {
@@ -209,8 +205,7 @@ describe("CalendarWidget integration", () => {
 
   it("calendar has accessible grid role", () => {
     const stats = buildStats(30, 30, 2025, 3);
-    const rows = buildRows(30, 30, 2025, 3);
-    const { container } = renderCal(stats, 2025, 3, undefined, rows);
+    const { container } = renderCal(stats, 2025, 3);
 
     expect(container.querySelector('[role="grid"]')).toBeTruthy();
     expect(container.querySelector('[role="columnheader"]')).toBeTruthy();
@@ -219,16 +214,16 @@ describe("CalendarWidget integration", () => {
 
   it("data cells have aria-label with speed and decile info", () => {
     const stats = buildStats(30, 30, 2025, 3);
-    const rows = buildRows(30, 30, 2025, 3);
+    const bmStats = buildBenchmarkStats(stats, 50);
     stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
-    rows.push(makeRow("2025-04-10", 35));
-    renderCal(stats, 2025, 3, undefined, rows);
+    bmStats.set("2025-04-10", { ...ds(50), dateKey: "2025-04-10" });
+    renderCal(stats, 2025, 3, undefined, bmStats);
 
     const cell = document.querySelector('[data-dk="2025-04-10"]');
     expect(cell).toBeTruthy();
     const ariaLabel = cell!.getAttribute("aria-label") ?? "";
     expect(ariaLabel).toContain("km/h");
     expect(ariaLabel).toContain("Decile");
-    expect(ariaLabel).toContain("vs baseline");
+    expect(ariaLabel).toContain("benchmark");
   });
 });

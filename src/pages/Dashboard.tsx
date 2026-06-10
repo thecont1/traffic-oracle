@@ -12,6 +12,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
+  useBenchmarkRoutes, useBenchmarkDailyStats,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
@@ -892,6 +893,9 @@ function DashboardInner() {
 
   const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
   const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
+  const benchmarkRoutes = useBenchmarkRoutes(allRows);
+  const benchmarkDailyStats = useBenchmarkDailyStats(allRows, benchmarkRoutes, tod);
+  const benchmarkRouteLabel = benchmarkRoutes[0] ?? "the longest route";
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -2395,6 +2399,8 @@ function DashboardInner() {
                           allRows={allRows}
                           selectedRoute={selectedRoute}
                           tod={tod}
+                          benchmarkDailyStats={benchmarkDailyStats}
+                          benchmarkRouteLabel={benchmarkRouteLabel}
                           cutoffDate={tt.isActive ? tt.simulatedNow : null}
                           widgetCalYear={widgetCalYear}
                           widgetCalMonth={widgetCalMonth}

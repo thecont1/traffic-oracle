@@ -149,9 +149,9 @@ export const TOOLTIP_CONTENT = {
     body: [
       "What am I looking at?",
       "",
-      "Each circle is a day on this calendar. Its colour shows how fast or slow traffic was compared to similar days — green means faster than usual, red means slower than usual.",
+      "Each circle is a day on this calendar. Its colour shows how this route compared to the city's longest road (the benchmark) on the same day and time — green means it kept pace with the best road, red means it fell far behind.",
       "",
-      "• Hover any filled day to see that day's speed and how it ranks historically",
+      "• Hover any filled day to see the speed ratio, side-by-side comparison, and a verdict",
       "• Click any past day to open it in the Time Traveller for a detailed breakdown",
       "",
       "Days shown with a dashed outline are today or in the future — no data yet.",

@@ -387,6 +387,7 @@ function DashboardInner() {
 
   /* route dropdown */
   const [routeDropdownOpen, setRouteDropdownOpen] = useState(false);
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
   const routeDropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1114,8 +1115,8 @@ function DashboardInner() {
         {`Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${lastDataDate ? fmtShortDate(lastDataDate.toISOString()) : fmtShortDate(lastDate)}) · `}
         {routeMapLink
           ? <a href={routeMapLink} target="_blank" rel="noopener noreferrer"
-              style={{ color: "inherit", textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: "2px" }}>
-              {routeEndpoints}
+              style={{ color: "inherit", textDecorationLine: "underline", textDecorationStyle: "solid", textUnderlineOffset: "3px", fontWeight: 600 }}>
+              {routeEndpoints} <span style={{ fontSize: 9 }}>&#x2197;</span>
             </a>
           : routeEndpoints
         }
@@ -1278,6 +1279,13 @@ function DashboardInner() {
                     }}>
                       {sortedRoutes.map((route) => {
                         const rrs = rrsLookup.get(route.label_short);
+                        const isSelected = route.label_short === selectedRoute;
+                        const isHovered = route.label_short === hoveredRoute;
+                        const bg = isSelected
+                          ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
+                          : isHovered
+                          ? (thm.key === "colour" ? "rgba(34,211,238,0.06)" : thm.key === "pastel" ? "rgba(58,134,200,0.05)" : "rgba(0,0,0,0.03)")
+                          : "transparent";
                         return (
                           <div
                             key={route.route_code}
@@ -1285,6 +1293,8 @@ function DashboardInner() {
                             tabIndex={0}
                             onClick={() => { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); }}
                             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); } }}
+                            onMouseEnter={() => setHoveredRoute(route.label_short)}
+                            onMouseLeave={() => setHoveredRoute(null)}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -1293,14 +1303,13 @@ function DashboardInner() {
                               padding: "7px 12px",
                               minHeight: 32,
                               border: "none",
-                              background: route.label_short === selectedRoute
-                                ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
-                                : "transparent",
+                              background: bg,
                               cursor: "pointer",
                               fontSize: 12,
-                              fontWeight: route.label_short === selectedRoute ? 700 : 400,
+                              fontWeight: isSelected ? 700 : 400,
                               color: thm.textPrimary,
                               textAlign: "left",
+                              transition: "background 0.1s",
                             }}
                           >
                             <span style={{

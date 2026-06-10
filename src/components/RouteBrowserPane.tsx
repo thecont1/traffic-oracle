@@ -280,7 +280,9 @@ function RouteCard({
             style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0, textDecoration: "none", lineHeight: 1 }}
             title="Open in Google Maps"
           >&#x2197;</a>
-        ) : null}
+        ) : (
+          <span style={{ fontSize: 8, color: "#f00", flexShrink: 0 }}>no-map-link</span>
+        )}
       </div>
 
       {/* Row 2b: weather strip */}

@@ -1281,10 +1281,8 @@ function DashboardInner() {
                         const rrs = rrsLookup.get(route.label_short);
                         const isSelected = route.label_short === selectedRoute;
                         const isHovered = route.label_short === hoveredRoute;
-                        const bg = isSelected
+                        const bg = isSelected || isHovered
                           ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
-                          : isHovered
-                          ? (thm.key === "colour" ? "rgba(34,211,238,0.06)" : thm.key === "pastel" ? "rgba(58,134,200,0.05)" : "rgba(0,0,0,0.03)")
                           : "transparent";
                         return (
                           <div

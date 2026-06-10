@@ -24,6 +24,7 @@ interface PaneProps {
   lastUpdated: Date | null;
   ttActive?: boolean;
   ttSimulatedNow?: Date | null;
+  mapLinkByLabel?: Map<string, string>;
 }
 
 /* ── Relative time label ─────────────────────────────────────── */
@@ -50,13 +51,14 @@ function ttFormatPane(dt: Date): string {
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
 function SortedCardList({
-  cards, thm, selectedRoute, onRouteSelect, ttActive,
+  cards, thm, selectedRoute, onRouteSelect, ttActive, mapLinkByLabel,
 }: {
   cards: RouteCardData[];
   thm: AppTheme;
   selectedRoute: string;
   onRouteSelect: (label: string) => void;
   ttActive?: boolean;
+  mapLinkByLabel?: Map<string, string>;
 }) {
   // Sort ascending by liveSpeed; nulls sink to bottom
   const sorted = useMemo(() => {
@@ -115,6 +117,7 @@ function SortedCardList({
             onSelect={onRouteSelect}
             isLast={i === sorted.length - 1}
             ttActive={ttActive}
+            mapLink={mapLinkByLabel?.get(card.label)}
           />
         </div>
       ))}
@@ -140,11 +143,11 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect, isLast, ttActive,
+  card, thm, isSelected, onSelect, isLast, ttActive, mapLink,
 }: {
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
-  ttActive?: boolean;
+  ttActive?: boolean; mapLink?: string;
 }) {
   const [hovered, setHovered] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,18 +274,16 @@ function RouteCard({
         display: "flex", alignItems: "center", gap: 4,
       }}>
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{endpoints}</span>
-        {card.map_link ? (
+        {mapLink ? (
           <a
-            href={card.map_link}
+            href={mapLink}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             style={{ fontSize: 11, color: thm.textMuted, flexShrink: 0, textDecoration: "none", lineHeight: 1 }}
             title="Open in Google Maps"
           >&#x2197;</a>
-        ) : (
-          <span style={{ fontSize: 8, color: "#f00", flexShrink: 0 }}>no-map-link</span>
-        )}
+        ) : null}
       </div>
 
       {/* Row 2b: weather strip */}
@@ -352,7 +353,7 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel }: PaneProps) {
   const RAIL_WIDTH = 44;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
@@ -496,6 +497,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 selectedRoute={selectedRoute}
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
+                mapLinkByLabel={mapLinkByLabel}
               />
             )}
           </div>
@@ -554,7 +556,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 }
 
 /* ── Mobile bottom sheet ───────────────────────────────────────── */
-function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
+function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel }: PaneProps) {
   return (
     <>
       {isOpen && (
@@ -611,6 +613,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 selectedRoute={selectedRoute}
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
+                mapLinkByLabel={mapLinkByLabel}
               />
             )}
           </div>
@@ -648,6 +651,7 @@ interface Props {
   paneWidth?: number;
   ttActive?: boolean;
   ttSimulatedNow?: Date | null;
+  mapLinkByLabel?: Map<string, string>;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -680,6 +684,7 @@ export default function RouteBrowserPane(props: Props) {
     onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle, paneWidth,
     dataTimestamp: props.dataTimestamp, lastUpdated: props.lastUpdated,
     ttActive: props.ttActive, ttSimulatedNow: props.ttSimulatedNow,
+    mapLinkByLabel: props.mapLinkByLabel,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

@@ -1048,6 +1048,15 @@ function DashboardInner() {
     });
   }, [allRouteCards, rrsLookup]);
 
+  /* ── Map link lookup by route label ─────────────────────────── */
+  const mapLinkByLabel = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of routes) {
+      if (r.map_link) m.set(r.label_short, r.map_link);
+    }
+    return m;
+  }, [routes]);
+
   /* ── Routes sorted by R³S² rank for the Route Observer dropdown ── */
   const sortedRoutes = useMemo(() => {
     if (rrsLookup.size === 0) return routes;
@@ -2619,6 +2628,7 @@ function DashboardInner() {
                 paneWidth={cfg.route_pane.width}
                 ttActive={tt.isActive}
                 ttSimulatedNow={tt.simulatedNow}
+                mapLinkByLabel={mapLinkByLabel}
               />
             </div>
           )}
@@ -2637,6 +2647,7 @@ function DashboardInner() {
             mobile={true}
             ttActive={tt.isActive}
             ttSimulatedNow={tt.simulatedNow}
+            mapLinkByLabel={mapLinkByLabel}
           />
         </div>
       )}

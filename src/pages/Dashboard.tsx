@@ -1298,24 +1298,23 @@ function DashboardInner() {
                             <span style={{
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
                               width: 20, height: 18,
-                              border: "1px solid " + (rrs ? thm.textMuted : thm.surface),
+                              border: "1px solid " + thm.textMuted,
                               borderRadius: 2,
                               fontSize: 10, fontWeight: 800, color: thm.textMuted,
                               flexShrink: 0,
+                              opacity: rrs ? 1 : 0.4,
                             }}>
                               {rrs ? rrs.rank : ""}
                             </span>
                             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {route.label_short}
                             </span>
-                            {rrs && (
-                              <span style={{
-                                fontSize: 10, fontWeight: 600, flexShrink: 0,
-                                color: rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted,
-                              }}>
-                                {rrs.score > 0 ? "+" : ""}{rrs.score.toFixed(0)}
-                              </span>
-                            )}
+                            <span style={{
+                              fontSize: 10, fontWeight: 600, flexShrink: 0,
+                              color: rrs ? (rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted) : "#ef4444",
+                            }}>
+                              {rrs ? (rrs.score > 0 ? "+" : "") + rrs.score.toFixed(0) : "\u2014"}
+                            </span>
                             {route.map_link && (
                               <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>↗</span>
                             )}

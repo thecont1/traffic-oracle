@@ -1,24 +1,24 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "@/lib/ThemeContext";
-import type { DayStats, TrafficRow, TimeOfDay } from "@/lib/useTrafficData";
+import type { DayStats, TrafficRow, TimeOfDay, BandThresholdsResult } from "@/lib/useTrafficData";
 import { matchesToD } from "@/lib/useTrafficData";
 
 const CIRCLE_D = 46;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DECILES = 10;
 
-/* ── Ratio → decile mapping (fixed, absolute thresholds) ─────── */
-const RATIO_THRESHOLDS: [number, number][] = [
-  [0.15, 0], [0.25, 1], [0.35, 2], [0.45, 3], [0.55, 4],
-  [0.65, 5], [0.75, 6], [0.85, 7], [0.95, 8],
-];
+/* ── Ratio → decile mapping (dynamic empirical thresholds) ────── */
+/** Default fallback thresholds (same as old fixed values). */
+const DEFAULT_THRESHOLDS = [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
 
-function ratioToDecile(ratio: number): number {
-  for (const [threshold, band] of RATIO_THRESHOLDS) {
-    if (ratio < threshold) return band;
+/** Map a ratio to a band index 0–9 using the given threshold boundaries.
+ *  thresholds[i] is the lower bound of band i; band 9 is everything >= thresholds[9]. */
+function ratioToDecile(ratio: number, thresholds: number[] = DEFAULT_THRESHOLDS): number {
+  for (let i = 1; i < thresholds.length; i++) {
+    if (ratio < thresholds[i]) return i - 1;
   }
-  return 9;
+  return thresholds.length - 1;
 }
 
 /* ── Centralised decile palettes ───────────────────────────────── */
@@ -89,6 +89,7 @@ interface CellTip {
 export function CalendarWidget({
   dailyStats, allRows, selectedRoute, tod,
   benchmarkDailyStats, benchmarkRouteLabel,
+  bandThresholds,
   widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
 }: {
   dailyStats: Map<string, DayStats>;
@@ -97,6 +98,7 @@ export function CalendarWidget({
   tod: TimeOfDay;
   benchmarkDailyStats: Map<string, DayStats>;
   benchmarkRouteLabel: string;
+  bandThresholds: BandThresholdsResult;
   widgetCalYear: number;
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;
@@ -134,7 +136,7 @@ export function CalendarWidget({
       const bmOk = bm && bm.avgSpeed > 0;
       const bmSpeed = bmOk ? bm!.avgSpeed : 0;
       const ratio = bmOk ? s.avgSpeed / bm!.avgSpeed : 0;
-      const band = bmOk ? ratioToDecile(ratio) : -1;
+      const band = bmOk ? ratioToDecile(ratio, bandThresholds.thresholds) : -1;
 
       result.set(dateKey, {
         band,
@@ -454,6 +456,13 @@ export function CalendarWidget({
               <div><strong>Total dates with subject data:</strong> {subjDateKeys.length}</div>
               <div><strong>Total dates with benchmark data:</strong> {bmDateKeys.length}</div>
               <div><strong>Dates where benchmark data was missing:</strong> {missingBm}</div>
+            </div>
+            <div style={{ marginBottom:10, padding:"8px", background:"#FEE2E2", border:"1px solid #FCA5A5" }}>
+              <div style={{ fontWeight:700, marginBottom:4 }}>Empirical Thresholds ({bandThresholds.observationCount} observations, {bandThresholds.computedAt ? new Date(bandThresholds.computedAt).toLocaleString() : "not computed"})</div>
+              <div style={{ fontSize:10, lineHeight:1.6 }}>
+                <div><strong>BAND_THRESHOLDS:</strong> [{bandThresholds.thresholds.map(t => t.toFixed(3)).join(", ")}]</div>
+                <div><strong>Quantiles:</strong> p1={bandThresholds.quantiles.p1.toFixed(3)} p5={bandThresholds.quantiles.p5.toFixed(3)} p15={bandThresholds.quantiles.p15.toFixed(3)} p30={bandThresholds.quantiles.p30.toFixed(3)} p45={bandThresholds.quantiles.p45.toFixed(3)} p60={bandThresholds.quantiles.p60.toFixed(3)} p75={bandThresholds.quantiles.p75.toFixed(3)} p85={bandThresholds.quantiles.p85.toFixed(3)} p95={bandThresholds.quantiles.p95.toFixed(3)}</div>
+              </div>
             </div>
             {rows.length > 0 && (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:10.5 }}>

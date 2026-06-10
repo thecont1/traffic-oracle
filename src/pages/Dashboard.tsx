@@ -1297,10 +1297,14 @@ function DashboardInner() {
                           >
                             {rrs && (
                               <span style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 20, height: 18,
+                                border: "1px solid " + thm.textMuted,
+                                borderRadius: 2,
                                 fontSize: 10, fontWeight: 800, color: thm.textMuted,
-                                minWidth: 22, textAlign: "right",
+                                flexShrink: 0,
                               }}>
-                                #{rrs.rank}
+                                {rrs.rank}
                               </span>
                             )}
                             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

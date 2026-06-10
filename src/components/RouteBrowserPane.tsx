@@ -117,7 +117,6 @@ function SortedCardList({
             onSelect={onRouteSelect}
             isLast={i === sorted.length - 1}
             ttActive={ttActive}
-            mapLink={mapLinkByLabel?.get(card.label)}
           />
         </div>
       ))}
@@ -143,11 +142,11 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect, isLast, ttActive, mapLink,
+  card, thm, isSelected, onSelect, isLast, ttActive,
 }: {
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
-  ttActive?: boolean; mapLink?: string;
+  ttActive?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,24 +194,32 @@ function RouteCard({
     ? `${card.origin} → ${card.destination}`
     : card.origin;
   
-  // Status text color - matching the demo scheme exactly
+  // Status text color - matching mobile exactly
   const getStatusColor = () => {
-    if (thm.key === 'gray') {
-      // Scale me gray: use weight/contrast, no hue
+    if (thm.key === 'gray')
       return card.status === 'as-expected' ? '#555555'
            : card.status === 'faster' || card.status === 'unusually-fast' ? '#2D8A4E'
            : '#C0392B';
-    }
-    if (thm.key === 'pastel') {
+    if (thm.key === 'pastel')
       return card.status === 'as-expected' ? '#546E7A'
            : card.status === 'faster' || card.status === 'unusually-fast' ? '#2E7D32'
            : '#D84315';
-    }
-    // Colour me Surprised
     return card.status === 'as-expected' ? '#60A5FA'
          : card.status === 'faster' || card.status === 'unusually-fast' ? '#34D399'
          : '#F87171';
   };
+
+  // Trend label (matching mobile)
+  const trend = (card.liveSpeed !== null && card.prevSpeed !== null && !ttActive)
+    ? (card.liveSpeed === card.prevSpeed ? "no change" : card.liveSpeed > card.prevSpeed ? "improving" : "getting worse")
+    : null;
+
+  // Diamond position for status text alignment (matching mobile)
+  const livePos = card.liveSpeed !== null && card.cityMax > card.cityMin
+    ? Math.max(3, Math.min(97, ((card.liveSpeed - card.cityMin) / (card.cityMax - card.cityMin)) * 100))
+    : null;
+  const statusLeft = livePos === null ? "50%" : livePos < 15 ? "0" : livePos > 85 ? "100%" : `${livePos}%`;
+  const statusTransform = livePos === null ? "translateX(-50%)" : livePos < 15 ? "none" : livePos > 85 ? "translateX(-100%)" : "translateX(-50%)";
 
   return (
     <div
@@ -234,41 +241,20 @@ function RouteCard({
         transition: "background 0.12s",
       }}
     >
-      {/* Row 1: route name + status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-        <p style={{
-          fontSize: 12, fontWeight: 700,
-          color: isSelected ? thm.chart.line1 : thm.textPrimary,
-          lineHeight: 1.3, margin: 0,
-          transition: "color 0.12s",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          flex: 1, minWidth: 0,
-        }}>
-          {card.label}
-        </p>
-        <span style={{ 
-          fontSize: 9, 
-          fontWeight: 500,
-          color: getStatusColor(),
-          whiteSpace: "nowrap", 
-          flexShrink: 0,
-          fontStyle: 'italic',
-        }}>
-          {card.statusText}
-          {!ttActive && card.liveSpeed !== null && card.prevSpeed !== null && (
-            <span style={{ opacity: 0.75 }}>
-              {card.liveSpeed === card.prevSpeed
-                ? ', no change'
-                : card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse'
-              }
-            </span>
-          )}
-        </span>
-      </div>
+      {/* Row 1: route name */}
+      <p style={{
+        fontSize: 16, fontWeight: 400,
+        color: isSelected ? thm.chart.line1 : thm.textPrimary,
+        lineHeight: 1.3, margin: 0,
+        transition: "color 0.12s",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {card.label}
+      </p>
       
       {/* Row 2: origin → destination */}
       <div style={{
-        fontSize: 10, color: thm.textMuted,
+        fontSize: 11, color: thm.textMuted,
         lineHeight: 1.3, margin: 0,
         overflow: "hidden",
       }}>
@@ -315,20 +301,43 @@ function RouteCard({
         </div>
       )}
 
-      {/* Row 3: Nested-scale chart */}
-      <div style={{ marginTop: 4 }} />
-      <NestedScaleChart
-        liveSpeed={card.liveSpeed}
-        prevSpeed={card.prevSpeed}
-        typical={card.typical}
-        cityMin={card.cityMin}
-        cityMax={card.cityMax}
-        status={card.status}
-        thm={thm}
-        expanded={hovered || isSelected}
-        ttActive={ttActive}
-      />
-      
+      {/* Row 3: Nested-scale chart (always expanded) */}
+      <div style={{ marginTop: 2 }}>
+        <NestedScaleChart
+          liveSpeed={card.liveSpeed}
+          prevSpeed={card.prevSpeed}
+          typical={card.typical}
+          cityMin={card.cityMin}
+          cityMax={card.cityMax}
+          status={card.status}
+          thm={thm}
+          expanded={true}
+          ttActive={ttActive}
+        />
+      </div>
+
+      {/* Row 4: status text below diamond */}
+      {livePos !== null && (
+        <div style={{ position: "relative", height: 18, marginTop: -2, overflow: "hidden" }}>
+          <span
+            style={{
+              position: "absolute",
+              left: statusLeft,
+              transform: statusTransform,
+              fontSize: 10,
+              fontWeight: 600,
+              color: getStatusColor(),
+              whiteSpace: "nowrap",
+              fontStyle: "italic",
+              textAlign: "center",
+              lineHeight: 1.3,
+            }}
+          >
+            {card.statusText}
+            {trend ? `, ${trend}` : ""}
+          </span>
+        </div>
+      )}
       
       {/* Separator */}
       {!isLast && (

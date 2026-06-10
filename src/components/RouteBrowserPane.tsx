@@ -268,8 +268,18 @@ function RouteCard({
         fontSize: 10, color: thm.textMuted,
         lineHeight: 1.3, margin: 0,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        display: "flex", alignItems: "center", gap: 4,
       }}>
-        {endpoints}
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{endpoints}</span>
+        {card.map_link && (
+          <a
+            href={card.map_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0, textDecoration: "none" }}
+          >↗</a>
+        )}
       </p>
 
       {/* Row 2b: weather strip */}

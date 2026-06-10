@@ -1270,12 +1270,12 @@ function DashboardInner() {
                       {sortedRoutes.map((route) => {
                         const rrs = rrsLookup.get(route.label_short);
                         return (
-                          <a
+                          <div
                             key={route.route_code}
-                            href={route.map_link || undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => { setRouteDropdownOpen(false); }}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); } }}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -1292,7 +1292,6 @@ function DashboardInner() {
                               fontWeight: route.label_short === selectedRoute ? 700 : 400,
                               color: thm.textPrimary,
                               textAlign: "left",
-                              textDecoration: "none",
                             }}
                           >
                             <span style={{
@@ -1314,10 +1313,7 @@ function DashboardInner() {
                             }}>
                               {rrs ? (rrs.score > 0 ? "+" : "") + rrs.score.toFixed(0) : "\u2014"}
                             </span>
-                            {route.map_link && (
-                              <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>↗</span>
-                            )}
-                          </a>
+                          </div>
                         );
                       })}
                     </div>

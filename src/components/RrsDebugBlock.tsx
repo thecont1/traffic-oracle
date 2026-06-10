@@ -90,7 +90,8 @@ export function RrsDebugBlock({ ctx, selectedRoute, tod, widgetCalMonth, widgetC
     cv: ctx.cv,
     speedSd: ctx.speedSd,
     isBenchmarkRoute: ctx.isBenchmarkRoute,
-    todLabel: TOD_LABELS[tod]?.toLowerCase() ?? tod,
+    tod,
+    routeLabel: ctx.routeLabel,
   }), [ctx, tod]);
 
   const volTier = classifyVolatilityTier(ctx.cv);

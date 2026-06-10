@@ -40,7 +40,8 @@ export function RrsContextBlock({ ctx, tod, theme }: Props) {
     cv: ctx.cv,
     speedSd: ctx.speedSd,
     isBenchmarkRoute: ctx.isBenchmarkRoute,
-    todLabel: TOD_LABELS[tod] ?? tod,
+    tod,
+    routeLabel: ctx.routeLabel,
   }), [ctx, tod]);
 
   if (ctx.scoreStatus === "insufficient_data") {

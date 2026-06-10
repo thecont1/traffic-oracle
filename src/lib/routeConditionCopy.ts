@@ -27,12 +27,14 @@ export interface RouteConditionInput {
   speedSd: number;
   /** Whether this route is the benchmark */
   isBenchmarkRoute: boolean;
-  /** Current TOD label, e.g. "weekday evenings" */
-  todLabel: string;
+  /** Raw TOD bucket value, e.g. "weekday_evening" */
+  tod: string;
+  /** Route label for deterministic hashing */
+  routeLabel?: string;
 }
 
 export interface RouteConditionCopy {
-  /** Primary one-liner, e.g. "One of the worst roads in the city today." */
+  /** Primary one-liner, e.g. "One of the worst roads in the city this evening." */
   headline: string;
   /** Optional supporting line */
   subline?: string;
@@ -44,6 +46,35 @@ export interface RouteConditionCopy {
   benchmarkNote?: string;
   /** Message family for debug */
   messageFamily: ConditionFamily;
+}
+
+// ============================================================================
+// Natural time phrases from TOD bucket
+// ============================================================================
+
+const TOD_NATURAL: Record<string, string> = {
+  weekday_morning:   'this morning',
+  weekday_afternoon: 'this afternoon',
+  weekday_evening:   'this evening',
+  weekends:          'this weekend',
+  late_hours:        'tonight',
+  all:               'today',
+};
+
+function naturalTod(tod: string): string {
+  return TOD_NATURAL[tod] ?? 'today';
+}
+
+// ============================================================================
+// Deterministic hash (djb2 — simple, fast, good enough for message selection)
+// ============================================================================
+
+function stableHash(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
 }
 
 // ============================================================================
@@ -92,49 +123,40 @@ function classifyCondition(rank: number, total: number): ConditionFamily {
 // Headline copy by condition family
 // ============================================================================
 
-const HEADLINES: Record<ConditionFamily, (tod: string) => string> = {
-  very_bad: (tod) => {
-    const options = [
-      `One of the worst roads in the city for ${tod}.`,
-      `As bad as it gets for ${tod}.`,
-      `Running badly for ${tod}.`,
-      `Traffic is in rough shape here for ${tod}.`,
-    ];
-    return options[Math.floor(Math.random() * options.length)];
-  },
-  bad: (tod) => {
-    const options = [
-      `Slower than typical for ${tod}.`,
-      `Still bad, but not the city's worst right now.`,
-      `Traffic is dragging here for ${tod}.`,
-    ];
-    return options[Math.floor(Math.random() * options.length)];
-  },
-  typical: (tod) => {
-    const options = [
-      `About as bad as this road usually is for ${tod}.`,
-      `Pretty typical for ${tod}.`,
-      `Nothing unusual — just the usual grind.`,
-    ];
-    return options[Math.floor(Math.random() * options.length)];
-  },
-  good: (tod) => {
-    const options = [
-      `Holding up well for ${tod}.`,
-      `Faster than typical for ${tod}.`,
-      `Better than this road usually gets.`,
-    ];
-    return options[Math.floor(Math.random() * options.length)];
-  },
-  very_good: (tod) => {
-    const options = [
-      `One of the best roads in the city for ${tod}.`,
-      `Running fast for ${tod}.`,
-      `Traffic is moving well here.`,
-    ];
-    return options[Math.floor(Math.random() * options.length)];
-  },
+const HEADLINES: Record<ConditionFamily, string[]> = {
+  very_bad: [
+    `One of the worst roads in the city {tod}.`,
+    `As bad as it gets {tod}.`,
+    `Running badly {tod}.`,
+    `Traffic is in rough shape here {tod}.`,
+  ],
+  bad: [
+    `Slower than typical {tod}.`,
+    `Still bad, but not the city's worst right now.`,
+    `Traffic is dragging here {tod}.`,
+  ],
+  typical: [
+    `About as bad as this road usually is {tod}.`,
+    `Pretty typical {tod}.`,
+    `Nothing unusual — just the usual grind.`,
+  ],
+  good: [
+    `Holding up well {tod}.`,
+    `Faster than typical {tod}.`,
+    `Better than this road usually gets.`,
+  ],
+  very_good: [
+    `One of the best roads in the city {tod}.`,
+    `Running fast {tod}.`,
+    `Traffic is moving well here.`,
+  ],
 };
+
+function pickHeadline(family: ConditionFamily, tod: string, seed: string): string {
+  const options = HEADLINES[family];
+  const idx = stableHash(seed) % options.length;
+  return options[idx].replace('{tod}', tod);
+}
 
 // ============================================================================
 // Public API
@@ -142,12 +164,16 @@ const HEADLINES: Record<ConditionFamily, (tod: string) => string> = {
 
 /** Derive all user-facing copy for a route's R³S² context. */
 export function getRouteConditionCopy(input: RouteConditionInput): RouteConditionCopy {
-  const { rrsRank, totalRoutes, cv, speedSd, isBenchmarkRoute, todLabel } = input;
+  const { rrsRank, totalRoutes, cv, speedSd, isBenchmarkRoute, tod, routeLabel } = input;
 
   const family = classifyCondition(rrsRank, totalRoutes);
   const volTier = classifyVolatilityTier(cv);
+  const todPhrase = naturalTod(tod);
 
-  const headline = HEADLINES[family](todLabel);
+  // Deterministic seed: same route + TOD + family always picks the same headline
+  const seed = `${routeLabel ?? ''}|${tod}|${family}`;
+  const headline = pickHeadline(family, todPhrase, seed);
+
   const volatilityBadge = VOLATILITY_BADGE[volTier];
   const volPhrase = VOLATILITY_PHRASE[volTier];
 

@@ -1302,7 +1302,6 @@ function DashboardInner() {
                               borderRadius: 2,
                               fontSize: 10, fontWeight: 800, color: thm.textMuted,
                               flexShrink: 0,
-                              opacity: rrs ? 1 : 0.4,
                             }}>
                               {rrs ? rrs.rank : ""}
                             </span>

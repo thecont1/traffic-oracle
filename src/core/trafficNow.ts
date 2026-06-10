@@ -34,6 +34,10 @@ export interface RouteCardData {
   statusText: string;
   sortKey: string;
   weather?: WeatherRow;
+  /** R³S² rank for the active context (1 = best). null if unavailable. */
+  rrsRank?: number | null;
+  /** R³S² raw rolling score. null if unavailable. */
+  rrsScore?: number | null;
 }
 
 /* ── Pure computation functions ───────────────────────────────────── */

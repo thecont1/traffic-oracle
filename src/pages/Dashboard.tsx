@@ -827,6 +827,24 @@ function DashboardInner() {
   /* ── Route browser pane state ─────────────────────────────────── */
   const allRouteCardsRef = useRef<RouteCardData[] | null>(null);
   const [allRouteCards, setAllRouteCards] = useState<RouteCardData[] | null>(null);
+
+  // ── Enrich route cards with R³S² rank/score ───────────────────
+  // Build a lookup from route label → R³S² rank/score for the active TOD
+  const rrsLookup = useMemo(() => {
+    const map = new Map<string, { rank: number; score: number }>();
+    if (!rrsData.routeWindow.length) return map;
+    for (const row of rrsData.routeWindow) {
+      if (row.tod_bucket !== tod) continue;
+      const label = row.route_label;
+      if (!label) continue;
+      // If multiple rows for same label (shouldn't happen), keep the better rank
+      const existing = map.get(label);
+      if (!existing || row.rrs_rank < existing.rank) {
+        map.set(label, { rank: row.rrs_rank, score: row.rrs_rolling_score });
+      }
+    }
+    return map;
+  }, [rrsData.routeWindow, tod]);
   const prevBaselineKeyForPane = useRef("");
 
   useEffect(() => {
@@ -835,14 +853,38 @@ function DashboardInner() {
     const weatherChanged = effectiveWeatherMap.size > 0;
     if (allRouteCardsRef.current && key === prevBaselineKeyForPane.current && !weatherChanged) return;
     const computed = computeAllRouteCards(ttAllRows, routeOptions, routes, effectiveWeatherMap);
-    allRouteCardsRef.current = computed;
-    setAllRouteCards(computed);
+    // Enrich with R³S² rank/score for the active TOD
+    const enriched = computed.map(card => {
+      const rrs = rrsLookup.get(card.label);
+      return {
+        ...card,
+        rrsRank: rrs?.rank ?? null,
+        rrsScore: rrs?.score ?? null,
+      };
+    });
+    allRouteCardsRef.current = enriched;
+    setAllRouteCards(enriched);
     prevBaselineKeyForPane.current = key;
-  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, effectiveWeatherMap]);
+  }, [ttAllRows, routeOptions, baselineStartDate, baselineEndDate, effectiveWeatherMap, rrsLookup]);
 
   /* ── Route cycling in pane order ───────────────────────────────── */
+  // When R³S² data is available, cycle in rank order (rank 1 first).
+  // Otherwise fall back to allRouteCards order or alphabetical.
   const routeOrder = useMemo(() => {
-    if (allRouteCards && allRouteCards.length > 0) return allRouteCards.map(c => c.label);
+    if (allRouteCards && allRouteCards.length > 0) {
+      const hasRrs = allRouteCards.some(c => c.rrsRank != null);
+      if (hasRrs) {
+        return [...allRouteCards]
+          .sort((a, b) => {
+            if (a.rrsRank == null && b.rrsRank == null) return 0;
+            if (a.rrsRank == null) return 1;
+            if (b.rrsRank == null) return -1;
+            return a.rrsRank - b.rrsRank;
+          })
+          .map(c => c.label);
+      }
+      return allRouteCards.map(c => c.label);
+    }
     return routeOptions;
   }, [allRouteCards, routeOptions]);
 

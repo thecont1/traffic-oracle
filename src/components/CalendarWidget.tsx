@@ -408,6 +408,90 @@ export function CalendarWidget({
         {cells}
       </div>
 
+      {/* ⚠ DEBUG PANEL — remove before release */}
+      {(() => {
+        const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
+        const bmRoute = benchmarkRouteLabel;
+        const bmTotalDist = allRows.filter(r => r.label_short === bmRoute).reduce((s, r) => s + r.distance_km, 0);
+        const bmTotalRows = allRows.filter(r => r.label_short === bmRoute).length;
+
+        const rows: {
+          dateKey: string; subjectSpeed: number; bmSpeed: number;
+          ratio: number; band: number; color: string;
+        }[] = [];
+        let missingBm = 0;
+        const subjDateKeys: string[] = [];
+        const bmDateKeys: string[] = [];
+
+        for (const [dateKey, s] of dailyStats.entries()) {
+          if (s.avgSpeed <= 0) continue;
+          if (!dateKey.startsWith(prefixStr)) continue;
+          subjDateKeys.push(dateKey);
+          const bm = benchmarkDailyStats.get(dateKey);
+          const bmOk = bm && bm.avgSpeed > 0;
+          if (bmOk) bmDateKeys.push(dateKey);
+          if (!bmOk) { missingBm++; continue; }
+          const ratio = s.avgSpeed / bm!.avgSpeed;
+          const band = ratioToDecile(ratio);
+          rows.push({ dateKey, subjectSpeed: s.avgSpeed, bmSpeed: bm!.avgSpeed, ratio, band, color: decileColor(thm.key, band) });
+        }
+
+        const dateFmt = (dk: string) => new Date(dk + "T12:00:00").toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short" });
+
+        return (
+          <div style={{
+            border:"2px solid #EF4444", background:"#FEF2F2", padding:12, marginTop:12,
+            fontFamily:mono, fontSize:11, lineHeight:1.6, color:"#1F2937", borderRadius:0,
+          }}>
+            <div style={{ fontWeight:800, fontSize:13, color:"#DC2626", marginBottom:8 }}>
+              ⚠ DEBUG — remove before release
+            </div>
+            <div style={{ marginBottom:10, lineHeight:1.8 }}>
+              <div><strong>Benchmark route resolved as:</strong> {bmRoute}</div>
+              <div><strong>Benchmark route path length / data points:</strong> {bmTotalDist.toFixed(1)} km total / {bmTotalRows} rows</div>
+              <div><strong>Subject route:</strong> {selectedRoute}</div>
+              <div><strong>Time slot filter applied to benchmark:</strong> yes — {tod}</div>
+              <div><strong>Total dates with subject data:</strong> {subjDateKeys.length}</div>
+              <div><strong>Total dates with benchmark data:</strong> {bmDateKeys.length}</div>
+              <div><strong>Dates where benchmark data was missing:</strong> {missingBm}</div>
+            </div>
+            {rows.length > 0 && (
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:10.5 }}>
+                <thead>
+                  <tr style={{ borderBottom:"2px solid #DC2626", textAlign:"left" }}>
+                    <th style={{ padding:"3px 6px" }}>Date</th>
+                    <th style={{ padding:"3px 6px" }}>Subject route</th>
+                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Subject speed</th>
+                    <th style={{ padding:"3px 6px" }}>Benchmark route</th>
+                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Benchmark speed</th>
+                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Ratio</th>
+                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Band</th>
+                    <th style={{ padding:"3px 6px" }}>Dot color</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.dateKey} style={{ borderBottom:"1px solid #FECACA", background: i % 2 === 0 ? "transparent" : "#FEF2F280" }}>
+                      <td style={{ padding:"2px 6px", whiteSpace:"nowrap" }}>{dateFmt(r.dateKey)}</td>
+                      <td style={{ padding:"2px 6px" }}>{selectedRoute}</td>
+                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.subjectSpeed} km/h</td>
+                      <td style={{ padding:"2px 6px" }}>{bmRoute}</td>
+                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.bmSpeed} km/h</td>
+                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.ratio.toFixed(3)}</td>
+                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.band + 1}</td>
+                      <td style={{ padding:"2px 6px" }}>
+                        <span style={{ display:"inline-block", width:12, height:12, background:r.color, verticalAlign:"middle", marginRight:4 }} />
+                        <span>{r.color}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Legend: Slow [10 blocks] Fast */}
       <div role="img" aria-label={legendAria}
         style={{ display:"flex", alignItems:"center", gap:6, marginTop:12,

@@ -1048,6 +1048,19 @@ function DashboardInner() {
     });
   }, [allRouteCards, rrsLookup]);
 
+  /* ── Routes sorted by R³S² rank for the Route Observer dropdown ── */
+  const sortedRoutes = useMemo(() => {
+    if (rrsLookup.size === 0) return routes;
+    return [...routes].sort((a, b) => {
+      const rA = rrsLookup.get(a.label_short);
+      const rB = rrsLookup.get(b.label_short);
+      if (!rA && !rB) return a.label_short.localeCompare(b.label_short);
+      if (!rA) return 1;
+      if (!rB) return -1;
+      return rA.rank - rB.rank;
+    });
+  }, [routes, rrsLookup]);
+
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
     cfg.percentile.verdict_threshold_kmh;
@@ -1246,9 +1259,7 @@ function DashboardInner() {
                       position: "absolute",
                       top: "calc(100% + 4px)",
                       left: 0,
-                      minWidth: 180,
-                      maxHeight: 320,
-                      overflow: "auto",
+                      minWidth: 260,
                       background: thm.sectionBg,
                       border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
                       borderRadius: 8,
@@ -1256,40 +1267,59 @@ function DashboardInner() {
                       padding: "4px 0",
                       zIndex: 1000,
                     }}>
-                      {routes.map((route) => (
-                        <a
-                          key={route.route_code}
-                          href={route.map_link || undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => { setRouteDropdownOpen(false); }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            width: "100%",
-                            padding: "8px 12px",
-                            minHeight: 36,
-                            border: "none",
-                            background: "transparent",
-                            cursor: route.map_link ? "pointer" : "default",
-                            fontSize: 12,
-                            fontWeight: route.label_short === selectedRoute ? 700 : 400,
-                            color: thm.textPrimary,
-                            textAlign: "left",
-                            textDecoration: "none",
-                            opacity: route.map_link ? 1 : 0.55,
-                          }}
-                        >
-                          <span style={{ fontSize: 10 }}>
-                            {route.map_link ? "○" : "◌"}
-                          </span>
-                          <span>{route.label_short}</span>
-                          {route.map_link && (
-                            <span style={{ marginLeft: "auto", fontSize: 10, color: thm.textMuted }}>↗</span>
-                          )}
-                        </a>
-                      ))}
+                      {sortedRoutes.map((route) => {
+                        const rrs = rrsLookup.get(route.label_short);
+                        return (
+                          <a
+                            key={route.route_code}
+                            href={route.map_link || undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => { setRouteDropdownOpen(false); }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              width: "100%",
+                              padding: "7px 12px",
+                              minHeight: 32,
+                              border: "none",
+                              background: route.label_short === selectedRoute
+                                ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
+                                : "transparent",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: route.label_short === selectedRoute ? 700 : 400,
+                              color: thm.textPrimary,
+                              textAlign: "left",
+                              textDecoration: "none",
+                            }}
+                          >
+                            {rrs && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 800, color: thm.textMuted,
+                                minWidth: 22, textAlign: "right",
+                              }}>
+                                #{rrs.rank}
+                              </span>
+                            )}
+                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {route.label_short}
+                            </span>
+                            {rrs && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 600, flexShrink: 0,
+                                color: rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted,
+                              }}>
+                                {rrs.score > 0 ? "+" : ""}{rrs.score.toFixed(0)}
+                              </span>
+                            )}
+                            {route.map_link && (
+                              <span style={{ fontSize: 10, color: thm.textMuted, flexShrink: 0 }}>↗</span>
+                            )}
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

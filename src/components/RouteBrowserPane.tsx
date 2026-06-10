@@ -58,23 +58,13 @@ function SortedCardList({
   onRouteSelect: (label: string) => void;
   ttActive?: boolean;
 }) {
-  // Sort by R³S² rank (ascending: rank 1 first). Nulls sink to bottom.
+  // Sort ascending by liveSpeed; nulls sink to bottom
   const sorted = useMemo(() => {
-    const hasRrs = cards.some(c => c.rrsRank != null);
-    if (!hasRrs) {
-      // Fallback: sort by liveSpeed ascending (slowest first)
-      return [...cards].sort((a, b) => {
-        if (a.liveSpeed === null && b.liveSpeed === null) return a.sortKey.localeCompare(b.sortKey);
-        if (a.liveSpeed === null) return 1;
-        if (b.liveSpeed === null) return -1;
-        return a.liveSpeed - b.liveSpeed;
-      });
-    }
     return [...cards].sort((a, b) => {
-      if (a.rrsRank == null && b.rrsRank == null) return a.sortKey.localeCompare(b.sortKey);
-      if (a.rrsRank == null) return 1;
-      if (b.rrsRank == null) return -1;
-      return a.rrsRank - b.rrsRank;
+      if (a.liveSpeed === null && b.liveSpeed === null) return a.sortKey.localeCompare(b.sortKey);
+      if (a.liveSpeed === null) return 1;
+      if (b.liveSpeed === null) return -1;
+      return a.liveSpeed - b.liveSpeed;
     });
   }, [cards]);
 
@@ -232,16 +222,16 @@ function RouteCard({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(card.label); } }}
       style={{
         background: cardBg,
-        borderRadius: 4,
-        padding: "6px 8px",
+        borderRadius: 6,
+        padding: "10px 10px",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 6,
         transition: "background 0.12s",
       }}
     >
-      {/* Row 1: route name + R³S² rank/score + status */}
+      {/* Row 1: route name + status */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
         <p style={{
           fontSize: 12, fontWeight: 700,
@@ -253,19 +243,6 @@ function RouteCard({
         }}>
           {card.label}
         </p>
-        {card.rrsRank != null && (
-          <span style={{
-            fontSize: 10, fontWeight: 800, color: thm.textMuted,
-            whiteSpace: "nowrap", flexShrink: 0,
-          }}>
-            #{card.rrsRank}
-            {card.rrsScore != null && (
-              <span style={{ fontWeight: 600, marginLeft: 3, color: card.rrsScore > 0 ? "#22c55e" : card.rrsScore < 0 ? "#ef4444" : thm.textMuted }}>
-                {card.rrsScore > 0 ? "+" : ""}{card.rrsScore.toFixed(0)}
-              </span>
-            )}
-          </span>
-        )}
         <span style={{ 
           fontSize: 9, 
           fontWeight: 500,
@@ -483,11 +460,13 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           )}
         </div>
 
-        {/* Non-scrolling route list — all routes visible at once */}
+        {/* Scrollable list */}
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-          <div style={{
-            padding: "6px 8px 6px 0",
-            display: "flex", flexDirection: "column", gap: 2,
+          <BlurEdge position="top" />
+          <BlurEdge position="bottom" />
+          <div className="scrollbar-hide" style={{
+            height: "100%", overflowY: "auto", padding: "8px 8px 8px 0",
+            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "none",
           }}>
             {!cards ? (
               <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>
@@ -549,7 +528,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           textTransform: "uppercase", color: thm.textMuted, whiteSpace: "nowrap",
           writingMode: "vertical-rl", textOrientation: "mixed", transform: "rotate(0deg)",
         }}>
-          RANKED ROUTES
+          LIVE ROUTE EXPLORER
         </span>
         <div style={{
           marginTop: 8, fontSize: 15, color: thm.textMuted,
@@ -561,67 +540,55 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
   );
 }
 
-/* ── Mobile full-screen route picker ────────────────────────────── */
+/* ── Mobile bottom sheet ───────────────────────────────────────── */
 function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
   return (
     <>
       {isOpen && (
         <div onClick={onToggle} style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 998,
-          backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)",
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 998,
+          backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
           animation: "fade-in 0.2s ease",
         }} />
       )}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
-        height: isOpen ? "100dvh" : 0, zIndex: 999,
+        height: isOpen ? 300 : 0, zIndex: 999,
         background: thm.sectionBg,
         borderTop: `1px solid ${thm.key === "colour" ? "#2A3545" : "#DCCFB8"}`,
+        borderTopLeftRadius: 16, borderTopRightRadius: 16,
         boxShadow: "0 -4px 20px rgba(0,0,0,0.10)",
         display: "flex", flexDirection: "column", overflow: "hidden",
         transition: "height 0.3s cubic-bezier(0.4,0,0.2,1)",
       }}>
-        {/* Header with close button */}
-        <div style={{
-          flexShrink: 0, padding: "12px 16px 8px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          borderBottom: `1px solid ${thm.key === "colour" ? "rgba(71,65,60,0.12)" : "rgba(0,0,0,0.08)"}`,
+        <div onClick={onToggle} style={{
+          flexShrink: 0, padding: "8px 0 4px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 32, height: 3, borderRadius: 2, background: thm.textMuted, opacity: 0.3 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ fontSize: 13 }}>🗺️</span>
             <span style={{
-              fontFamily: "var(--app-font-display)", fontWeight: 900, fontSize: 16,
-              color: thm.textPrimary,
-            }}>
-              {ttActive ? "📡 Traffic THEN!" : "📡 Route Ranking"}
-            </span>
-            {dataTimestamp && (
-              <span style={{ fontSize: 10, color: thm.textMuted, marginLeft: 4 }}>
-                {ttActive && ttSimulatedNow ? `Time Travel · ${ttFormatPane(ttSimulatedNow)}` : `Live · ${relativeTime(dataTimestamp)}`}
-              </span>
-            )}
+              fontFamily: "var(--app-font-display)", fontWeight: 700, fontSize: 13, color: thm.textPrimary,
+            }}>{ttActive ? "Traffic THEN!" : "Traffic NOW!"}</span>
           </div>
-          <button
-            onClick={onToggle}
-            aria-label="Close route picker"
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              fontSize: 18, color: thm.textMuted, padding: 8,
-              minWidth: 44, minHeight: 44,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            ✕
-          </button>
+          {dataTimestamp && (
+            <p style={{ fontSize: 9, color: thm.textMuted, margin: "2px 0 0",
+              display: "flex", alignItems: "center", gap: 4 }}>
+              {!ttActive && <span className="live-dot" aria-hidden="true" style={{ width: 5, height: 5 }} />}
+              <span>{ttActive && ttSimulatedNow ? `Time Travel · ${ttFormatPane(ttSimulatedNow)}` : `Live · ${relativeTime(dataTimestamp)}`}</span>
+            </p>
+          )}
         </div>
-
-        {/* Scrollable route list */}
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+          <BlurEdge position="top" />
+          <BlurEdge position="bottom" />
           <div className="scrollbar-hide" style={{
-            height: "100%", overflowY: "auto", padding: "8px 12px 24px",
-            display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "none",
+            height: "100%", overflowY: "auto", padding: "6px 8px 12px 0",
+            display: "flex", flexDirection: "column", gap: 6, scrollbarWidth: "none",
           }}>
             {!cards ? (
-              <p style={{ color: thm.textMuted, fontSize: 11, padding: "2rem 0", textAlign: "center" }}>
+              <p style={{ color: thm.textMuted, fontSize: 11, padding: "1rem 0", textAlign: "center" }}>
                 Computing route summaries…
               </p>
             ) : (
@@ -629,7 +596,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 cards={cards}
                 thm={thm}
                 selectedRoute={selectedRoute}
-                onRouteSelect={(label) => { onRouteSelect(label); onToggle(); }}
+                onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
               />
             )}
@@ -648,7 +615,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
           boxShadow: "0 3px 12px rgba(0,0,0,0.12)",
         }}>
           <span style={{ fontSize: 14 }}>🗺️</span>
-          Routes
+          Browse routes
         </button>
       )}
     </>

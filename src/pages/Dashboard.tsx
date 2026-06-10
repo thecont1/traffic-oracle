@@ -46,6 +46,11 @@ import NapkinChart from "@/components/shared/NapkinChart";
 import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
 import Route404 from "@/components/shared/Route404";
 
+// ── R³S² (Rolling Relative Route Scoring System) ────────────────
+import { useRrsData, useRrsContext } from "@/lib/rrsData";
+import { RrsContextBlock } from "@/components/RrsContextBlock";
+import { RrsDebugBlock } from "@/components/RrsDebugBlock";
+
 const cfg = appConfig as AppConfig;
 const CITIES = cfg.cities;
 
@@ -896,6 +901,11 @@ function DashboardInner() {
   const benchmarkRoutes = useBenchmarkRoutes(allRows);
   const benchmarkDailyStats = useBenchmarkDailyStats(allRows, benchmarkRoutes, tod);
   const benchmarkRouteLabel = benchmarkRoutes[0] ?? "the longest route";
+
+  // ── R³S² data loading and context ─────────────────────────────
+  const selectedRouteCode = selectedRouteInfo?.route_code ?? "";
+  const rrsData = useRrsData();
+  const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod);
   const bandThresholds = useEmpiricalBandThresholds(allRows, benchmarkRoutes);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
@@ -2395,19 +2405,36 @@ function DashboardInner() {
                         </div>
                       </div>
                       {calendarCardOpen && (
-                        <CalendarWidget
-                          dailyStats={calendarDailyStats}
-                          allRows={allRows}
-                          selectedRoute={selectedRoute}
-                          tod={tod}
-                          benchmarkDailyStats={benchmarkDailyStats}
-                          benchmarkRouteLabel={benchmarkRouteLabel}
-                          bandThresholds={bandThresholds}
-                          cutoffDate={tt.isActive ? tt.simulatedNow : null}
-                          widgetCalYear={widgetCalYear}
-                          widgetCalMonth={widgetCalMonth}
-                          onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
-                        />
+                        <>
+                          <CalendarWidget
+                            dailyStats={calendarDailyStats}
+                            allRows={allRows}
+                            selectedRoute={selectedRoute}
+                            tod={tod}
+                            benchmarkDailyStats={benchmarkDailyStats}
+                            benchmarkRouteLabel={benchmarkRouteLabel}
+                            bandThresholds={bandThresholds}
+                            cutoffDate={tt.isActive ? tt.simulatedNow : null}
+                            widgetCalYear={widgetCalYear}
+                            widgetCalMonth={widgetCalMonth}
+                            onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
+                          />
+                          {/* ── R³S² Context Block ── */}
+                          {rrsCtx && (
+                            <RrsContextBlock ctx={rrsCtx} theme={thm} />
+                          )}
+                          {/* ── R³S² DEBUG Block ── */}
+                          {rrsCtx && (
+                            <RrsDebugBlock
+                              ctx={rrsCtx}
+                              selectedRoute={selectedRoute}
+                              tod={tod}
+                              widgetCalMonth={widgetCalMonth}
+                              widgetCalYear={widgetCalYear}
+                              theme={thm}
+                            />
+                          )}
+                        </>
                       )}
                     </div>
                   }

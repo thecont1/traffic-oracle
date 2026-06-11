@@ -157,7 +157,7 @@ export function CalendarWidget({
       });
     }
     return result;
-  }, [dailyStats, benchmarkDailyStats]);
+  }, [dailyStats, benchmarkDailyStats, bandThresholds.thresholds]);
 
   /* ── Calendar math ──────────────────────────────────────────── */
   const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;

@@ -1341,8 +1341,10 @@ function DashboardInner() {
                           <div style={{
                             fontSize: 11, fontWeight: 700, color: thm.textPrimary,
                             letterSpacing: "0.02em",
+                            display: "flex", alignItems: "center", gap: 4,
                           }}>
                             R³S² ranking
+                            <InfoTip thm={thm}>{TOOLTIP_CONTENT.rrsRouteObserver.body}</InfoTip>
                           </div>
                           <div style={{
                             fontSize: 10, color: thm.textMuted, marginTop: 1,

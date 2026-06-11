@@ -1290,7 +1290,7 @@ function DashboardInner() {
                     <div style={{
                       position: "absolute",
                       top: "calc(100% + 4px)",
-                      left: 0,
+                      right: 0,
                       display: "flex",
                       background: thm.sectionBg,
                       border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
@@ -1298,6 +1298,7 @@ function DashboardInner() {
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       zIndex: 1000,
                       overflow: "visible",
+                      animation: "dropdown-slide-in 0.18s ease-out",
                     }}>
                       {/* Map preview — edge-to-edge with dropdown, square via aspect-ratio */}
                       {mapshot && (

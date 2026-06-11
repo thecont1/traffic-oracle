@@ -66,6 +66,33 @@ function SortedCardList({
   mapLinkByLabel?: Map<string, string>;
   onHover: (label: string | null) => void;
 }) {
+  // Centralized hover state — single timer for the whole list
+  const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHoverTimeout = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleCardHover = useCallback((label: string) => {
+    clearHoverTimeout();
+    setHoveredLabel(label);
+    onHover(label);
+  }, [onHover, clearHoverTimeout]);
+
+  const handleCardLeave = useCallback(() => {
+    clearHoverTimeout();
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredLabel(null);
+      onHover(null);
+    }, 2500);
+  }, [onHover, clearHoverTimeout]);
+
+  // Cleanup on unmount
+  useEffect(() => clearHoverTimeout, [clearHoverTimeout]);
   // Sort ascending by liveSpeed; nulls sink to bottom
   const sorted = useMemo(() => {
     return [...cards].sort((a, b) => {
@@ -123,7 +150,9 @@ function SortedCardList({
             onSelect={onRouteSelect}
             isLast={i === sorted.length - 1}
             ttActive={ttActive}
-            onHover={onHover}
+            isHovered={hoveredLabel === card.label}
+            onMouseEnter={() => handleCardHover(card.label)}
+            onMouseLeave={handleCardLeave}
           />
         </div>
       ))}
@@ -149,40 +178,16 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect, isLast, ttActive, onHover,
+  card, thm, isSelected, onSelect, isLast, ttActive, isHovered, onMouseEnter, onMouseLeave,
 }: {
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
   ttActive?: boolean;
-  onHover: (label: string | null) => void;
+  isHovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  const handleMouseEnter = useCallback(() => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setHovered(true);
-    onHover(card.label);
-  }, [card.label, onHover]);
-  
-  const handleMouseLeave = useCallback(() => {
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHovered(false);
-      onHover(null);
-    }, 2500);
-  }, [onHover]);
-  
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []);
+  const hovered = isHovered;
   
   // Full-width background: selected gets strong tint, hover gets subtle tint
   // Gray mode: base is white so cards are visible against the #F0F0F0 pane
@@ -229,14 +234,14 @@ function RouteCard({
   return (
     <div
       onClick={() => onSelect(card.label)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       tabIndex={0}
       role="button"
       className="route-card-focus"
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(card.label); } }}
-      onFocus={() => onHover(card.label)}
-      onBlur={() => onHover(null)}
+      onFocus={onMouseEnter}
+      onBlur={onMouseLeave}
       style={{
         background: cardBg,
         borderRadius: 6,

@@ -190,10 +190,6 @@ function RouteCard({
              : "rgba(0,0,0,0.04)";
   }
 
-  const endpoints = card.destination
-    ? `${card.origin} → ${card.destination}`
-    : card.origin;
-  
   // Status text color - matching mobile exactly
   const getStatusColor = () => {
     if (thm.key === 'gray')
@@ -241,22 +237,43 @@ function RouteCard({
         transition: "background 0.12s",
       }}
     >
-      {/* Route name + endpoints (inline, up to 2 lines) */}
-      <p style={{
-        fontSize: 16, fontWeight: 400,
-        color: isSelected ? thm.chart.line1 : thm.textPrimary,
-        lineHeight: 1.35, margin: 0,
-        transition: "color 0.12s",
-        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-        overflow: "hidden",
+      {/* Route name + endpoints side-by-side */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "auto 1fr",
+        gridTemplateRows: "1fr 1fr",
+        columnGap: 10,
+        alignItems: "baseline",
+        minHeight: 0,
       }}>
-        {card.label}
-        {endpoints !== card.label && (
-          <span style={{ fontSize: 11, color: thm.textMuted, marginLeft: 6 }}>
-            {endpoints}
+        <span style={{
+          gridRow: "1 / 3",
+          fontSize: 17, fontWeight: 700,
+          color: isSelected ? thm.chart.line1 : thm.textPrimary,
+          lineHeight: 1.35,
+          transition: "color 0.12s",
+          alignSelf: "center",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {card.label}
+        </span>
+        {card.origin && (
+          <span style={{
+            fontSize: 11, color: thm.textMuted, lineHeight: 1.3,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {card.origin}
           </span>
         )}
-      </p>
+        {card.destination && (
+          <span style={{
+            fontSize: 11, color: thm.textMuted, lineHeight: 1.3,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            → {card.destination}
+          </span>
+        )}
+      </div>
 
       {/* Row 2b: weather strip */}
       {card.weather && (

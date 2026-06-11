@@ -11,6 +11,7 @@ const cfg = appConfig as AppConfig;
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT } from "@/lib/tooltipContent";
 import NestedScaleChart from "@/components/shared/NestedScaleChart";
+import { getRouteMapshot } from "@/lib/routeMapshots";
 
 interface PaneProps {
   cards: RouteCardData[] | null;
@@ -51,7 +52,7 @@ function ttFormatPane(dt: Date): string {
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
 function SortedCardList({
-  cards, thm, selectedRoute, onRouteSelect, ttActive, mapLinkByLabel,
+  cards, thm, selectedRoute, onRouteSelect, ttActive, mapLinkByLabel, onHover,
 }: {
   cards: RouteCardData[];
   thm: AppTheme;
@@ -59,6 +60,7 @@ function SortedCardList({
   onRouteSelect: (label: string) => void;
   ttActive?: boolean;
   mapLinkByLabel?: Map<string, string>;
+  onHover: (label: string | null) => void;
 }) {
   // Sort ascending by liveSpeed; nulls sink to bottom
   const sorted = useMemo(() => {
@@ -117,6 +119,7 @@ function SortedCardList({
             onSelect={onRouteSelect}
             isLast={i === sorted.length - 1}
             ttActive={ttActive}
+            onHover={onHover}
           />
         </div>
       ))}
@@ -142,30 +145,31 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect, isLast, ttActive,
+  card, thm, isSelected, onSelect, isLast, ttActive, onHover,
 }: {
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
   ttActive?: boolean;
+  onHover: (label: string | null) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const handleMouseEnter = useCallback(() => {
-    // Clear any pending close timeout
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
     setHovered(true);
-  }, []);
+    onHover(card.label);
+  }, [card.label, onHover]);
   
   const handleMouseLeave = useCallback(() => {
-    // Delay closing by 500ms for better UX
     hoverTimeoutRef.current = setTimeout(() => {
       setHovered(false);
+      onHover(null);
     }, 2500);
-  }, []);
+  }, [onHover]);
   
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -227,6 +231,8 @@ function RouteCard({
       role="button"
       className="route-card-focus"
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(card.label); } }}
+      onFocus={() => onHover(card.label)}
+      onBlur={() => onHover(null)}
       style={{
         background: cardBg,
         borderRadius: 6,
@@ -373,6 +379,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
   const paneBorderColor = ttActive
@@ -513,6 +520,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
                 mapLinkByLabel={mapLinkByLabel}
+                onHover={setHoveredRoute}
               />
             )}
           </div>
@@ -629,6 +637,7 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
                 mapLinkByLabel={mapLinkByLabel}
+                onHover={() => {}}
               />
             )}
           </div>

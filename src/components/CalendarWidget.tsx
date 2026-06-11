@@ -422,8 +422,8 @@ export function CalendarWidget({
         {cells}
       </div>
 
-      {/* ⚠ DEBUG PANEL — remove before release */}
-      {(() => {
+      {/* ⚠ DEBUG PANEL — hidden for now */}
+      {false && (() => {
         const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
         const bmRoute = benchmarkRouteLabel;
         const bmTotalDist = allRows.filter(r => r.label_short === bmRoute).reduce((s, r) => s + r.distance_km, 0);

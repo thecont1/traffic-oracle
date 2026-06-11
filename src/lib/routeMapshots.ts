@@ -10,13 +10,16 @@ export interface RouteMapshot {
   alt: string;
 }
 
-const MAPSHOT_BASE = "/mapshots";
+const MAPSHOT_BASE = "/mapsots";
 
 /**
  * Deterministic slug from route label: "Airport Expy" → "airport_expy"
  */
 function routeSlug(label: string): string {
-  return label.toLowerCase().replace(/['']/g, "").replace(/\s+/g, "_");
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 /**

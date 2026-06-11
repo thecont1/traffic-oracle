@@ -2573,10 +2573,10 @@ function DashboardInner() {
                           {rrsCtx && (
                             <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
                           )}
-                          {/* ── R³S² DEBUG Block ── */}
-                          {rrsCtx && (
+                          {/* ── R³S² DEBUG Block — hidden for now ── */}
+                          {false && rrsCtx && (
                             <RrsDebugBlock
-                              ctx={rrsCtx}
+                              ctx={rrsCtx!}
                               selectedRoute={selectedRoute}
                               tod={tod}
                               widgetCalMonth={widgetCalMonth}

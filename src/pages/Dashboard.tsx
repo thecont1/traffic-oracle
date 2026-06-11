@@ -49,6 +49,7 @@ import Route404 from "@/components/shared/Route404";
 // ── R³S² (Rolling Relative Route Scoring System) ────────────────
 import { useRrsData, useRrsContext } from "@/lib/rrsData";
 import { getConditionBadge } from "@/lib/routeConditionCopy";
+import { getRouteMapshot } from "@/lib/routeMapshots";
 import { RrsContextBlock } from "@/components/RrsContextBlock";
 import { RrsDebugBlock } from "@/components/RrsDebugBlock";
 
@@ -1078,6 +1079,10 @@ function DashboardInner() {
     });
   }, [routes, rrsLookup]);
 
+  /* ── Mapshot preview state ───────────────────────────────────── */
+  const previewRoute = hoveredRoute ?? selectedRoute;
+  const mapshot = !isMobile ? getRouteMapshot(previewRoute) : null;
+
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
     cfg.percentile.verdict_threshold_kmh;
@@ -1276,106 +1281,136 @@ function DashboardInner() {
                       position: "absolute",
                       top: "calc(100% + 4px)",
                       left: 0,
-                      minWidth: 300,
+                      display: "flex",
                       background: thm.sectionBg,
                       border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
                       borderRadius: 8,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      padding: "4px 0",
                       zIndex: 1000,
+                      overflow: "hidden",
                     }}>
-                      {/* Contextual header — makes time basis explicit */}
-                      <div style={{
-                        padding: "8px 12px 4px",
-                        borderBottom: `1px solid ${thm.key === "gray" ? "#e8e8e8" : "rgba(128,128,128,0.12)"}`,
-                        marginBottom: 2,
-                      }}>
+                      {/* Left pane: ranked route list */}
+                      <div style={{ minWidth: 300, padding: "4px 0" }}>
+                        {/* Contextual header — makes time basis explicit */}
                         <div style={{
-                          fontSize: 11, fontWeight: 700, color: thm.textPrimary,
-                          letterSpacing: "0.02em",
+                          padding: "8px 12px 4px",
+                          borderBottom: `1px solid ${thm.key === "gray" ? "#e8e8e8" : "rgba(128,128,128,0.12)"}`,
+                          marginBottom: 2,
                         }}>
-                          R³S² ranking
-                        </div>
-                        <div style={{
-                          fontSize: 10, color: thm.textMuted, marginTop: 1,
-                        }}>
-                          {todLabel} · last 14 days
-                        </div>
-                      </div>
-                      {sortedRoutes.map((route) => {
-                        const rrs = rrsLookup.get(route.label_short);
-                        const isSelected = route.label_short === selectedRoute;
-                        const isHovered = route.label_short === hoveredRoute;
-                        const bg = isSelected || isHovered
-                          ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
-                          : "transparent";
-                        const badge = rrs ? getConditionBadge(rrs.rank, rrs.routesInWindow) : null;
-                        return (
-                          <div
-                            key={route.route_code}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); }}
-                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); } }}
-                            onMouseEnter={() => setHoveredRoute(route.label_short)}
-                            onMouseLeave={() => setHoveredRoute(null)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              width: "100%",
-                              padding: "7px 12px",
-                              minHeight: 32,
-                              border: "none",
-                              background: bg,
-                              cursor: "pointer",
-                              fontSize: 12,
-                              fontWeight: isSelected ? 700 : 400,
-                              color: thm.textPrimary,
-                              textAlign: "left",
-                              transition: "background 0.1s",
-                            }}
-                          >
-                            {/* Rank square */}
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              width: 20, height: 18,
-                              border: "1px solid " + thm.textMuted,
-                              borderRadius: 2,
-                              fontSize: 10, fontWeight: 800, color: thm.textMuted,
-                              flexShrink: 0,
-                            }}>
-                              {rrs ? rrs.rank : ""}
-                            </span>
-
-                            {/* Route name — dominant */}
-                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {route.label_short}
-                            </span>
-
-                            {/* Condition badge — lightweight phrase */}
-                            {badge && (
-                              <span style={{
-                                fontSize: 10,
-                                color: badge.color,
-                                whiteSpace: "nowrap",
-                                flexShrink: 0,
-                                opacity: 0.85,
-                              }}>
-                                {badge.text}
-                              </span>
-                            )}
-
-                            {/* Score — secondary */}
-                            <span style={{
-                              fontSize: 10, fontWeight: 600, flexShrink: 0,
-                              color: rrs ? (rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted) : "#ef4444",
-                            }}>
-                              {rrs ? (rrs.score > 0 ? "+" : "") + rrs.score.toFixed(0) : "\u2014"}
-                            </span>
+                          <div style={{
+                            fontSize: 11, fontWeight: 700, color: thm.textPrimary,
+                            letterSpacing: "0.02em",
+                          }}>
+                            R³S² ranking
                           </div>
-                        );
-                      })}
+                          <div style={{
+                            fontSize: 10, color: thm.textMuted, marginTop: 1,
+                          }}>
+                            {todLabel} · last 14 days
+                          </div>
+                        </div>
+                        {sortedRoutes.map((route) => {
+                          const rrs = rrsLookup.get(route.label_short);
+                          const isSelected = route.label_short === selectedRoute;
+                          const isHovered = route.label_short === hoveredRoute;
+                          const bg = isSelected || isHovered
+                            ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
+                            : "transparent";
+                          const badge = rrs ? getConditionBadge(rrs.rank, rrs.routesInWindow) : null;
+                          return (
+                            <div
+                              key={route.route_code}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); }}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); } }}
+                              onMouseEnter={() => setHoveredRoute(route.label_short)}
+                              onMouseLeave={() => setHoveredRoute(null)}
+                              onFocus={() => setHoveredRoute(route.label_short)}
+                              onBlur={() => { if (hoveredRoute === route.label_short) setHoveredRoute(null); }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                width: "100%",
+                                padding: "7px 12px",
+                                minHeight: 32,
+                                border: "none",
+                                background: bg,
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: isSelected ? 700 : 400,
+                                color: thm.textPrimary,
+                                textAlign: "left",
+                                transition: "background 0.1s",
+                              }}
+                            >
+                              {/* Rank square */}
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 20, height: 18,
+                                border: "1px solid " + thm.textMuted,
+                                borderRadius: 2,
+                                fontSize: 10, fontWeight: 800, color: thm.textMuted,
+                                flexShrink: 0,
+                              }}>
+                                {rrs ? rrs.rank : ""}
+                              </span>
+
+                              {/* Route name — dominant */}
+                              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {route.label_short}
+                              </span>
+
+                              {/* Condition badge — lightweight phrase */}
+                              {badge && (
+                                <span style={{
+                                  fontSize: 10,
+                                  color: badge.color,
+                                  whiteSpace: "nowrap",
+                                  flexShrink: 0,
+                                  opacity: 0.85,
+                                }}>
+                                  {badge.text}
+                                </span>
+                              )}
+
+                              {/* Score — secondary */}
+                              <span style={{
+                                fontSize: 10, fontWeight: 600, flexShrink: 0,
+                                color: rrs ? (rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted) : "#ef4444",
+                              }}>
+                                {rrs ? (rrs.score > 0 ? "+" : "") + rrs.score.toFixed(0) : "\u2014"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Right pane: mapshot preview (desktop only) */}
+                      {!isMobile && mapshot && (
+                        <div style={{
+                          width: 280,
+                          borderLeft: `1px solid ${thm.key === "gray" ? "#e8e8e8" : "rgba(128,128,128,0.12)"}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 8,
+                          background: thm.key === "colour" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                        }}>
+                          <img
+                            src={mapshot.imageUrl}
+                            alt={mapshot.alt}
+                            loading="eager"
+                            style={{
+                              width: "100%",
+                              height: "auto",
+                              borderRadius: 4,
+                              display: "block",
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

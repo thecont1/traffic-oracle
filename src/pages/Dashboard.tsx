@@ -24,7 +24,7 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
-import { CalendarWidget } from "@/components/CalendarWidget";
+import { CalendarWidget, PALETTES } from "@/components/CalendarWidget";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -1091,6 +1091,7 @@ function DashboardInner() {
   /* ── Mapshot preview state ───────────────────────────────────── */
   const previewRoute = hoveredRoute ?? selectedRoute;
   const mapshot = !isMobile ? getRouteMapshot(previewRoute) : null;
+  const previewMapLink = mapLinkByLabel.get(previewRoute) ?? null;
 
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
@@ -1300,24 +1301,32 @@ function DashboardInner() {
                     }}>
                       {/* Map preview — edge-to-edge with dropdown, square via aspect-ratio */}
                       {mapshot && (
-                        <div style={{
-                          position: "absolute",
-                          top: 0,
-                          bottom: 0,
-                          right: "100%",
-                          aspectRatio: "1 / 1",
-                          borderRadius: "8px 0 0 8px",
-                          overflow: "hidden",
-                          background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                        }}>
+                        <a
+                          href={previewMapLink ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open in Google Maps"
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            bottom: 0,
+                            right: "100%",
+                            aspectRatio: "1 / 1",
+                            borderRadius: "8px 0 0 8px",
+                            overflow: "hidden",
+                            display: "block",
+                            background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                            cursor: previewMapLink ? "pointer" : "default",
+                          }}
+                        >
                           <img
                             src={mapshot.imageUrl}
                             alt={mapshot.alt}
                             loading="eager"
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                           />
-                        </div>
+                        </a>
                       )}
                       {/* Route list — clips itself */}
                       <div style={{ overflow: "hidden", borderRadius: 8, display: "flex", flexDirection: "column" }}>
@@ -2579,10 +2588,43 @@ function DashboardInner() {
                             isBenchmarkRoute={selectedRoute === benchmarkRouteLabel}
                             debug={!!URL_PARAMS.debug}
                           />
-                          {/* ── R³S² Context Block ── */}
-                          {rrsCtx && (
-                            <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
-                          )}
+                          {/* ── Footer row: R³S² context + legend ── */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "space-between",
+                            marginTop: 6,
+                            gap: 12,
+                          }}>
+                            {/* Left: R³S² compact summary */}
+                            {rrsCtx && (
+                              <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
+                            )}
+
+                            {/* Right: Slow–Fast legend */}
+                            {(() => {
+                              const effectiveTheme = selectedRoute === benchmarkRouteLabel ? "benchmark" : thm.key;
+                              const pal = PALETTES[effectiveTheme] ?? PALETTES.colour;
+                              return (
+                                <div role="img" aria-label="Legend: 10 speed deciles from red (slowest) to green (fastest)"
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 4,
+                                    fontSize: 10, color: thm.textMuted, fontWeight: 600,
+                                    flexShrink: 0,
+                                  }}>
+                                  <span>Slow</span>
+                                  <div>
+                                    <div style={{ display: "flex", gap: 1 }}>
+                                      {pal.map((c, i) => (
+                                        <div key={i} style={{ width: 14, height: 14, background: c }} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <span>Fast</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
                           {/* ── R³S² DEBUG Block — ?debug=1 to show ── */}
                           {URL_PARAMS.debug && rrsCtx && (
                             <RrsDebugBlock

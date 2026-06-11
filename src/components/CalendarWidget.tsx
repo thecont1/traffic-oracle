@@ -21,9 +21,9 @@ function ratioToDecile(ratio: number, thresholds: number[] = DEFAULT_THRESHOLDS)
   return thresholds.length - 1;
 }
 
-/* ── Centralised decile palettes ───────────────────────────────── */
+/** Centralised decile palettes — exported for use in legend. */
 /*   band 0 = red/slowest  →  band 9 = green/fastest              */
-const PALETTES: Record<string, string[]> = {
+export const PALETTES: Record<string, string[]> = {
   colour: ["#E8354A","#F0673A","#F5973A","#F7C244","#EDD97A","#C8DC6A","#96CC54","#5DB96A","#2EA878","#0D8C52"],
   gray:   ["#0a0a0a","#171717","#262626","#404040","#525252","#737373","#a3a3a3","#d4d4d4","#e5e5e5","#fafafa"],
   pastel: ["#fca5a5","#fdba74","#fcd34d","#fde68a","#d9f99d","#bef264","#86efac","#4ade80","#22c55e","#16a34a"],
@@ -417,9 +417,10 @@ export function CalendarWidget({
         ))}
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid — fixed height for 6 rows to prevent layout shift */}
       <div key={fadeKey} role="grid" aria-label="Traffic calendar"
         style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+          minHeight: 6 * (CIRCLE_D + 10),
           animation:"cal-fade-in 0.2s ease" }}>
         {cells}
       </div>
@@ -524,22 +525,7 @@ export function CalendarWidget({
         );
       })()}
 
-      {/* Legend: Slow [10 blocks] Fast */}
-      <div role="img" aria-label={legendAria}
-        style={{ display:"flex", alignItems:"center", gap:6, marginTop:12,
-          justifyContent:"flex-end", fontSize:10, color:thm.textMuted, fontWeight:600 }}>
-        <span>Slow</span>
-        <div>
-          <div style={{ display:"flex", gap:2 }}>
-            {pal.map((c, i) => (
-              <div key={i} style={{ width:17, height:17, background:c }} />
-            ))}
-          </div>
-          <div style={{ height:2, marginTop:2,
-            background:`linear-gradient(to right, ${pal[0]}, ${pal[9]})` }} />
-        </div>
-        <span>Fast</span>
-      </div>
+      {/* Legend moved to Dashboard footer row alongside R³S² context */}
 
       {/* Tooltip — portalled to body to escape card overflow:hidden */}
       {tip && createPortal(renderTooltip(), document.body)}

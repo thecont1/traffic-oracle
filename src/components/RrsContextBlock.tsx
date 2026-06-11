@@ -35,7 +35,6 @@ export function RrsContextBlock({ ctx, tod, theme }: Props) {
   if (ctx.scoreStatus === "insufficient_data") {
     return (
       <div style={{
-        marginTop: 8,
         fontSize: 10,
         color: theme.textMuted,
         lineHeight: 1.5,
@@ -51,7 +50,6 @@ export function RrsContextBlock({ ctx, tod, theme }: Props) {
 
   return (
     <div style={{
-      marginTop: 8,
       fontSize: 10,
       lineHeight: 1.5,
       color: theme.textMuted,

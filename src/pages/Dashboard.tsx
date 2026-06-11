@@ -1387,30 +1387,6 @@ function DashboardInner() {
                         })}
                       </div>
 
-                      {/* Right pane: mapshot preview (desktop only) */}
-                      {!isMobile && mapshot && (
-                        <div style={{
-                          width: 280,
-                          borderLeft: `1px solid ${thm.key === "gray" ? "#e8e8e8" : "rgba(128,128,128,0.12)"}`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: 8,
-                          background: thm.key === "colour" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                        }}>
-                          <img
-                            src={mapshot.imageUrl}
-                            alt={mapshot.alt}
-                            loading="eager"
-                            style={{
-                              width: "100%",
-                              height: "auto",
-                              borderRadius: 4,
-                              display: "block",
-                            }}
-                          />
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -2703,6 +2679,24 @@ function DashboardInner() {
           {/* ── Route browser pane (desktop) ──────────────────────── */}
           {!isMobile && citySource && (
             <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
+              {/* Map preview — left of dropdown, edge-to-edge */}
+              {paneOpen && mapshot && (
+                <div style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
+                }}>
+                  <img
+                    src={mapshot.imageUrl}
+                    alt={mapshot.alt}
+                    loading="eager"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
+                </div>
+              )}
               <RouteBrowserPane
                 cards={enrichedRouteCards}
                 selectedRoute={selectedRoute}
@@ -2716,6 +2710,7 @@ function DashboardInner() {
                 ttActive={tt.isActive}
                 ttSimulatedNow={tt.simulatedNow}
                 mapLinkByLabel={mapLinkByLabel}
+                onHoverRoute={setHoveredRoute}
               />
             </div>
           )}

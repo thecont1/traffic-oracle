@@ -242,7 +242,7 @@ function RouteCard({
         display: "grid",
         gridTemplateColumns: "auto 1fr",
         gridTemplateRows: "1fr 1fr",
-        columnGap: 10,
+        columnGap: 16,
         alignItems: "baseline",
         minHeight: 0,
       }}>
@@ -259,7 +259,7 @@ function RouteCard({
         </span>
         {card.origin && (
           <span style={{
-            fontSize: 11, color: thm.textMuted, lineHeight: 1.3,
+            fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             {card.origin}
@@ -267,7 +267,7 @@ function RouteCard({
         )}
         {card.destination && (
           <span style={{
-            fontSize: 11, color: thm.textMuted, lineHeight: 1.3,
+            fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             → {card.destination}
@@ -315,7 +315,7 @@ function RouteCard({
         </div>
       )}
 
-      {/* Row 3: Nested-scale chart (always expanded) */}
+      {/* Row 3: Nested-scale chart (numbers visible when selected/hovered) */}
       <div style={{ marginTop: 2 }}>
         <NestedScaleChart
           liveSpeed={card.liveSpeed}
@@ -325,7 +325,7 @@ function RouteCard({
           cityMax={card.cityMax}
           status={card.status}
           thm={thm}
-          expanded={true}
+          expanded={hovered || isSelected}
           ttActive={ttActive}
         />
       </div>

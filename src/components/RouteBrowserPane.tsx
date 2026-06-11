@@ -190,7 +190,7 @@ function RouteCard({
              : "rgba(0,0,0,0.04)";
   }
 
-  // Status text color - matching mobile exactly
+  // Status text color — must match NestedScaleChart diamond exactly
   const getStatusColor = () => {
     if (thm.key === 'gray')
       return card.status === 'as-expected' ? '#555555'
@@ -200,7 +200,8 @@ function RouteCard({
       return card.status === 'as-expected' ? '#546E7A'
            : card.status === 'faster' || card.status === 'unusually-fast' ? '#2E7D32'
            : '#D84315';
-    return card.status === 'as-expected' ? '#60A5FA'
+    // colour theme — typical is gray, not blue
+    return card.status === 'as-expected' ? '#9CA3AF'
          : card.status === 'faster' || card.status === 'unusually-fast' ? '#34D399'
          : '#F87171';
   };
@@ -261,6 +262,7 @@ function RouteCard({
           <span style={{
             fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            textAlign: "right",
           }}>
             {card.origin}
           </span>
@@ -269,6 +271,7 @@ function RouteCard({
           <span style={{
             fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            textAlign: "right",
           }}>
             → {card.destination}
           </span>

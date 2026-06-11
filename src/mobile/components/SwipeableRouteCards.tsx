@@ -32,7 +32,7 @@ function getStatusColor(status: LiveStatus, thm: AppTheme): string {
         ? "#2E7D32"
         : "#D84315";
   return status === "as-expected"
-    ? "#60A5FA"
+    ? "#9CA3AF"
     : status === "faster" || status === "unusually-fast"
       ? "#34D399"
       : "#F87171";

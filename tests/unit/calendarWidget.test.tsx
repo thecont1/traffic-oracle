@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { CalendarWidget } from "../../src/components/CalendarWidget";
 import { ThemeProvider } from "../../src/lib/ThemeContext";
-import type { DayStats, TrafficRow } from "../../src/lib/useTrafficData";
+import type { DayStats, TrafficRow, BandThresholdsResult } from "../../src/lib/useTrafficData";
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
@@ -24,6 +24,10 @@ function ds(avgSpeed: number, overrides: Partial<DayStats> = {}): DayStats {
   return {
     dateKey: "",
     avgSpeed,
+    minSpeed: avgSpeed - 5,
+    maxSpeed: avgSpeed + 5,
+    minTime: "5:00 AM",
+    maxTime: "10:00 PM",
     p05Speed: avgSpeed - 8,
     p95Speed: avgSpeed + 8,
     avgDuration: 0,
@@ -70,6 +74,13 @@ function buildBenchmarkStats(subjectStats: Map<string, DayStats>, bmSpeed: numbe
   return map;
 }
 
+const DEFAULT_THRESHOLDS: BandThresholdsResult = {
+  thresholds: [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
+  quantiles: { p1:0.15,p2:0.18,p5:0.25,p10:0.30,p15:0.35,p25:0.42,p30:0.45,p40:0.50,p45:0.55,p50:0.60,p55:0.65,p60:0.70,p70:0.75,p75:0.80,p85:0.85,p90:0.90,p95:0.95,p98:0.98,p99:1.00 },
+  observationCount: 1000,
+  computedAt: Date.now(),
+};
+
 function renderCal(
   dailyStats: Map<string, DayStats>,
   year?: number,
@@ -88,6 +99,7 @@ function renderCal(
         tod="all"
         benchmarkDailyStats={bmStats}
         benchmarkRouteLabel="Benchmark Route"
+        bandThresholds={DEFAULT_THRESHOLDS}
         widgetCalYear={year ?? now.getFullYear()}
         widgetCalMonth={month ?? now.getMonth()}
         onDateClick={onDateClick}

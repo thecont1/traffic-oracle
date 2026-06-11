@@ -12,7 +12,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
-  useBenchmarkRoutes, useBenchmarkDailyStats,
+  useBenchmarkRoutes, useBenchmarkDailyStats, useEmpiricalBandThresholds,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
 import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
@@ -24,7 +24,7 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
-import { CalendarWidget } from "@/components/CalendarWidget";
+import { CalendarWidget, PALETTES } from "@/components/CalendarWidget";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -45,6 +45,13 @@ import Chip from "@/components/shared/Chip";
 import NapkinChart from "@/components/shared/NapkinChart";
 import { useChartTooltip } from "@/components/shared/ChartTooltipFactory";
 import Route404 from "@/components/shared/Route404";
+
+// ── R³S² (Rolling Relative Route Scoring System) ────────────────
+import { useRrsData, useRrsContext } from "@/lib/rrsData";
+import { getConditionBadge } from "@/lib/routeConditionCopy";
+import { getRouteMapshot } from "@/lib/routeMapshots";
+import { RrsContextBlock } from "@/components/RrsContextBlock";
+import { RrsDebugBlock } from "@/components/RrsDebugBlock";
 
 const cfg = appConfig as AppConfig;
 const CITIES = cfg.cities;
@@ -88,6 +95,15 @@ const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 function parseYM(s: string) {
   const d = new Date(s + "T12:00:00");
   return { y: d.getFullYear(), m: d.getMonth() };
+}
+
+/* ── R³S² score → colour (±15 dead-band = gray) ──────────────── */
+function rrsScoreColor(score: number): string {
+  if (score > 30)  return '#22c55e';   // deep green
+  if (score > 15)  return '#4ade80';   // light green
+  if (score >= -15) return '#9CA3AF';  // gray — unremarkable
+  if (score > -30) return '#f97316';   // orange — struggling
+  return '#ef4444';                    // red — as bad as it gets
 }
 
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
@@ -382,6 +398,7 @@ function DashboardInner() {
 
   /* route dropdown */
   const [routeDropdownOpen, setRouteDropdownOpen] = useState(false);
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
   const routeDropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -896,6 +913,12 @@ function DashboardInner() {
   const benchmarkRoutes = useBenchmarkRoutes(allRows);
   const benchmarkDailyStats = useBenchmarkDailyStats(allRows, benchmarkRoutes, tod);
   const benchmarkRouteLabel = benchmarkRoutes[0] ?? "the longest route";
+
+  // ── R³S² data loading and context ─────────────────────────────
+  const selectedRouteCode = selectedRouteInfo?.route_code ?? "";
+  const rrsData = useRrsData();
+  const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod, benchmarkRouteLabel);
+  const bandThresholds = useEmpiricalBandThresholds(allRows, benchmarkRoutes);
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -1012,6 +1035,64 @@ function DashboardInner() {
     return { min: Math.round(Math.max(0, Math.min(...vals) - pad) * 10) / 10, max: Math.round((Math.max(...vals) + pad) * 10) / 10 };
   }, [chartDataArr]);
 
+  /* ── R³S²-enriched route cards for Route Observer ─────────────── */
+  const rrsLookup = useMemo(() => {
+    const map = new Map<string, { rank: number; score: number; cv: number; speedSd: number; routesInWindow: number }>();
+    if (!rrsData.routeWindow.length) return map;
+    for (const row of rrsData.routeWindow) {
+      if (row.tod_bucket !== tod) continue;
+      const label = row.route_label;
+      if (!label) continue;
+      const existing = map.get(label);
+      if (!existing || row.rrs_rank < existing.rank) {
+        map.set(label, {
+          rank: row.rrs_rank,
+          score: row.rrs_rolling_score,
+          cv: row.speed_cv,
+          speedSd: row.speed_sd_window,
+          routesInWindow: row.routes_in_window,
+        });
+      }
+    }
+    return map;
+  }, [rrsData.routeWindow, tod]);
+
+  const enrichedRouteCards = useMemo(() => {
+    if (!allRouteCards) return null;
+    if (rrsLookup.size === 0) return allRouteCards;
+    return allRouteCards.map(card => {
+      const rrs = rrsLookup.get(card.label);
+      return { ...card, rrsRank: rrs?.rank ?? null, rrsScore: rrs?.score ?? null };
+    });
+  }, [allRouteCards, rrsLookup]);
+
+  /* ── Map link lookup by route label ─────────────────────────── */
+  const mapLinkByLabel = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of routes) {
+      if (r.map_link) m.set(r.label_short, r.map_link);
+    }
+    return m;
+  }, [routes]);
+
+  /* ── Routes sorted by R³S² rank for the Route Observer dropdown ── */
+  const sortedRoutes = useMemo(() => {
+    if (rrsLookup.size === 0) return routes;
+    return [...routes].sort((a, b) => {
+      const rA = rrsLookup.get(a.label_short);
+      const rB = rrsLookup.get(b.label_short);
+      if (!rA && !rB) return a.label_short.localeCompare(b.label_short);
+      if (!rA) return 1;
+      if (!rB) return -1;
+      return rA.rank - rB.rank;
+    });
+  }, [routes, rrsLookup]);
+
+  /* ── Mapshot preview state ───────────────────────────────────── */
+  const previewRoute = hoveredRoute ?? selectedRoute;
+  const mapshot = !isMobile ? getRouteMapshot(previewRoute) : null;
+  const previewMapLink = mapLinkByLabel.get(previewRoute) ?? null;
+
   /* ── Data trend ─────────────────────────────────────────────── */
   const VERDICT_THRESHOLD =
     cfg.percentile.verdict_threshold_kmh;
@@ -1056,8 +1137,8 @@ function DashboardInner() {
         {`Comparing baseline (${fmtShortDate(baselineStartDate)}–${fmtShortDate(baselineEndDate)}) to recent (${fmtShortDate(recentStartDate)}–${lastDataDate ? fmtShortDate(lastDataDate.toISOString()) : fmtShortDate(lastDate)}) · `}
         {routeMapLink
           ? <a href={routeMapLink} target="_blank" rel="noopener noreferrer"
-              style={{ color: "inherit", textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: "2px" }}>
-              {routeEndpoints}
+              style={{ color: "inherit", textDecorationLine: "underline", textDecorationStyle: "solid", textUnderlineOffset: "3px", fontWeight: 600 }}>
+              {routeEndpoints} <span style={{ fontSize: 9 }}>&#x2197;</span>
             </a>
           : routeEndpoints
         }
@@ -1209,51 +1290,148 @@ function DashboardInner() {
                     <div style={{
                       position: "absolute",
                       top: "calc(100% + 4px)",
-                      left: 0,
-                      minWidth: 180,
-                      maxHeight: 320,
-                      overflow: "auto",
+                      right: 0,
+                      display: "flex",
                       background: thm.sectionBg,
                       border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
                       borderRadius: 8,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      padding: "4px 0",
                       zIndex: 1000,
+                      overflow: "visible",
+                      animation: "dropdown-slide-in 0.18s ease-out",
                     }}>
-                      {routes.map((route) => (
+                      {/* Map preview — edge-to-edge with dropdown, square via aspect-ratio */}
+                      {mapshot && (
                         <a
-                          key={route.route_code}
-                          href={route.map_link || undefined}
+                          href={previewMapLink ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={() => { setRouteDropdownOpen(false); }}
+                          title="Open in Google Maps"
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            width: "100%",
-                            padding: "8px 12px",
-                            minHeight: 36,
-                            border: "none",
-                            background: "transparent",
-                            cursor: route.map_link ? "pointer" : "default",
-                            fontSize: 12,
-                            fontWeight: route.label_short === selectedRoute ? 700 : 400,
-                            color: thm.textPrimary,
-                            textAlign: "left",
-                            textDecoration: "none",
-                            opacity: route.map_link ? 1 : 0.55,
+                            position: "absolute",
+                            top: 0,
+                            bottom: 0,
+                            right: "100%",
+                            aspectRatio: "1 / 1",
+                            borderRadius: "8px 0 0 8px",
+                            overflow: "hidden",
+                            display: "block",
+                            background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                            cursor: previewMapLink ? "pointer" : "default",
                           }}
                         >
-                          <span style={{ fontSize: 10 }}>
-                            {route.map_link ? "○" : "◌"}
-                          </span>
-                          <span>{route.label_short}</span>
-                          {route.map_link && (
-                            <span style={{ marginLeft: "auto", fontSize: 10, color: thm.textMuted }}>↗</span>
-                          )}
+                          <img
+                            src={mapshot.imageUrl}
+                            alt={mapshot.alt}
+                            loading="eager"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          />
                         </a>
-                      ))}
+                      )}
+                      {/* Route list — clips itself */}
+                      <div style={{ overflow: "hidden", borderRadius: 8, display: "flex", flexDirection: "column" }}>
+                      {/* Left pane: ranked route list */}
+                      <div style={{ minWidth: 300, padding: "4px 0" }}>
+                        {/* Contextual header — makes time basis explicit */}
+                        <div style={{
+                          padding: "8px 12px 4px",
+                          borderBottom: `1px solid ${thm.key === "gray" ? "#e8e8e8" : "rgba(128,128,128,0.12)"}`,
+                          marginBottom: 2,
+                        }}>
+                          <div style={{
+                            fontSize: 11, fontWeight: 700, color: thm.textPrimary,
+                            letterSpacing: "0.02em",
+                            display: "flex", alignItems: "center", gap: 4,
+                          }}>
+                            R³S² ranking
+                            <InfoTip thm={thm}>{TOOLTIP_CONTENT.rrsRouteObserver.body}</InfoTip>
+                          </div>
+                          <div style={{
+                            fontSize: 10, color: thm.textMuted, marginTop: 1,
+                          }}>
+                            {todLabel} · last 14 days
+                          </div>
+                        </div>
+                        {sortedRoutes.map((route) => {
+                          const rrs = rrsLookup.get(route.label_short);
+                          const isSelected = route.label_short === selectedRoute;
+                          const isHovered = route.label_short === hoveredRoute;
+                          const bg = isSelected || isHovered
+                            ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
+                            : "transparent";
+                          const badge = rrs ? getConditionBadge(rrs.rank, rrs.routesInWindow) : null;
+                          return (
+                            <div
+                              key={route.route_code}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); }}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { handleRouteSelectFromPane(route.label_short); setRouteDropdownOpen(false); } }}
+                              onMouseEnter={() => setHoveredRoute(route.label_short)}
+                              onMouseLeave={() => setHoveredRoute(null)}
+                              onFocus={() => setHoveredRoute(route.label_short)}
+                              onBlur={() => { if (hoveredRoute === route.label_short) setHoveredRoute(null); }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                width: "100%",
+                                padding: "7px 12px",
+                                minHeight: 32,
+                                border: "none",
+                                background: bg,
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: isSelected ? 700 : 400,
+                                color: thm.textPrimary,
+                                textAlign: "left",
+                                transition: "background 0.1s",
+                              }}
+                            >
+                              {/* Rank square */}
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 20, height: 18,
+                                border: "1px solid " + thm.textMuted,
+                                borderRadius: 2,
+                                fontSize: 10, fontWeight: 800, color: thm.textMuted,
+                                flexShrink: 0,
+                              }}>
+                                {rrs ? rrs.rank : ""}
+                              </span>
+
+                              {/* Route name — dominant */}
+                              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {route.label_short}
+                              </span>
+
+                              {/* Condition badge — lightweight phrase */}
+                              {badge && (
+                                <span style={{
+                                  fontSize: 10,
+                                  color: badge.color,
+                                  whiteSpace: "nowrap",
+                                  flexShrink: 0,
+                                  opacity: 0.85,
+                                }}>
+                                  {badge.text}
+                                </span>
+                              )}
+
+                              {/* Score — secondary */}
+                              <span style={{
+                                fontSize: 10, fontWeight: 600, flexShrink: 0,
+                                color: badge ? badge.color : thm.textMuted,
+                              }}>
+                                {rrs ? (rrs.score > 0 ? "+" : "") + rrs.score.toFixed(0) : "\u2014"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      </div>{/* close route list wrapper */}
                     </div>
                   )}
                 </div>
@@ -2381,7 +2559,10 @@ function DashboardInner() {
                             ✳︎ Good Days and Bad Days
                           </p>
                           <InfoTip thm={thm}>
-                            {TOOLTIP_CONTENT.dailyCalendar.body}
+                            {selectedRoute === benchmarkRouteLabel
+                              ? TOOLTIP_CONTENT.dailyCalendarBenchmark.body
+                              : TOOLTIP_CONTENT.dailyCalendar.body
+                            }
                           </InfoTip>
                           <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                             transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
@@ -2394,18 +2575,71 @@ function DashboardInner() {
                         </div>
                       </div>
                       {calendarCardOpen && (
-                        <CalendarWidget
-                          dailyStats={calendarDailyStats}
-                          allRows={allRows}
-                          selectedRoute={selectedRoute}
-                          tod={tod}
-                          benchmarkDailyStats={benchmarkDailyStats}
-                          benchmarkRouteLabel={benchmarkRouteLabel}
-                          cutoffDate={tt.isActive ? tt.simulatedNow : null}
-                          widgetCalYear={widgetCalYear}
-                          widgetCalMonth={widgetCalMonth}
-                          onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
-                        />
+                        <>
+                          <CalendarWidget
+                            dailyStats={calendarDailyStats}
+                            allRows={allRows}
+                            selectedRoute={selectedRoute}
+                            tod={tod}
+                            benchmarkDailyStats={benchmarkDailyStats}
+                            benchmarkRouteLabel={benchmarkRouteLabel}
+                            bandThresholds={bandThresholds}
+                            cutoffDate={tt.isActive ? tt.simulatedNow : null}
+                            widgetCalYear={widgetCalYear}
+                            widgetCalMonth={widgetCalMonth}
+                            onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
+                            isBenchmarkRoute={selectedRoute === benchmarkRouteLabel}
+                            debug={!!URL_PARAMS.debug}
+                          />
+                          {/* ── Footer row: R³S² context + legend ── */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "space-between",
+                            marginTop: 6,
+                            gap: 12,
+                          }}>
+                            {/* Left: R³S² compact summary */}
+                            {rrsCtx && (
+                              <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
+                            )}
+
+                            {/* Right: Slow–Fast legend */}
+                            {(() => {
+                              const effectiveTheme = selectedRoute === benchmarkRouteLabel ? "benchmark" : thm.key;
+                              const pal = PALETTES[effectiveTheme] ?? PALETTES.colour;
+                              return (
+                                <div role="img" aria-label="Legend: 10 speed deciles from red (slowest) to green (fastest)"
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 4,
+                                    fontSize: 10, color: thm.textMuted, fontWeight: 600,
+                                    flexShrink: 0,
+                                  }}>
+                                  <span>Slow</span>
+                                  <div>
+                                    <div style={{ display: "flex", gap: 1 }}>
+                                      {pal.map((c, i) => (
+                                        <div key={i} style={{ width: 14, height: 14, background: c }} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <span>Fast</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          {/* ── R³S² DEBUG Block — ?debug=1 to show ── */}
+                          {URL_PARAMS.debug && rrsCtx && (
+                            <RrsDebugBlock
+                              ctx={rrsCtx!}
+                              selectedRoute={selectedRoute}
+                              tod={tod}
+                              widgetCalMonth={widgetCalMonth}
+                              widgetCalYear={widgetCalYear}
+                              theme={thm}
+                            />
+                          )}
+                        </>
                       )}
                     </div>
                   }
@@ -2524,7 +2758,7 @@ function DashboardInner() {
           {!isMobile && citySource && (
             <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
               <RouteBrowserPane
-                cards={allRouteCards}
+                cards={enrichedRouteCards}
                 selectedRoute={selectedRoute}
                 onRouteSelect={handleRouteSelectFromPane}
                 dataTimestamp={effectiveDataTimestamp}
@@ -2535,6 +2769,8 @@ function DashboardInner() {
                 paneWidth={cfg.route_pane.width}
                 ttActive={tt.isActive}
                 ttSimulatedNow={tt.simulatedNow}
+                mapLinkByLabel={mapLinkByLabel}
+                onHoverRoute={setHoveredRoute}
               />
             </div>
           )}
@@ -2545,7 +2781,7 @@ function DashboardInner() {
       {isMobile && citySource && (
         <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", zoom: ZOOM_STEPS[zoomIdx] }}>
           <RouteBrowserPane
-            cards={allRouteCards}
+            cards={enrichedRouteCards}
             selectedRoute={selectedRoute}
             onRouteSelect={handleRouteSelectFromPane}
             dataTimestamp={effectiveDataTimestamp}
@@ -2553,6 +2789,7 @@ function DashboardInner() {
             mobile={true}
             ttActive={tt.isActive}
             ttSimulatedNow={tt.simulatedNow}
+            mapLinkByLabel={mapLinkByLabel}
           />
         </div>
       )}

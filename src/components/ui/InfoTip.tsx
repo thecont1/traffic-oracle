@@ -5,7 +5,7 @@ import type { AppTheme } from "@/lib/theme";
 interface InfoTipProps {
   thm: AppTheme;
   children: React.ReactNode;
-  /** Max width in px. Default 240. */
+  /** Max width in px. Default 300. */
   maxWidth?: number;
 }
 
@@ -19,7 +19,7 @@ interface InfoTipProps {
  * - Smooth opacity transition
  * - pointer-events: none so it never blocks interaction
  */
-export default function InfoTip({ thm, children, maxWidth = 240 }: InfoTipProps) {
+export default function InfoTip({ thm, children, maxWidth = 300 }: InfoTipProps) {
   const tipRef = useRef<HTMLDivElement>(null);
 
   const show = useCallback((e: React.MouseEvent<HTMLSpanElement>) => {
@@ -85,6 +85,7 @@ export default function InfoTip({ thm, children, maxWidth = 240 }: InfoTipProps)
             maxWidth,
             fontSize: 12,
             lineHeight: 1.5,
+            whiteSpace: "pre-line",
             color: isGray ? "#333333" : "#F0F4F8",
             fontFamily: "var(--app-font)",
             top: 0,

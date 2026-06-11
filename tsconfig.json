@@ -30,6 +30,6 @@
     },
     "downlevelIteration": true
   },
-  "include": ["src/**/*", "config.json"],
+  "include": ["src/**/*", "tools/**/*", "*.d.ts", "config.json"],
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"]
 }

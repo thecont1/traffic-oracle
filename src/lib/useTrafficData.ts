@@ -837,9 +837,15 @@ export function useBenchmarkDailyStats(
       const speeds = dayRows.map((r) => r.speed_kmh);
       const durations = dayRows.map((r) => r.duration_min).sort((a, b) => a - b);
       const sortedSpeeds = [...speeds].sort((a, b) => a - b);
+      const minRow = dayRows.reduce((a, b) => a.speed_kmh <= b.speed_kmh ? a : b);
+      const maxRow = dayRows.reduce((a, b) => a.speed_kmh >= b.speed_kmh ? a : b);
       result.set(dateKey, {
         dateKey,
         avgSpeed: Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+        minSpeed: Math.round(sortedSpeeds[0] * 10) / 10,
+        maxSpeed: Math.round(sortedSpeeds[sortedSpeeds.length - 1] * 10) / 10,
+        minTime: fmtTime(minRow.timestamp),
+        maxTime: fmtTime(maxRow.timestamp),
         p05Speed: Math.round(percentile(sortedSpeeds, 5) * 10) / 10,
         p95Speed: Math.round(percentile(sortedSpeeds, 95) * 10) / 10,
         avgDuration: Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10,
@@ -851,6 +857,134 @@ export function useBenchmarkDailyStats(
     }
     return result;
   }, [allRows, benchmarkRoutes, tod]);
+}
+
+/* ── Empirical band thresholds ──────────────────────────────────── */
+
+const CACHE_KEY = "traffiCOracle_bandThresholds";
+const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const CACHE_ROW_GROWTH_PCT = 0.05; // 5%
+
+export interface RatioQuantiles {
+  p1: number; p2: number; p5: number; p10: number; p15: number;
+  p25: number; p30: number; p40: number; p45: number; p50: number;
+  p55: number; p60: number; p70: number; p75: number; p85: number;
+  p90: number; p95: number; p98: number; p99: number;
+}
+
+export interface BandThresholdsResult {
+  thresholds: number[];   // 10 boundaries: [0, p1, p5, p15, p30, p45, p60, p75, p85, p95]
+  quantiles: RatioQuantiles;
+  observationCount: number;
+  sourceRowCount: number; // allRows.length at time of computation
+  computedAt: number;     // Date.now() timestamp
+}
+
+function getCachedThresholds(): BandThresholdsResult | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as BandThresholdsResult;
+  } catch { return null; }
+}
+
+function setCachedThresholds(result: BandThresholdsResult): void {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(result)); } catch {}
+}
+
+/** Compute empirical ratio distribution across all routes and dates.
+ *  Uses tod='all' to capture the full range of traffic conditions.
+ *  Results are cached in localStorage and recomputed when stale. */
+export function useEmpiricalBandThresholds(
+  allRows: TrafficRow[],
+  benchmarkRoutes: string[],
+): BandThresholdsResult {
+  const defaultResult: BandThresholdsResult = {
+    thresholds: [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
+    quantiles: { p1:0,p2:0,p5:0,p10:0,p15:0,p25:0,p30:0,p40:0,p45:0,p50:0,p55:0,p60:0,p70:0,p75:0,p85:0,p90:0,p95:0,p98:0,p99:0 },
+    observationCount: 0,
+    sourceRowCount: 0,
+    computedAt: 0,
+  };
+
+  const [result, setResult] = useState<BandThresholdsResult>(() => {
+    return getCachedThresholds() ?? defaultResult;
+  });
+
+  useEffect(() => {
+    if (allRows.length === 0 || benchmarkRoutes.length === 0) return;
+
+    const cached = getCachedThresholds();
+    const now = Date.now();
+    const isStale = !cached
+      || (now - cached.computedAt > CACHE_MAX_AGE_MS)
+      || (cached.sourceRowCount > 0 && allRows.length > cached.sourceRowCount * (1 + CACHE_ROW_GROWTH_PCT));
+
+    if (!isStale) return;
+
+    const bmRoute = benchmarkRoutes[0];
+    if (!bmRoute) return;
+
+    // Group rows by route+date (no ToD filter — full dataset)
+    const byKey = new Map<string, TrafficRow[]>();
+    for (const r of allRows) {
+      const d = r.timestamp;
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const key = `${r.label_short}|${dateKey}`;
+      const arr = byKey.get(key);
+      if (arr) arr.push(r); else byKey.set(key, [r]);
+    }
+
+    // Build daily stats per route per date
+    const dailyStatsMap = new Map<string, { route: string; dateKey: string; avgSpeed: number; count: number }>();
+    for (const [key, dayRows] of byKey) {
+      const [route, dateKey] = key.split("|");
+      const speeds = dayRows.map(r => r.speed_kmh);
+      const avgSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+      dailyStatsMap.set(key, { route, dateKey, avgSpeed: Math.round(avgSpeed * 10) / 10, count: dayRows.length });
+    }
+
+    // Build benchmark daily speeds by date
+    const bmByDate = new Map<string, { avgSpeed: number; count: number }>();
+    for (const [key, stats] of dailyStatsMap) {
+      if (stats.route === bmRoute) bmByDate.set(stats.dateKey, { avgSpeed: stats.avgSpeed, count: stats.count });
+    }
+
+    // Compute ratios for non-benchmark routes
+    const MIN_COUNT = 3;
+    const ratios: number[] = [];
+    for (const [key, stats] of dailyStatsMap) {
+      if (stats.route === bmRoute) continue;
+      if (stats.count < MIN_COUNT) continue;
+      const bm = bmByDate.get(stats.dateKey);
+      if (!bm || bm.count < MIN_COUNT) continue;
+      const ratio = stats.avgSpeed / bm.avgSpeed;
+      if (ratio >= 0.05 && ratio <= 2.0) ratios.push(ratio);
+    }
+
+    if (ratios.length < 10) return;
+
+    ratios.sort((a, b) => a - b);
+    const q = (p: number) => percentile(ratios, p);
+    const quantiles: RatioQuantiles = {
+      p1:q(1),p2:q(2),p5:q(5),p10:q(10),p15:q(15),p25:q(25),p30:q(30),p40:q(40),p45:q(45),p50:q(50),
+      p55:q(55),p60:q(60),p70:q(70),p75:q(75),p85:q(85),p90:q(90),p95:q(95),p98:q(98),p99:q(99),
+    };
+
+    const newResult: BandThresholdsResult = {
+      thresholds: [0, quantiles.p1, quantiles.p5, quantiles.p15, quantiles.p30,
+                   quantiles.p45, quantiles.p60, quantiles.p75, quantiles.p85, quantiles.p95],
+      quantiles,
+      observationCount: ratios.length,
+      sourceRowCount: allRows.length,
+      computedAt: now,
+    };
+
+    setCachedThresholds(newResult);
+    setResult(newResult);
+  }, [allRows, benchmarkRoutes]);
+
+  return result;
 }
 
 /** Full dataset weekly aggregates for a route + tod — no period cutoff.

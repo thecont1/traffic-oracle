@@ -1,32 +1,34 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "@/lib/ThemeContext";
-import type { DayStats, TrafficRow, TimeOfDay } from "@/lib/useTrafficData";
+import type { DayStats, TrafficRow, TimeOfDay, BandThresholdsResult } from "@/lib/useTrafficData";
 import { matchesToD } from "@/lib/useTrafficData";
 
 const CIRCLE_D = 46;
 const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DECILES = 10;
 
-/* ── Ratio → decile mapping (fixed, absolute thresholds) ─────── */
-const RATIO_THRESHOLDS: [number, number][] = [
-  [0.15, 0], [0.25, 1], [0.35, 2], [0.45, 3], [0.55, 4],
-  [0.65, 5], [0.75, 6], [0.85, 7], [0.95, 8],
-];
+/* ── Ratio → decile mapping (dynamic empirical thresholds) ────── */
+/** Default fallback thresholds (same as old fixed values). */
+const DEFAULT_THRESHOLDS = [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
 
-function ratioToDecile(ratio: number): number {
-  for (const [threshold, band] of RATIO_THRESHOLDS) {
-    if (ratio < threshold) return band;
+/** Map a ratio to a band index 0–9 using the given threshold boundaries.
+ *  thresholds[i] is the lower bound of band i; band 9 is everything >= thresholds[9]. */
+function ratioToDecile(ratio: number, thresholds: number[] = DEFAULT_THRESHOLDS): number {
+  for (let i = 1; i < thresholds.length; i++) {
+    if (ratio < thresholds[i]) return i - 1;
   }
-  return 9;
+  return thresholds.length - 1;
 }
 
-/* ── Centralised decile palettes ───────────────────────────────── */
+/** Centralised decile palettes — exported for use in legend. */
 /*   band 0 = red/slowest  →  band 9 = green/fastest              */
-const PALETTES: Record<string, string[]> = {
+export const PALETTES: Record<string, string[]> = {
   colour: ["#E8354A","#F0673A","#F5973A","#F7C244","#EDD97A","#C8DC6A","#96CC54","#5DB96A","#2EA878","#0D8C52"],
   gray:   ["#0a0a0a","#171717","#262626","#404040","#525252","#737373","#a3a3a3","#d4d4d4","#e5e5e5","#fafafa"],
   pastel: ["#fca5a5","#fdba74","#fcd34d","#fde68a","#d9f99d","#bef264","#86efac","#4ade80","#22c55e","#16a34a"],
+  /* Benchmark special case: teal/blue tones for Airport Expy self-view */
+  benchmark: ["#0e7490","#0891b2","#06b6d4","#22d3ee","#67e8f9","#a5f3fc","#0d9488","#14b8a6","#2dd4bf","#5eead4"],
 };
 
 function paletteFor(key: string): string[] {
@@ -89,7 +91,10 @@ interface CellTip {
 export function CalendarWidget({
   dailyStats, allRows, selectedRoute, tod,
   benchmarkDailyStats, benchmarkRouteLabel,
+  bandThresholds,
   widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
+  isBenchmarkRoute = false,
+  debug = false,
 }: {
   dailyStats: Map<string, DayStats>;
   allRows: TrafficRow[];
@@ -97,10 +102,13 @@ export function CalendarWidget({
   tod: TimeOfDay;
   benchmarkDailyStats: Map<string, DayStats>;
   benchmarkRouteLabel: string;
+  bandThresholds: BandThresholdsResult;
   widgetCalYear: number;
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;
   cutoffDate?: Date | null;
+  isBenchmarkRoute?: boolean;
+  debug?: boolean;
 }) {
   const { theme: thm } = useTheme();
 
@@ -134,7 +142,7 @@ export function CalendarWidget({
       const bmOk = bm && bm.avgSpeed > 0;
       const bmSpeed = bmOk ? bm!.avgSpeed : 0;
       const ratio = bmOk ? s.avgSpeed / bm!.avgSpeed : 0;
-      const band = bmOk ? ratioToDecile(ratio) : -1;
+      const band = bmOk ? ratioToDecile(ratio, bandThresholds.thresholds) : -1;
 
       result.set(dateKey, {
         band,
@@ -149,7 +157,7 @@ export function CalendarWidget({
       });
     }
     return result;
-  }, [dailyStats, benchmarkDailyStats]);
+  }, [dailyStats, benchmarkDailyStats, bandThresholds.thresholds]);
 
   /* ── Calendar math ──────────────────────────────────────────── */
   const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
@@ -200,7 +208,8 @@ export function CalendarWidget({
         circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
         txtClr = thm.textMuted;
       } else if (hasData) {
-        const bg = decileColor(thm.key, band);
+        const effectiveTheme = isBenchmarkRoute ? "benchmark" : thm.key;
+        const bg = decileColor(effectiveTheme, band);
         circleStyle = { background:bg, border:`2px solid ${bg}`, boxShadow:"0 2px 8px rgba(0,0,0,0.12)" };
         txtClr = textOn(bg);
       } else if (s) {
@@ -214,8 +223,9 @@ export function CalendarWidget({
       const ariaLabel = hasData && entry
         ? `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ` +
           `${Math.round(entry.tip.avgSpeed)} km/h. ` +
-          `Decile ${band + 1} of 10. ` +
-          `${Math.round(entry.tip.ratio * 100)}% of benchmark.`
+          (isBenchmarkRoute
+            ? `Benchmark reference. Day ${band + 1} of ${DECILES}.`
+            : `Decile ${band + 1} of 10. ${Math.round(entry.tip.ratio * 100)}% of benchmark.`)
         : isFuture ? `${dayLabel}. Future date.`
         : isBeyondCutoff ? `${dayLabel}. Beyond cutoff.`
         : s ? `${dayLabel}. No benchmark data for this day.`
@@ -315,7 +325,10 @@ export function CalendarWidget({
         <div style={{ display:"inline-block", padding:"4px 10px", marginBottom:12,
           background:v.color + "22", border:`1px solid ${v.color}44`, borderRadius:0,
           fontSize:13, fontWeight:700, color:v.color }}>
-          {d.band >= 0 ? `${v.text} · ${d.band + 1}/${DECILES}` : v.text}
+          {isBenchmarkRoute
+            ? (d.band >= 0 ? `Benchmark reference · ${d.band + 1}/${DECILES}` : "Benchmark reference")
+            : (d.band >= 0 ? `${v.text} · ${d.band + 1}/${DECILES}` : v.text)
+          }
         </div>
 
         <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
@@ -348,7 +361,7 @@ export function CalendarWidget({
                 background:`linear-gradient(90deg, ${pal[0]}, ${pal[4]}, ${pal[9]})` }} />
             </div>
             <div style={{ fontSize:12, color:tipMuted, marginBottom:8, fontWeight:600 }}>
-              {ratioPct}% of benchmark
+              {isBenchmarkRoute ? "benchmark reference" : `${ratioPct}% of benchmark`}
             </div>
           </>
         )}
@@ -371,7 +384,10 @@ export function CalendarWidget({
 
         {/* ── Footnote ── */}
         <div style={{ fontSize:12, color:tipMuted }}>
-          Compared to {benchmarkRouteLabel} · same conditions
+          {isBenchmarkRoute
+            ? `This is Bangalore's benchmark route · ${TOD_LABELS[tod]}`
+            : `Compared to ${benchmarkRouteLabel} · same conditions`
+          }
         </div>
 
         {/* Tail */}
@@ -401,15 +417,16 @@ export function CalendarWidget({
         ))}
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid — fixed height for 6 rows to prevent layout shift */}
       <div key={fadeKey} role="grid" aria-label="Traffic calendar"
         style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+          minHeight: 6 * (CIRCLE_D + 10),
           animation:"cal-fade-in 0.2s ease" }}>
         {cells}
       </div>
 
-      {/* ⚠ DEBUG PANEL — remove before release */}
-      {(() => {
+      {/* ⚠ DEBUG PANEL — ?debug=1 to show */}
+      {debug && (() => {
         const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
         const bmRoute = benchmarkRouteLabel;
         const bmTotalDist = allRows.filter(r => r.label_short === bmRoute).reduce((s, r) => s + r.distance_km, 0);
@@ -433,7 +450,8 @@ export function CalendarWidget({
           if (!bmOk) { missingBm++; continue; }
           const ratio = s.avgSpeed / bm!.avgSpeed;
           const band = ratioToDecile(ratio);
-          rows.push({ dateKey, subjectSpeed: s.avgSpeed, bmSpeed: bm!.avgSpeed, ratio, band, color: decileColor(thm.key, band) });
+          const effectiveDbgTheme = isBenchmarkRoute ? "benchmark" : thm.key;
+          rows.push({ dateKey, subjectSpeed: s.avgSpeed, bmSpeed: bm!.avgSpeed, ratio, band, color: decileColor(effectiveDbgTheme, band) });
         }
 
         const dateFmt = (dk: string) => new Date(dk + "T12:00:00").toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short" });
@@ -454,6 +472,21 @@ export function CalendarWidget({
               <div><strong>Total dates with subject data:</strong> {subjDateKeys.length}</div>
               <div><strong>Total dates with benchmark data:</strong> {bmDateKeys.length}</div>
               <div><strong>Dates where benchmark data was missing:</strong> {missingBm}</div>
+              <div><strong>benchmark_self_comparison:</strong> <span style={{ color: isBenchmarkRoute ? "#DC2626" : "#16a34a", fontWeight: 700 }}>{String(isBenchmarkRoute)}</span></div>
+              <div><strong>calendar_render_mode:</strong> {isBenchmarkRoute ? "benchmark_reference_mode" : "relative_benchmark"}</div>
+              <div><strong>dot_palette_mode:</strong> {isBenchmarkRoute ? "benchmark_special_case" : "standard"}</div>
+              {isBenchmarkRoute && (
+                <div style={{ color: "#DC2626", fontWeight: 600, marginTop: 4 }}>
+                  ⚠ Selected route is the benchmark route; relative ratio is self-referential.
+                </div>
+              )}
+            </div>
+            <div style={{ marginBottom:10, padding:"8px", background:"#FEE2E2", border:"1px solid #FCA5A5" }}>
+              <div style={{ fontWeight:700, marginBottom:4 }}>Empirical Thresholds ({bandThresholds.observationCount} observations, {bandThresholds.computedAt ? new Date(bandThresholds.computedAt).toLocaleString() : "not computed"})</div>
+              <div style={{ fontSize:10, lineHeight:1.6 }}>
+                <div><strong>BAND_THRESHOLDS:</strong> [{bandThresholds.thresholds.map(t => t.toFixed(3)).join(", ")}]</div>
+                <div><strong>Quantiles:</strong> p1={bandThresholds.quantiles.p1.toFixed(3)} p5={bandThresholds.quantiles.p5.toFixed(3)} p15={bandThresholds.quantiles.p15.toFixed(3)} p30={bandThresholds.quantiles.p30.toFixed(3)} p45={bandThresholds.quantiles.p45.toFixed(3)} p60={bandThresholds.quantiles.p60.toFixed(3)} p75={bandThresholds.quantiles.p75.toFixed(3)} p85={bandThresholds.quantiles.p85.toFixed(3)} p95={bandThresholds.quantiles.p95.toFixed(3)}</div>
+              </div>
             </div>
             {rows.length > 0 && (
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:10.5 }}>
@@ -492,22 +525,7 @@ export function CalendarWidget({
         );
       })()}
 
-      {/* Legend: Slow [10 blocks] Fast */}
-      <div role="img" aria-label={legendAria}
-        style={{ display:"flex", alignItems:"center", gap:6, marginTop:12,
-          justifyContent:"flex-end", fontSize:10, color:thm.textMuted, fontWeight:600 }}>
-        <span>Slow</span>
-        <div>
-          <div style={{ display:"flex", gap:2 }}>
-            {pal.map((c, i) => (
-              <div key={i} style={{ width:17, height:17, background:c }} />
-            ))}
-          </div>
-          <div style={{ height:2, marginTop:2,
-            background:`linear-gradient(to right, ${pal[0]}, ${pal[9]})` }} />
-        </div>
-        <span>Fast</span>
-      </div>
+      {/* Legend moved to Dashboard footer row alongside R³S² context */}
 
       {/* Tooltip — portalled to body to escape card overflow:hidden */}
       {tip && createPortal(renderTooltip(), document.body)}

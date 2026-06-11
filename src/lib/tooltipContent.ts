@@ -149,12 +149,50 @@ export const TOOLTIP_CONTENT = {
     body: [
       "What am I looking at?",
       "",
-      "Each circle is a day on this calendar. Its colour shows how this route compared to the city's longest road (the benchmark) on the same day and time — green means it kept pace with the best road, red means it fell far behind.",
+      "This calendar shows how this road performed day by day against Bangalore's benchmark route at the same time of day.",
       "",
-      "• Hover any filled day to see the speed ratio, side-by-side comparison, and a verdict",
-      "• Click any past day to open it in the Time Traveller for a detailed breakdown",
+      "• Each filled circle is a day with traffic data",
+      "• Green means this route kept up better with the city's benchmark road",
+      "• Red means it fell further behind",
+      "• Hover a day to see the comparison in more detail",
+      "• Click a past day to open it in Time Traveller",
       "",
-      "Days shown with a dashed outline are today or in the future — no data yet.",
+      "The short line below the calendar is a recent route-quality summary. It uses the R³S² score to show how this road has been performing lately compared with the rest of the city.",
+    ].join("\n"),
+  },
+
+  // ── Daily Calendar — Benchmark Route Special Case ──────────────
+  dailyCalendarBenchmark: {
+    title: "Good Days and Bad Days",
+    body: [
+      "What am I looking at?",
+      "",
+      "This is Bangalore's benchmark route — the road the rest of the city is judged against.",
+      "",
+      "These dots show how this road itself behaved day to day. They are not a comparison against a better road.",
+      "",
+      "• Hover any filled day to see its speed and a verdict",
+      "• Click any past day to open it in Time Traveller",
+      "",
+      "The short line below the calendar is a recent route-quality summary using the R³S² score.",
+    ].join("\n"),
+  },
+
+  // ── R³S² Route Observer ────────────────────────────────────────
+  rrsRouteObserver: {
+    title: "R³S² Route Quality Score",
+    body: [
+      "What am I looking at?",
+      "",
+      "R³S² is traffiCOracle's rolling route-quality score.",
+      "",
+      "It compares Bangalore's major roads over the last 14 days for the selected time of day and ranks them by how well they have been holding up.",
+      "",
+      "• Higher scores mean a route has been performing better lately",
+      "• Lower scores mean it has been struggling",
+      "• The rank and score update when you change the time of day or move through time",
+      "",
+      "This helps you see which roads have been holding up well lately — and which ones have been a mess.",
     ].join("\n"),
   },
 } as const;

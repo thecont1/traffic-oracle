@@ -11,6 +11,9 @@ const cfg = appConfig as AppConfig;
 import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT } from "@/lib/tooltipContent";
 import NestedScaleChart from "@/components/shared/NestedScaleChart";
+import { getRouteMapshot } from "@/lib/routeMapshots";
+
+interface RouteMapshot { imageUrl: string; alt: string; }
 
 interface PaneProps {
   cards: RouteCardData[] | null;
@@ -24,6 +27,9 @@ interface PaneProps {
   lastUpdated: Date | null;
   ttActive?: boolean;
   ttSimulatedNow?: Date | null;
+  mapLinkByLabel?: Map<string, string>;
+  onHoverRoute?: (label: string | null) => void;
+  mapshot?: RouteMapshot | null;
 }
 
 /* ── Relative time label ─────────────────────────────────────── */
@@ -50,14 +56,43 @@ function ttFormatPane(dt: Date): string {
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
 function SortedCardList({
-  cards, thm, selectedRoute, onRouteSelect, ttActive,
+  cards, thm, selectedRoute, onRouteSelect, ttActive, mapLinkByLabel, onHover,
 }: {
   cards: RouteCardData[];
   thm: AppTheme;
   selectedRoute: string;
   onRouteSelect: (label: string) => void;
   ttActive?: boolean;
+  mapLinkByLabel?: Map<string, string>;
+  onHover: (label: string | null) => void;
 }) {
+  // Centralized hover state — single timer for the whole list
+  const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHoverTimeout = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleCardHover = useCallback((label: string) => {
+    clearHoverTimeout();
+    setHoveredLabel(label);
+    onHover(label);
+  }, [onHover, clearHoverTimeout]);
+
+  const handleCardLeave = useCallback(() => {
+    clearHoverTimeout();
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredLabel(null);
+      onHover(null);
+    }, 2500);
+  }, [onHover, clearHoverTimeout]);
+
+  // Cleanup on unmount
+  useEffect(() => clearHoverTimeout, [clearHoverTimeout]);
   // Sort ascending by liveSpeed; nulls sink to bottom
   const sorted = useMemo(() => {
     return [...cards].sort((a, b) => {
@@ -115,6 +150,9 @@ function SortedCardList({
             onSelect={onRouteSelect}
             isLast={i === sorted.length - 1}
             ttActive={ttActive}
+            isHovered={hoveredLabel === card.label}
+            onMouseEnter={() => handleCardHover(card.label)}
+            onMouseLeave={handleCardLeave}
           />
         </div>
       ))}
@@ -140,39 +178,16 @@ function BlurEdge({ position }: { position: "top" | "bottom" }) {
 
 /* ── Route card ────────────────────────────────────────────────── */
 function RouteCard({
-  card, thm, isSelected, onSelect, isLast, ttActive,
+  card, thm, isSelected, onSelect, isLast, ttActive, isHovered, onMouseEnter, onMouseLeave,
 }: {
   card: RouteCardData; thm: AppTheme; isSelected: boolean;
   onSelect: (label: string) => void; isLast: boolean;
   ttActive?: boolean;
+  isHovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  const handleMouseEnter = useCallback(() => {
-    // Clear any pending close timeout
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setHovered(true);
-  }, []);
-  
-  const handleMouseLeave = useCallback(() => {
-    // Delay closing by 500ms for better UX
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHovered(false);
-    }, 2500);
-  }, []);
-  
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []);
+  const hovered = isHovered;
   
   // Full-width background: selected gets strong tint, hover gets subtle tint
   // Gray mode: base is white so cards are visible against the #F0F0F0 pane
@@ -188,38 +203,45 @@ function RouteCard({
              : "rgba(0,0,0,0.04)";
   }
 
-  const endpoints = card.destination
-    ? `${card.origin} → ${card.destination}`
-    : card.origin;
-  
-  // Status text color - matching the demo scheme exactly
+  // Status text color — must match NestedScaleChart diamond exactly
   const getStatusColor = () => {
-    if (thm.key === 'gray') {
-      // Scale me gray: use weight/contrast, no hue
+    if (thm.key === 'gray')
       return card.status === 'as-expected' ? '#555555'
            : card.status === 'faster' || card.status === 'unusually-fast' ? '#2D8A4E'
            : '#C0392B';
-    }
-    if (thm.key === 'pastel') {
+    if (thm.key === 'pastel')
       return card.status === 'as-expected' ? '#546E7A'
            : card.status === 'faster' || card.status === 'unusually-fast' ? '#2E7D32'
            : '#D84315';
-    }
-    // Colour me Surprised
-    return card.status === 'as-expected' ? '#60A5FA'
+    // colour theme — typical is gray, not blue
+    return card.status === 'as-expected' ? '#9CA3AF'
          : card.status === 'faster' || card.status === 'unusually-fast' ? '#34D399'
          : '#F87171';
   };
 
+  // Trend label (matching mobile)
+  const trend = (card.liveSpeed !== null && card.prevSpeed !== null && !ttActive)
+    ? (card.liveSpeed === card.prevSpeed ? "no change" : card.liveSpeed > card.prevSpeed ? "improving" : "getting worse")
+    : null;
+
+  // Diamond position for status text alignment (matching mobile)
+  const livePos = card.liveSpeed !== null && card.cityMax > card.cityMin
+    ? Math.max(3, Math.min(97, ((card.liveSpeed - card.cityMin) / (card.cityMax - card.cityMin)) * 100))
+    : null;
+  const statusLeft = livePos === null ? "50%" : livePos < 15 ? "0" : livePos > 85 ? "100%" : `${livePos}%`;
+  const statusTransform = livePos === null ? "translateX(-50%)" : livePos < 15 ? "none" : livePos > 85 ? "translateX(-100%)" : "translateX(-50%)";
+
   return (
     <div
       onClick={() => onSelect(card.label)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       tabIndex={0}
       role="button"
       className="route-card-focus"
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(card.label); } }}
+      onFocus={onMouseEnter}
+      onBlur={onMouseLeave}
       style={{
         background: cardBg,
         borderRadius: 6,
@@ -231,46 +253,45 @@ function RouteCard({
         transition: "background 0.12s",
       }}
     >
-      {/* Row 1: route name + status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-        <p style={{
-          fontSize: 12, fontWeight: 700,
+      {/* Route name + endpoints side-by-side */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "auto 1fr",
+        gridTemplateRows: "1fr 1fr",
+        columnGap: 16,
+        alignItems: "baseline",
+        minHeight: 0,
+      }}>
+        <span style={{
+          gridRow: "1 / 3",
+          fontSize: 17, fontWeight: 700,
           color: isSelected ? thm.chart.line1 : thm.textPrimary,
-          lineHeight: 1.3, margin: 0,
+          lineHeight: 1.35,
           transition: "color 0.12s",
+          alignSelf: "center",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          flex: 1, minWidth: 0,
         }}>
           {card.label}
-        </p>
-        <span style={{ 
-          fontSize: 9, 
-          fontWeight: 500,
-          color: getStatusColor(),
-          whiteSpace: "nowrap", 
-          flexShrink: 0,
-          fontStyle: 'italic',
-        }}>
-          {card.statusText}
-          {!ttActive && card.liveSpeed !== null && card.prevSpeed !== null && (
-            <span style={{ opacity: 0.75 }}>
-              {card.liveSpeed === card.prevSpeed
-                ? ', no change'
-                : card.liveSpeed > card.prevSpeed ? ', improving' : ', getting worse'
-              }
-            </span>
-          )}
         </span>
+        {card.origin && (
+          <span style={{
+            fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            textAlign: "right",
+          }}>
+            {card.origin}
+          </span>
+        )}
+        {card.destination && (
+          <span style={{
+            fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            textAlign: "right",
+          }}>
+            → {card.destination}
+          </span>
+        )}
       </div>
-      
-      {/* Row 2: origin → destination */}
-      <p style={{
-        fontSize: 10, color: thm.textMuted,
-        lineHeight: 1.3, margin: 0,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
-        {endpoints}
-      </p>
 
       {/* Row 2b: weather strip */}
       {card.weather && (
@@ -312,20 +333,43 @@ function RouteCard({
         </div>
       )}
 
-      {/* Row 3: Nested-scale chart */}
-      <div style={{ marginTop: 4 }} />
-      <NestedScaleChart
-        liveSpeed={card.liveSpeed}
-        prevSpeed={card.prevSpeed}
-        typical={card.typical}
-        cityMin={card.cityMin}
-        cityMax={card.cityMax}
-        status={card.status}
-        thm={thm}
-        expanded={hovered || isSelected}
-        ttActive={ttActive}
-      />
-      
+      {/* Row 3: Nested-scale chart (numbers visible when selected/hovered) */}
+      <div style={{ marginTop: 2 }}>
+        <NestedScaleChart
+          liveSpeed={card.liveSpeed}
+          prevSpeed={card.prevSpeed}
+          typical={card.typical}
+          cityMin={card.cityMin}
+          cityMax={card.cityMax}
+          status={card.status}
+          thm={thm}
+          expanded={hovered || isSelected}
+          ttActive={ttActive}
+        />
+      </div>
+
+      {/* Row 4: status text below diamond */}
+      {livePos !== null && (
+        <div style={{ position: "relative", height: 18, marginTop: -2, overflow: "hidden" }}>
+          <span
+            style={{
+              position: "absolute",
+              left: statusLeft,
+              transform: statusTransform,
+              fontSize: 10,
+              fontWeight: 600,
+              color: getStatusColor(),
+              whiteSpace: "nowrap",
+              fontStyle: "italic",
+              textAlign: "center",
+              lineHeight: 1.3,
+            }}
+          >
+            {card.statusText}
+            {trend ? `, ${trend}` : ""}
+          </span>
+        </div>
+      )}
       
       {/* Separator */}
       {!isLast && (
@@ -339,11 +383,16 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel, onHoverRoute, mapshot }: PaneProps) {
   const RAIL_WIDTH = 44;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
+  const handleHover = useCallback((label: string | null) => {
+    setHoveredRoute(label);
+    onHoverRoute?.(label);
+  }, [onHoverRoute]);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
   const paneBorderColor = ttActive
@@ -483,6 +532,8 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 selectedRoute={selectedRoute}
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
+                mapLinkByLabel={mapLinkByLabel}
+                onHover={handleHover}
               />
             )}
           </div>
@@ -541,7 +592,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 }
 
 /* ── Mobile bottom sheet ───────────────────────────────────────── */
-function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow }: PaneProps) {
+function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel }: PaneProps) {
   return (
     <>
       {isOpen && (
@@ -598,6 +649,8 @@ function MobileSheet({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 selectedRoute={selectedRoute}
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
+                mapLinkByLabel={mapLinkByLabel}
+                onHover={() => {}}
               />
             )}
           </div>
@@ -635,6 +688,9 @@ interface Props {
   paneWidth?: number;
   ttActive?: boolean;
   ttSimulatedNow?: Date | null;
+  mapLinkByLabel?: Map<string, string>;
+  onHoverRoute?: (label: string | null) => void;
+  mapshot?: RouteMapshot | null;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -667,6 +723,9 @@ export default function RouteBrowserPane(props: Props) {
     onRouteSelect: handleRouteSelect, thm, isOpen, onToggle: handleToggle, paneWidth,
     dataTimestamp: props.dataTimestamp, lastUpdated: props.lastUpdated,
     ttActive: props.ttActive, ttSimulatedNow: props.ttSimulatedNow,
+    mapLinkByLabel: props.mapLinkByLabel,
+    onHoverRoute: props.onHoverRoute,
+    mapshot: props.mapshot,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

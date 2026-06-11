@@ -34,6 +34,7 @@ export interface RouteCardData {
   statusText: string;
   sortKey: string;
   weather?: WeatherRow;
+  map_link?: string;
 }
 
 /* ── Pure computation functions ───────────────────────────────────── */
@@ -103,7 +104,7 @@ export function computeTODStats(
 export function computeAllRouteCards(
   allRows: TrafficRow[],
   routeOptions: string[],
-  routes: { label_short: string; label_full: string; route_code?: string }[],
+  routes: { label_short: string; label_full: string; route_code?: string; map_link?: string }[],
   weatherMap?: Map<string, WeatherRow>,
 ): RouteCardData[] {
   const lastTs = allRows.reduce((mx, r) => Math.max(mx, r.timestamp.getTime()), 0);
@@ -112,7 +113,9 @@ export function computeAllRouteCards(
 
   const preliminaryCards = routeOptions.map((label) => {
     const routeRows = allRows.filter(r => r.label_short === label);
-    const labelFull = routes.find(r => r.label_short === label)?.label_full ?? label;
+    const routeMeta = routes.find(r => r.label_short === label);
+    const labelFull = routeMeta?.label_full ?? label;
+    const map_link = routeMeta?.map_link;
     const arrowIdx = labelFull.indexOf("→");
     const origin = arrowIdx > 0 ? labelFull.slice(0, arrowIdx).trim() : label;
     const destination = arrowIdx > 0 ? labelFull.slice(arrowIdx + 1).trim() : "";
@@ -126,7 +129,7 @@ export function computeAllRouteCards(
     const liveTimestamp = mostRecent ? mostRecent.timestamp : null;
     const typical = computeTODStats(routeRows, lastDataDate, 90, 90);
 
-    return { label, origin, destination, liveSpeed, prevSpeed, liveTimestamp, typical, sortKey: label.toLowerCase() };
+    return { label, origin, destination, liveSpeed, prevSpeed, liveTimestamp, typical, sortKey: label.toLowerCase(), map_link };
   });
 
   const liveSpeeds = preliminaryCards.map(c => c.liveSpeed).filter((s): s is number => s !== null);

@@ -876,6 +876,7 @@ export interface BandThresholdsResult {
   thresholds: number[];   // 10 boundaries: [0, p1, p5, p15, p30, p45, p60, p75, p85, p95]
   quantiles: RatioQuantiles;
   observationCount: number;
+  sourceRowCount: number; // allRows.length at time of computation
   computedAt: number;     // Date.now() timestamp
 }
 
@@ -902,6 +903,7 @@ export function useEmpiricalBandThresholds(
     thresholds: [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
     quantiles: { p1:0,p2:0,p5:0,p10:0,p15:0,p25:0,p30:0,p40:0,p45:0,p50:0,p55:0,p60:0,p70:0,p75:0,p85:0,p90:0,p95:0,p98:0,p99:0 },
     observationCount: 0,
+    sourceRowCount: 0,
     computedAt: 0,
   };
 
@@ -916,7 +918,7 @@ export function useEmpiricalBandThresholds(
     const now = Date.now();
     const isStale = !cached
       || (now - cached.computedAt > CACHE_MAX_AGE_MS)
-      || (cached.observationCount > 0 && allRows.length > cached.observationCount * (1 + CACHE_ROW_GROWTH_PCT));
+      || (cached.sourceRowCount > 0 && allRows.length > cached.sourceRowCount * (1 + CACHE_ROW_GROWTH_PCT));
 
     if (!isStale) return;
 
@@ -974,14 +976,12 @@ export function useEmpiricalBandThresholds(
                    quantiles.p45, quantiles.p60, quantiles.p75, quantiles.p85, quantiles.p95],
       quantiles,
       observationCount: ratios.length,
+      sourceRowCount: allRows.length,
       computedAt: now,
     };
 
     setCachedThresholds(newResult);
     setResult(newResult);
-    console.log("[Calendar] RATIO_QUANTILES:", quantiles);
-    console.log("[Calendar] BAND_THRESHOLDS:", newResult.thresholds);
-    console.log("[Calendar] Observations:", ratios.length);
   }, [allRows, benchmarkRoutes]);
 
   return result;

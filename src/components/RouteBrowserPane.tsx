@@ -13,6 +13,8 @@ import { TOOLTIP_CONTENT } from "@/lib/tooltipContent";
 import NestedScaleChart from "@/components/shared/NestedScaleChart";
 import { getRouteMapshot } from "@/lib/routeMapshots";
 
+interface RouteMapshot { imageUrl: string; alt: string; }
+
 interface PaneProps {
   cards: RouteCardData[] | null;
   selectedRoute: string;
@@ -27,6 +29,7 @@ interface PaneProps {
   ttSimulatedNow?: Date | null;
   mapLinkByLabel?: Map<string, string>;
   onHoverRoute?: (label: string | null) => void;
+  mapshot?: RouteMapshot | null;
 }
 
 /* ── Relative time label ─────────────────────────────────────── */
@@ -375,7 +378,7 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel, onHoverRoute }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel, onHoverRoute, mapshot }: PaneProps) {
   const RAIL_WIDTH = 44;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
@@ -682,6 +685,7 @@ interface Props {
   ttSimulatedNow?: Date | null;
   mapLinkByLabel?: Map<string, string>;
   onHoverRoute?: (label: string | null) => void;
+  mapshot?: RouteMapshot | null;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -716,6 +720,7 @@ export default function RouteBrowserPane(props: Props) {
     ttActive: props.ttActive, ttSimulatedNow: props.ttSimulatedNow,
     mapLinkByLabel: props.mapLinkByLabel,
     onHoverRoute: props.onHoverRoute,
+    mapshot: props.mapshot,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

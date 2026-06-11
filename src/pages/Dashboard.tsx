@@ -1287,8 +1287,31 @@ function DashboardInner() {
                       borderRadius: 8,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       zIndex: 1000,
-                      overflow: "hidden",
+                      overflow: "visible",
                     }}>
+                      {/* Map preview — left of dropdown, edge-to-edge */}
+                      {mapshot && (
+                        <div style={{
+                          position: "absolute",
+                          top: 0,
+                          bottom: 0,
+                          right: "100%",
+                          width: 360,
+                          borderRadius: "8px 0 0 8px",
+                          overflow: "hidden",
+                          background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                        }}>
+                          <img
+                            src={mapshot.imageUrl}
+                            alt={mapshot.alt}
+                            loading="eager"
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </div>
+                      )}
+                      {/* Route list — clips itself */}
+                      <div style={{ overflow: "hidden", borderRadius: 8, display: "flex", flexDirection: "column" }}>
                       {/* Left pane: ranked route list */}
                       <div style={{ minWidth: 300, padding: "4px 0" }}>
                         {/* Contextual header — makes time basis explicit */}
@@ -1387,6 +1410,7 @@ function DashboardInner() {
                         })}
                       </div>
 
+                      </div>{/* close route list wrapper */}
                     </div>
                   )}
                 </div>
@@ -2679,24 +2703,6 @@ function DashboardInner() {
           {/* ── Route browser pane (desktop) ──────────────────────── */}
           {!isMobile && citySource && (
             <div style={{ opacity: showIntro ? 0 : 1, transition: "opacity 0.4s ease", display:"flex", minHeight:0, zoom: ZOOM_STEPS[zoomIdx] }}>
-              {/* Map preview — left of dropdown, edge-to-edge */}
-              {paneOpen && mapshot && (
-                <div style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                  background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
-                }}>
-                  <img
-                    src={mapshot.imageUrl}
-                    alt={mapshot.alt}
-                    loading="eager"
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                  />
-                </div>
-              )}
               <RouteBrowserPane
                 cards={enrichedRouteCards}
                 selectedRoute={selectedRoute}

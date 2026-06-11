@@ -1284,6 +1284,24 @@ function DashboardInner() {
                       padding: "4px 0",
                       zIndex: 1000,
                     }}>
+                      {/* Contextual header — makes time basis explicit */}
+                      <div style={{
+                        padding: "8px 12px 4px",
+                        borderBottom: `1px solid ${thm.key === "gray" ? "#e8e8e8" : "rgba(128,128,128,0.12)"}`,
+                        marginBottom: 2,
+                      }}>
+                        <div style={{
+                          fontSize: 11, fontWeight: 700, color: thm.textPrimary,
+                          letterSpacing: "0.02em",
+                        }}>
+                          R³S² ranking
+                        </div>
+                        <div style={{
+                          fontSize: 10, color: thm.textMuted, marginTop: 1,
+                        }}>
+                          {todLabel} · last 14 days
+                        </div>
+                      </div>
                       {sortedRoutes.map((route) => {
                         const rrs = rrsLookup.get(route.label_short);
                         const isSelected = route.label_short === selectedRoute;

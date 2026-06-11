@@ -26,6 +26,7 @@ interface PaneProps {
   ttActive?: boolean;
   ttSimulatedNow?: Date | null;
   mapLinkByLabel?: Map<string, string>;
+  onHoverRoute?: (label: string | null) => void;
 }
 
 /* ── Relative time label ─────────────────────────────────────── */
@@ -374,12 +375,16 @@ function RouteCard({
 }
 
 /* ── Desktop pane with draggable left edge ─────────────────────── */
-function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel }: PaneProps) {
+function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggle, paneWidth, dataTimestamp, lastUpdated, ttActive, ttSimulatedNow, mapLinkByLabel, onHoverRoute }: PaneProps) {
   const RAIL_WIDTH = 44;
   const MIN_WIDTH = cfg.route_pane.min_width;
   const MAX_WIDTH = cfg.route_pane.max_width;
   const [dragging, setDragging] = useState(false);
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
+  const handleHover = useCallback((label: string | null) => {
+    setHoveredRoute(label);
+    onHoverRoute?.(label);
+  }, [onHoverRoute]);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
   const paneBorderColor = ttActive
@@ -520,7 +525,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
                 onRouteSelect={onRouteSelect}
                 ttActive={ttActive}
                 mapLinkByLabel={mapLinkByLabel}
-                onHover={setHoveredRoute}
+                onHover={handleHover}
               />
             )}
           </div>
@@ -676,6 +681,7 @@ interface Props {
   ttActive?: boolean;
   ttSimulatedNow?: Date | null;
   mapLinkByLabel?: Map<string, string>;
+  onHoverRoute?: (label: string | null) => void;
 }
 
 export default function RouteBrowserPane(props: Props) {
@@ -709,6 +715,7 @@ export default function RouteBrowserPane(props: Props) {
     dataTimestamp: props.dataTimestamp, lastUpdated: props.lastUpdated,
     ttActive: props.ttActive, ttSimulatedNow: props.ttSimulatedNow,
     mapLinkByLabel: props.mapLinkByLabel,
+    onHoverRoute: props.onHoverRoute,
   };
 
   return props.mobile ? <MobileSheet {...paneProps} /> : <DesktopPane {...paneProps} />;

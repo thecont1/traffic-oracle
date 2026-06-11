@@ -2568,13 +2568,14 @@ function DashboardInner() {
                             widgetCalMonth={widgetCalMonth}
                             onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
                             isBenchmarkRoute={selectedRoute === benchmarkRouteLabel}
+                            debug={!!URL_PARAMS.debug}
                           />
                           {/* ── R³S² Context Block ── */}
                           {rrsCtx && (
                             <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
                           )}
-                          {/* ── R³S² DEBUG Block — hidden for now ── */}
-                          {false && rrsCtx && (
+                          {/* ── R³S² DEBUG Block — ?debug=1 to show ── */}
+                          {URL_PARAMS.debug && rrsCtx && (
                             <RrsDebugBlock
                               ctx={rrsCtx!}
                               selectedRoute={selectedRoute}

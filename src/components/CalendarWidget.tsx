@@ -94,6 +94,7 @@ export function CalendarWidget({
   bandThresholds,
   widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
   isBenchmarkRoute = false,
+  debug = false,
 }: {
   dailyStats: Map<string, DayStats>;
   allRows: TrafficRow[];
@@ -107,6 +108,7 @@ export function CalendarWidget({
   onDateClick?: (dateKey: string) => void;
   cutoffDate?: Date | null;
   isBenchmarkRoute?: boolean;
+  debug?: boolean;
 }) {
   const { theme: thm } = useTheme();
 
@@ -422,8 +424,8 @@ export function CalendarWidget({
         {cells}
       </div>
 
-      {/* ⚠ DEBUG PANEL — hidden for now */}
-      {false && (() => {
+      {/* ⚠ DEBUG PANEL — ?debug=1 to show */}
+      {debug && (() => {
         const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
         const bmRoute = benchmarkRouteLabel;
         const bmTotalDist = allRows.filter(r => r.label_short === bmRoute).reduce((s, r) => s + r.distance_km, 0);

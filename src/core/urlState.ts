@@ -16,13 +16,14 @@ export interface DashboardUrlParams {
   aggregation?: string;
   metric?: string;
   tt?: string;
+  debug?: boolean;
 }
 
 /** Parse dashboard-relevant query parameters from the current URL. */
 export function readUrlParams(): DashboardUrlParams {
   if (typeof window === "undefined") return {};
   const p = new URLSearchParams(window.location.search);
-  const out: Record<string, string | number> = {};
+  const out: Record<string, string | number | boolean> = {};
   if (p.has("city"))        out.city        = p.get("city")!;
   if (p.has("route"))       out.route       = p.get("route")!;
   if (p.has("tod"))         out.tod         = p.get("tod")!;
@@ -35,6 +36,7 @@ export function readUrlParams(): DashboardUrlParams {
   if (p.has("aggregation")) out.aggregation = p.get("aggregation")!;
   if (p.has("metric"))      out.metric      = p.get("metric")!;
   if (p.has("tt"))          out.tt          = p.get("tt")!;
+  if (p.has("debug"))       out.debug       = p.get("debug") === "1";
   return out as DashboardUrlParams;
 }
 

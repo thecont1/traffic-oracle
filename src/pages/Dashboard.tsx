@@ -97,6 +97,15 @@ function parseYM(s: string) {
   return { y: d.getFullYear(), m: d.getMonth() };
 }
 
+/* ── R³S² score → colour (±15 dead-band = gray) ──────────────── */
+function rrsScoreColor(score: number): string {
+  if (score > 30)  return '#22c55e';   // deep green
+  if (score > 15)  return '#4ade80';   // light green
+  if (score >= -15) return '#9CA3AF';  // gray — unremarkable
+  if (score > -30) return '#f97316';   // orange — struggling
+  return '#ef4444';                    // red — as bad as it gets
+}
+
 /* ── Main dashboard (inner — consumes ThemeContext) ───────────── */
 function DashboardInner() {
   const { theme: thm, themeKey, nextThemeKey, cycleTheme } = useTheme();
@@ -1289,14 +1298,14 @@ function DashboardInner() {
                       zIndex: 1000,
                       overflow: "visible",
                     }}>
-                      {/* Map preview — left of dropdown, edge-to-edge */}
+                      {/* Map preview — edge-to-edge with dropdown, square via aspect-ratio */}
                       {mapshot && (
                         <div style={{
                           position: "absolute",
                           top: 0,
                           bottom: 0,
                           right: "100%",
-                          width: 360,
+                          aspectRatio: "1 / 1",
                           borderRadius: "8px 0 0 8px",
                           overflow: "hidden",
                           background: thm.key === "colour" ? "#0D1117" : thm.key === "pastel" ? "#F5F0E8" : "#f5f5f5",
@@ -1401,7 +1410,7 @@ function DashboardInner() {
                               {/* Score — secondary */}
                               <span style={{
                                 fontSize: 10, fontWeight: 600, flexShrink: 0,
-                                color: rrs ? (rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted) : "#ef4444",
+                                color: badge ? badge.color : thm.textMuted,
                               }}>
                                 {rrs ? (rrs.score > 0 ? "+" : "") + rrs.score.toFixed(0) : "\u2014"}
                               </span>

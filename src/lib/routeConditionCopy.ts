@@ -231,11 +231,11 @@ export const BENCHMARK_CALENDAR_COPY = {
 
 /** Short phrase for ranked route selector badges. */
 const CONDITION_BADGE: Record<ConditionFamily, string> = {
-  very_good: 'running fast lately',
-  good:      'holding up well lately',
-  typical:   'typical lately',
-  bad:       'struggling lately',
-  very_bad:  'as bad as it gets lately',
+  very_good: "excellent",
+  good:      "good",
+  typical:   "typical",
+  bad:       "bad",
+  very_bad:  "terrible",
 };
 
 /** Badge color per condition family (lightweight, no per-theme needed). */

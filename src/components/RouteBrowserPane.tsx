@@ -241,25 +241,22 @@ function RouteCard({
         transition: "background 0.12s",
       }}
     >
-      {/* Row 1: route name */}
+      {/* Route name + endpoints (inline, up to 2 lines) */}
       <p style={{
         fontSize: 16, fontWeight: 400,
         color: isSelected ? thm.chart.line1 : thm.textPrimary,
-        lineHeight: 1.3, margin: 0,
+        lineHeight: 1.35, margin: 0,
         transition: "color 0.12s",
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
-        {card.label}
-      </p>
-      
-      {/* Row 2: origin → destination */}
-      <div style={{
-        fontSize: 11, color: thm.textMuted,
-        lineHeight: 1.3, margin: 0,
+        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
         overflow: "hidden",
       }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{endpoints}</span>
-      </div>
+        {card.label}
+        {endpoints !== card.label && (
+          <span style={{ fontSize: 11, color: thm.textMuted, marginLeft: 6 }}>
+            {endpoints}
+          </span>
+        )}
+      </p>
 
       {/* Row 2b: weather strip */}
       {card.weather && (

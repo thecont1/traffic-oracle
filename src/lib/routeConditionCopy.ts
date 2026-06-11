@@ -226,6 +226,45 @@ export const BENCHMARK_CALENDAR_COPY = {
 };
 
 // ============================================================================
+// Short condition badge (for Route Observer dropdown — casual, glanceable)
+// ============================================================================
+
+/** Short phrase for ranked route selector badges. */
+const CONDITION_BADGE: Record<ConditionFamily, string> = {
+  very_good: 'running fast',
+  good:      'holding up well',
+  typical:   'typical',
+  bad:       'struggling',
+  very_bad:  'as bad as it gets',
+};
+
+/** Badge color per condition family (lightweight, no per-theme needed). */
+export const CONDITION_BADGE_COLOR: Record<ConditionFamily, string> = {
+  very_good: '#22c55e',
+  good:      '#4ade80',
+  typical:   '#9CA3AF',
+  bad:       '#f97316',
+  very_bad:  '#ef4444',
+};
+
+/**
+ * Get a short condition badge for a route rank.
+ * Returns { text, color, family } for the Route Observer dropdown.
+ */
+export function getConditionBadge(rank: number, totalRoutes: number): {
+  text: string;
+  color: string;
+  family: ConditionFamily;
+} {
+  const family = classifyCondition(rank, totalRoutes);
+  return {
+    text: CONDITION_BADGE[family],
+    color: CONDITION_BADGE_COLOR[family],
+    family,
+  };
+}
+
+// ============================================================================
 // R³S² explainer copy
 // ============================================================================
 

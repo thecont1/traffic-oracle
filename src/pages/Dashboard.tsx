@@ -48,6 +48,7 @@ import Route404 from "@/components/shared/Route404";
 
 // ── R³S² (Rolling Relative Route Scoring System) ────────────────
 import { useRrsData, useRrsContext } from "@/lib/rrsData";
+import { getConditionBadge } from "@/lib/routeConditionCopy";
 import { RrsContextBlock } from "@/components/RrsContextBlock";
 import { RrsDebugBlock } from "@/components/RrsDebugBlock";
 
@@ -1026,7 +1027,7 @@ function DashboardInner() {
 
   /* ── R³S²-enriched route cards for Route Observer ─────────────── */
   const rrsLookup = useMemo(() => {
-    const map = new Map<string, { rank: number; score: number }>();
+    const map = new Map<string, { rank: number; score: number; cv: number; speedSd: number; routesInWindow: number }>();
     if (!rrsData.routeWindow.length) return map;
     for (const row of rrsData.routeWindow) {
       if (row.tod_bucket !== tod) continue;
@@ -1034,7 +1035,13 @@ function DashboardInner() {
       if (!label) continue;
       const existing = map.get(label);
       if (!existing || row.rrs_rank < existing.rank) {
-        map.set(label, { rank: row.rrs_rank, score: row.rrs_rolling_score });
+        map.set(label, {
+          rank: row.rrs_rank,
+          score: row.rrs_rolling_score,
+          cv: row.speed_cv,
+          speedSd: row.speed_sd_window,
+          routesInWindow: row.routes_in_window,
+        });
       }
     }
     return map;
@@ -1269,7 +1276,7 @@ function DashboardInner() {
                       position: "absolute",
                       top: "calc(100% + 4px)",
                       left: 0,
-                      minWidth: 260,
+                      minWidth: 300,
                       background: thm.sectionBg,
                       border: `1px solid ${thm.key === "gray" ? "#e0e0e0" : "hsl(var(--border))"}`,
                       borderRadius: 8,
@@ -1284,6 +1291,7 @@ function DashboardInner() {
                         const bg = isSelected || isHovered
                           ? (thm.key === "colour" ? "rgba(34,211,238,0.12)" : thm.key === "pastel" ? "rgba(58,134,200,0.10)" : "rgba(0,0,0,0.06)")
                           : "transparent";
+                        const badge = rrs ? getConditionBadge(rrs.rank, rrs.routesInWindow) : null;
                         return (
                           <div
                             key={route.route_code}
@@ -1296,7 +1304,7 @@ function DashboardInner() {
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: 6,
+                              gap: 8,
                               width: "100%",
                               padding: "7px 12px",
                               minHeight: 32,
@@ -1310,6 +1318,7 @@ function DashboardInner() {
                               transition: "background 0.1s",
                             }}
                           >
+                            {/* Rank square */}
                             <span style={{
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
                               width: 20, height: 18,
@@ -1320,9 +1329,26 @@ function DashboardInner() {
                             }}>
                               {rrs ? rrs.rank : ""}
                             </span>
+
+                            {/* Route name — dominant */}
                             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {route.label_short}
                             </span>
+
+                            {/* Condition badge — lightweight phrase */}
+                            {badge && (
+                              <span style={{
+                                fontSize: 10,
+                                color: badge.color,
+                                whiteSpace: "nowrap",
+                                flexShrink: 0,
+                                opacity: 0.85,
+                              }}>
+                                {badge.text}
+                              </span>
+                            )}
+
+                            {/* Score — secondary */}
                             <span style={{
                               fontSize: 10, fontWeight: 600, flexShrink: 0,
                               color: rrs ? (rrs.score > 0 ? "#22c55e" : rrs.score < 0 ? "#ef4444" : thm.textMuted) : "#ef4444",

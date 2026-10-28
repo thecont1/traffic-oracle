@@ -135,6 +135,9 @@ export interface CalendarAnomalyFeed {
   byKey: Map<string, CalendarAnomaly>;
   methodVersion: string | null;
   generatedAt: string | null;
+  /** First and last civil date present in the export (the published window). */
+  earliestDate: string | null;
+  latestDate: string | null;
   error: string | null;
 }
 
@@ -143,6 +146,8 @@ const EMPTY_FEED: CalendarAnomalyFeed = {
   byKey: new Map(),
   methodVersion: null,
   generatedAt: null,
+  earliestDate: null,
+  latestDate: null,
   error: null,
 };
 
@@ -256,6 +261,18 @@ export function todIncludesWeekday(tod: TimeOfDay, weekday: number): boolean {
   }
 }
 
+/**
+ * True when a civil date predates the export's published window.
+ * The upstream file is a rolling 90-day publication, so an early date is not
+ * "no observations" — it simply was not published in this file.
+ */
+export function isBeforePublishedWindow(
+  dateKey: string,
+  feed: Pick<CalendarAnomalyFeed, "earliestDate">,
+): boolean {
+  return !!feed.earliestDate && dateKey < feed.earliestDate;
+}
+
 /** True when a civil date is outside the selected time-of-day filter. */
 export function isDateExcludedByTod(dateKey: string, tod: TimeOfDay): boolean {
   const civil = parseCivilDate(dateKey);
@@ -354,6 +371,8 @@ export function parseAnomalyCsv(csvText: string): CalendarAnomalyFeed {
   const methodVersions = new Set<string>();
   const byKey = new Map<string, CalendarAnomaly>();
   let generatedAt: string | null = null;
+  let earliestDate: string | null = null;
+  let latestDate: string | null = null;
 
   for (const row of rows) {
     const methodVersion = (row.method_version ?? "").trim();
@@ -407,6 +426,8 @@ export function parseAnomalyCsv(csvText: string): CalendarAnomalyFeed {
     if (record.generatedAt && (!generatedAt || record.generatedAt > generatedAt)) {
       generatedAt = record.generatedAt;
     }
+    if (earliestDate === null || date < earliestDate) earliestDate = date;
+    if (latestDate === null || date > latestDate) latestDate = date;
     byKey.set(anomalyKey(routeCode, tod, date), record);
   }
 
@@ -432,6 +453,8 @@ export function parseAnomalyCsv(csvText: string): CalendarAnomalyFeed {
     byKey,
     methodVersion: [...methodVersions][0] ?? null,
     generatedAt,
+    earliestDate,
+    latestDate,
     error: null,
   };
 }

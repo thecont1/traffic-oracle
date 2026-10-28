@@ -19,6 +19,7 @@ import {
   formatPercent,
   formatSignedMinutes,
   instantToCivilKey,
+  isBeforePublishedWindow,
   isDateExcludedByTod,
   isScorable,
   parseCivilDate,
@@ -122,6 +123,7 @@ export function CalendarWidget({
   anomalies,
   feedState,
   feedMeta,
+  publishedFrom,
   selectedRoute,
   tod,
   widgetCalYear,
@@ -134,6 +136,8 @@ export function CalendarWidget({
   anomalies: Map<string, CalendarAnomaly>;
   feedState: AnomalyFeedState;
   feedMeta?: FeedMeta;
+  /** First date the export publishes (rolling 90-day window). */
+  publishedFrom?: string | null;
   selectedRoute: string;
   tod: TimeOfDay;
   widgetCalYear: number;
@@ -202,6 +206,9 @@ export function CalendarWidget({
       // A Saturday under "weekday evenings" is not missing evidence — it is
       // simply not part of the filter, and must not read as a failed day.
       const outsideFilter = !record && isDateExcludedByTod(dateKey, tod);
+      // Nor is a day from before the export's rolling window a day that failed
+      // to collect — it is simply not published in this file.
+      const beforeWindow = !record && isBeforePublishedWindow(dateKey, { earliestDate: publishedFrom ?? null });
 
       const dayLabel = formatCivilDate(dateKey, {
         weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -234,9 +241,9 @@ export function CalendarWidget({
           background: "transparent",
         };
         txtClr = thm.textMuted;
-      } else if (outsideFilter) {
-        // Outside the selected filter: the number stays legible but is clearly
-        // not a scored day — no ring, just muted text.
+      } else if (outsideFilter || beforeWindow) {
+        // Outside the selected filter or before the published window: the
+        // number stays legible but is clearly not a scored day — no ring.
         circleStyle = { border: "2px solid transparent", background: "transparent" };
         txtClr = thm.textMuted;
       } else {
@@ -254,14 +261,21 @@ export function CalendarWidget({
               ? categoryText(record)
               : outsideFilter
                 ? `Not part of ${TOD_LABELS[tod]}`
-                : "No observations";
+                : beforeWindow
+                  ? "Before the published window"
+                  : "No observations";
 
       const details = (() => {
         if (!record || !feedReady) {
-          return outsideFilter ? `This weekday is not part of ${TOD_LABELS[tod]}.` : "";
+          if (outsideFilter) return `This weekday is not part of ${TOD_LABELS[tod]}.`;
+          if (beforeWindow) {
+            return `Only the most recent 90 days are published (from ${publishedFrom ?? "–"}).`;
+          }
+          return "";
         }
         if (isScorable(record)) {
-          const parts = [categoryText(record)];
+          // The category is already in the cell's label; do not say it twice.
+          const parts: string[] = [];
           if (record.status === "provisional") parts.push("Provisional");
           if (record.observedMinutes !== null) {
             parts.push(`Estimated journey ${formatMinutes(record.observedMinutes)}`);
@@ -317,7 +331,7 @@ export function CalendarWidget({
             <span style={{
               fontSize: 16, fontWeight: 800, color: txtClr,
               lineHeight: 1, userSelect: "none",
-              opacity: isFuture || outsideFilter ? 0.4 : 1,
+              opacity: isFuture || outsideFilter || beforeWindow ? 0.4 : 1,
             }}>
               {dayNum}
             </span>
@@ -326,7 +340,8 @@ export function CalendarWidget({
       );
     });
   }, [anomalies, firstDay, daysInMo, prefixStr, thm.key, thm.textMuted, cutoffKey,
-      todayKey, onDateClick, selectedRoute, tod, showTip, hideTip, feedReady, feedState]);
+      todayKey, onDateClick, selectedRoute, tod, showTip, hideTip, feedReady, feedState,
+      publishedFrom]);
 
   /* ── Tooltip rendering ──────────────────────────────────────── */
   const renderTooltip = () => {

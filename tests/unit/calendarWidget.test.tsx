@@ -67,6 +67,7 @@ function renderCal(
     cutoffDate?: Date | null;
     theme?: "colour" | "gray" | "pastel";
     tod?: CalendarAnomaly["tod"];
+    publishedFrom?: string | null;
   } = {},
 ) {
   const { year = 2025, month = 3, onDateClick, feedState = "ready", cutoffDate = null } = options;
@@ -76,6 +77,7 @@ function renderCal(
         anomalies={recordMap(records)}
         feedState={feedState}
         feedMeta={{ methodVersion: "calendar-anomaly-v1", generatedAt: "2025-04-11T02:00", error: null }}
+        publishedFrom={options.publishedFrom ?? null}
         selectedRoute="Test Route"
         tod={options.tod ?? "all"}
         widgetCalYear={year}
@@ -206,6 +208,16 @@ describe("CalendarWidget status treatment", () => {
     expect(saturday!.querySelector("div")!.style.background).toBe("transparent");
   });
 
+  it("labels days before the rolling publication window as unpublished, not unobserved", () => {
+    renderCal([anomaly("2025-04-10", { category: "usual" })], { publishedFrom: "2025-04-05" });
+    const early = document.querySelector('[aria-label*="2 April 2025"]') as HTMLElement | null;
+    expect(early).toBeTruthy();
+    expect(early!.getAttribute("aria-label")).toContain("Before the published window");
+    expect(early!.getAttribute("aria-label")).not.toContain("No observations");
+    expect(early!.getAttribute("data-dk")).toBeNull();
+    expect(early!.querySelector("div")!.style.background).toBe("transparent");
+  });
+
   it("still calls a genuinely missing weekday reading 'No observations'", () => {
     renderCal([], { tod: "weekday_evening" });
     const thursday = document.querySelector('[aria-label*="10 April 2025"]') as HTMLElement | null;
@@ -295,6 +307,8 @@ describe("CalendarWidget interaction", () => {
     expect(label).toContain("typical comparable Thursday 28.4 min");
     expect(label).toContain("About 15.1 min longer, or 53%");
     expect(label).toContain("Longer than all 12 comparable Thursdays");
+    // The category appears once: it is the cell's verdict, not a prefix to the detail.
+    expect(label.match(/Much worse than usual/g)).toHaveLength(1);
   });
 
   it("shows the typical value and rank in the hover tooltip", async () => {

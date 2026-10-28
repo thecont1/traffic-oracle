@@ -969,7 +969,12 @@ function DashboardInner() {
   const [widgetCalMonth, setWidgetCalMonth] = useState(() => cityToday().month - 1);
 
   const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
-  const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;
+  // The anomaly export is a rolling 90-day publication; do not let month
+  // navigation wander into periods it no longer publishes.
+  const anomalyFirstStr = anomalyFeed.earliestDate ?? "";
+  const widgetCalMinMonthStr = (anomalyFirstStr || calFirstStr)
+    ? (anomalyFirstStr || calFirstStr).slice(0, 7)
+    : widgetCalPrefixStr;
   const { y: wCalLy, m: wCalLm } = calLastStr ? parseYM(calLastStr) : { y: widgetCalYear, m: widgetCalMonth };
   const widgetCalMaxMonthStr = `${wCalLy}-${String(wCalLm + 1).padStart(2, "0")}`;
   const widgetCalCanBack = widgetCalPrefixStr > widgetCalMinMonthStr;
@@ -2586,7 +2591,7 @@ function DashboardInner() {
                           <p style={{ fontSize: 12, color: thm.textMuted, margin: "0 0 8px", lineHeight: 1.5 }}>
                             Each day is compared with the same weekday and hours on this route
                             over the preceding 90 days. This 90-day reference is independent of
-                            the main question's baseline.
+                            the main question's baseline; only the most recent 90 days are published.
                           </p>
                           <CalendarWidget
                             anomalies={anomalyRecords}
@@ -2596,6 +2601,7 @@ function DashboardInner() {
                               generatedAt: anomalyFeed.generatedAt,
                               error: anomalyFeed.error,
                             }}
+                            publishedFrom={anomalyFeed.earliestDate}
                             selectedRoute={selectedRoute}
                             tod={tod}
                             cutoffDate={tt.isActive ? tt.simulatedNow : null}

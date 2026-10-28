@@ -11,6 +11,7 @@ import { describe, it, expect } from "bun:test";
 import * as Papa from "papaparse";
 import {
   ANOMALY_CSV_URL,
+  isBeforePublishedWindow,
   CATEGORY_LABELS,
   SUPPORTED_METHOD_VERSIONS,
   anomaliesForRoute,
@@ -150,6 +151,16 @@ describe("parseAnomalyCsv", () => {
     expect(r.observedSlots).toEqual([18, 19, 20]);
   });
 
+  it("exposes the published date window", () => {
+    const feed = parseAnomalyCsvText(csv([
+      row({ date: "2025-04-10" }),
+      row({ date: "2025-04-30" }),
+      row({ date: "2025-04-20" }),
+    ]));
+    expect(feed.earliestDate).toBe("2025-04-10");
+    expect(feed.latestDate).toBe("2025-04-30");
+  });
+
   it("keeps route identity separate from the display label", () => {
     const feed = parseAnomalyCsvText(csv([row()]));
     expect([...feed.byKey.keys()]).toEqual([anomalyKey("XMW9+G8|WMJR+V4", "weekday_evening", "2025-04-10")]);
@@ -257,6 +268,14 @@ describe("civil dates", () => {
     expect(today.month).toBeGreaterThanOrEqual(1);
     expect(today.month).toBeLessThanOrEqual(12);
     expect(toCivilKey(today.year, today.month, today.day)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("distinguishes dates before the published window from empty ones", () => {
+    const feed = { earliestDate: "2026-07-30" };
+    expect(isBeforePublishedWindow("2026-07-29", feed)).toBe(true);
+    expect(isBeforePublishedWindow("2026-07-30", feed)).toBe(false);
+    expect(isBeforePublishedWindow("2026-08-01", feed)).toBe(false);
+    expect(isBeforePublishedWindow("2025-01-01", { earliestDate: null })).toBe(false);
   });
 
   it("round-trips a civil key", () => {

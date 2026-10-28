@@ -1,43 +1,80 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "@/lib/ThemeContext";
-import type { DayStats, TrafficRow, TimeOfDay, BandThresholdsResult } from "@/lib/useTrafficData";
-import { matchesToD } from "@/lib/useTrafficData";
+import type { TimeOfDay } from "@/lib/useTrafficData";
+import type { AnomalyCategory, AnomalyFeedState, CalendarAnomaly } from "@/lib/calendarAnomalies";
+import {
+  CATEGORY_LABELS,
+  MIN_COMPARABLE_DAYS,
+  STATUS_LABELS,
+  categoryText,
+  cityTodayKey,
+  civilWeekdayName,
+  describeDelta,
+  describeRank,
+  describeSample,
+  describeSlots,
+  formatCivilDate,
+  formatMinutes,
+  formatPercent,
+  formatSignedMinutes,
+  instantToCivilKey,
+  isDateExcludedByTod,
+  isScorable,
+  parseCivilDate,
+} from "@/lib/calendarAnomalies";
 
 const CIRCLE_D = 46;
-const DAY_HDR  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const DECILES = 10;
+const DAY_HDR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/* ── Ratio → decile mapping (dynamic empirical thresholds) ────── */
-/** Default fallback thresholds (same as old fixed values). */
-const DEFAULT_THRESHOLDS = [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
-
-/** Map a ratio to a band index 0–9 using the given threshold boundaries.
- *  thresholds[i] is the lower bound of band i; band 9 is everything >= thresholds[9]. */
-function ratioToDecile(ratio: number, thresholds: number[] = DEFAULT_THRESHOLDS): number {
-  for (let i = 1; i < thresholds.length; i++) {
-    if (ratio < thresholds[i]) return i - 1;
-  }
-  return thresholds.length - 1;
-}
-
-/** Centralised decile palettes — exported for use in legend. */
-/*   band 0 = red/slowest  →  band 9 = green/fastest              */
-export const PALETTES: Record<string, string[]> = {
-  colour: ["#E8354A","#F0673A","#F5973A","#F7C244","#EDD97A","#C8DC6A","#96CC54","#5DB96A","#2EA878","#0D8C52"],
-  gray:   ["#0a0a0a","#171717","#262626","#404040","#525252","#737373","#a3a3a3","#d4d4d4","#e5e5e5","#fafafa"],
-  pastel: ["#fca5a5","#fdba74","#fcd34d","#fde68a","#d9f99d","#bef264","#86efac","#4ade80","#22c55e","#16a34a"],
-  /* Benchmark special case: teal/blue tones for Airport Expy self-view */
-  benchmark: ["#0e7490","#0891b2","#06b6d4","#22d3ee","#67e8f9","#a5f3fc","#0d9488","#14b8a6","#2dd4bf","#5eead4"],
+/* ── Category palette ────────────────────────────────────────────────
+ * Five categories, ordered much_worse → much_better, plus an unfilled
+ * dashed treatment for missing/provisional-unavailable evidence.
+ * Colour is always paired with category text in the aria label and tooltip;
+ * the grey theme uses a luminance ramp and still distinguishes a filled
+ * "usual" day from an outlined day with no usable evidence.            */
+export const CATEGORY_COLOURS: Record<string, Record<AnomalyCategory, string>> = {
+  colour: {
+    much_worse: "#E8354A",
+    worse: "#E08A3C",
+    usual: "#3A4A5C",
+    // "Better" is a lighter, low-emphasis green and "much better" the deep
+    // saturated one, so adjacent categories stay separable by luminance as
+    // well as hue (red/orange keep the same luminance hierarchy).
+    better: "#62BE89",
+    much_better: "#0D8C52",
+  },
+  // A single monotonic luminance ramp — darker means worse — so the five
+  // categories stay ordered without hue. "Usual" is the mid step: a filled
+  // circle, deliberately distinct from the dashed no-result treatment.
+  gray: {
+    much_worse: "#111111",
+    worse: "#4F4F4F",
+    usual: "#8C8C8C",
+    better: "#B8B8B8",
+    much_better: "#E2E2E2",
+  },
+  pastel: {
+    much_worse: "#FCA5A5",
+    worse: "#FDBA74",
+    usual: "#EDE5D6",
+    better: "#BEF2CE",
+    much_better: "#86EFAC",
+  },
 };
 
-function paletteFor(key: string): string[] {
-  return PALETTES[key] ?? PALETTES.colour;
-}
+/** Legend order: worst first, matching the old Slow → Fast reading order. */
+export const CATEGORY_LEGEND_ORDER: AnomalyCategory[] = [
+  "much_worse",
+  "worse",
+  "usual",
+  "better",
+  "much_better",
+];
 
-function decileColor(themeKey: string, band: number): string {
-  const pal = paletteFor(themeKey);
-  return pal[Math.max(0, Math.min(9, band))];
+export function categoryColor(themeKey: string, category: AnomalyCategory): string {
+  const palette = CATEGORY_COLOURS[themeKey] ?? CATEGORY_COLOURS.colour;
+  return palette[category];
 }
 
 /** WCAG relative luminance → pick black or white text for contrast. */
@@ -45,69 +82,64 @@ function textOn(hex: string): "#111" | "#fff" {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const toLinear = (channel: number) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
   return L > 0.4 ? "#111" : "#fff";
 }
 
-/* ── Human-readable ToD label ──────────────────────────────────── */
-const TOD_LABELS: Record<TimeOfDay, string> = {
-  weekday_morning:   "Weekday Mornings",
+/* ── Human-readable ToD label ──────────────────────────────────────── */
+export const TOD_LABELS: Record<TimeOfDay, string> = {
+  weekday_morning: "Weekday Mornings",
   weekday_afternoon: "Weekday Afternoons",
-  weekday_evening:   "Weekday Evenings",
-  weekends:          "Weekends",
-  late_hours:        "Late Hours",
-  all:               "All Times",
+  weekday_evening: "Weekday Evenings",
+  weekends: "Weekends",
+  late_hours: "Late Hours",
+  all: "All Times",
 };
 
-/* ── Benchmark-relative verdict labels ─────────────────────────── */
-const VERDICT_TEXT = [
-  "One of the worst roads in the city today",   // band 0
-  "One of the worst roads in the city today",   // band 1
-  "Slower than it should be",                   // band 2
-  "Slower than it should be",                   // band 3
-  "Typical city traffic",                       // band 4
-  "Typical city traffic",                       // band 5
-  "Reasonably good for Bangalore",              // band 6
-  "Reasonably good for Bangalore",              // band 7
-  "Among the best in the city today",           // band 8
-  "Among the best in the city today",           // band 9
-];
+const TOD_NOUNS: Record<TimeOfDay, string> = {
+  weekday_morning: "morning",
+  weekday_afternoon: "afternoon",
+  weekday_evening: "evening",
+  weekends: "day",
+  late_hours: "late hours",
+  all: "day",
+};
 
-function verdict(band: number, themeKey: string): { text: string; color: string } {
-  if (band < 0) return { text:"No benchmark data", color:"#94A3B8" };
-  return { text: VERDICT_TEXT[band], color: decileColor(themeKey, band) };
-}
+const FEED_MESSAGES: Record<Exclude<AnomalyFeedState, "ready" | "loading">, string> = {
+  unavailable: "Comparison data unavailable",
+  unsupported: "Comparison method not supported",
+};
 
-/* ── Tooltip data carried per cell ─────────────────────────────── */
-interface CellTip {
-  id: string;
-  dateKey: string;
-  avgSpeed: number;
-  benchmarkSpeed: number;
-  ratio: number;
-  band: number;
+interface FeedMeta {
+  methodVersion: string | null;
+  generatedAt: string | null;
+  error: string | null;
 }
 
 export function CalendarWidget({
-  dailyStats, allRows, selectedRoute, tod,
-  benchmarkDailyStats, benchmarkRouteLabel,
-  bandThresholds,
-  widgetCalYear, widgetCalMonth, onDateClick, cutoffDate,
-  isBenchmarkRoute = false,
+  anomalies,
+  feedState,
+  feedMeta,
+  selectedRoute,
+  tod,
+  widgetCalYear,
+  widgetCalMonth,
+  onDateClick,
+  cutoffDate,
   debug = false,
 }: {
-  dailyStats: Map<string, DayStats>;
-  allRows: TrafficRow[];
+  /** Records for the selected route + time filter, keyed by civil date. */
+  anomalies: Map<string, CalendarAnomaly>;
+  feedState: AnomalyFeedState;
+  feedMeta?: FeedMeta;
   selectedRoute: string;
   tod: TimeOfDay;
-  benchmarkDailyStats: Map<string, DayStats>;
-  benchmarkRouteLabel: string;
-  bandThresholds: BandThresholdsResult;
   widgetCalYear: number;
   widgetCalMonth: number;
   onDateClick?: (dateKey: string) => void;
   cutoffDate?: Date | null;
-  isBenchmarkRoute?: boolean;
   debug?: boolean;
 }) {
   const { theme: thm } = useTheme();
@@ -116,11 +148,11 @@ export function CalendarWidget({
   useEffect(() => { setFadeKey(k => k + 1); }, [widgetCalYear, widgetCalMonth]);
 
   /* ── Tooltip state ───────────────────────────────────────────── */
-  const [tip, setTip] = useState<{ data: CellTip; x: number; y: number } | null>(null);
+  const [tip, setTip] = useState<{ record: CalendarAnomaly; x: number; y: number } | null>(null);
 
-  const showTip = useCallback((data: CellTip, el: HTMLElement) => {
+  const showTip = useCallback((record: CalendarAnomaly, el: HTMLElement) => {
     const er = el.getBoundingClientRect();
-    setTip({ data, x: er.left + er.width / 2, y: er.top });
+    setTip({ record, x: er.left + er.width / 2, y: er.top });
   }, []);
 
   const hideTip = useCallback(() => setTip(null), []);
@@ -132,270 +164,310 @@ export function CalendarWidget({
     return () => window.removeEventListener("keydown", onKey);
   }, [tip, hideTip]);
 
-  /* ── Band + tooltip metadata for every date in dailyStats ───── */
-  const dayBands = useMemo(() => {
-    const result = new Map<string, { band: number; tip: CellTip }>();
-    for (const [dateKey, s] of dailyStats.entries()) {
-      if (s.avgSpeed <= 0) continue;
+  /* ── Calendar math — civil dates only, never viewer-local ────── */
+  const prefixStr = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
+  // Weekday of the 1st, computed from the civil date (0=Sun → 0=Mon layout).
+  const firstDay = (() => {
+    const civil = parseCivilDate(`${prefixStr}-01`);
+    return civil ? (civil.weekday + 6) % 7 : 0;
+  })();
+  const daysInMo = new Date(Date.UTC(widgetCalYear, widgetCalMonth + 1, 0)).getUTCDate();
 
-      const bm = benchmarkDailyStats.get(dateKey);
-      const bmOk = bm && bm.avgSpeed > 0;
-      const bmSpeed = bmOk ? bm!.avgSpeed : 0;
-      const ratio = bmOk ? s.avgSpeed / bm!.avgSpeed : 0;
-      const band = bmOk ? ratioToDecile(ratio, bandThresholds.thresholds) : -1;
-
-      result.set(dateKey, {
-        band,
-        tip: {
-          id: `tip-${dateKey}`,
-          dateKey,
-          avgSpeed: s.avgSpeed,
-          benchmarkSpeed: bmSpeed,
-          ratio,
-          band,
-        },
-      });
-    }
-    return result;
-  }, [dailyStats, benchmarkDailyStats, bandThresholds.thresholds]);
-
-  /* ── Calendar math ──────────────────────────────────────────── */
-  const prefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
-  const firstDay   = (new Date(widgetCalYear, widgetCalMonth, 1).getDay() + 6) % 7;
-  const daysInMo   = new Date(widgetCalYear, widgetCalMonth + 1, 0).getDate();
-  const pal        = paletteFor(thm.key);
-  const legendAria = `Legend: 10 speed deciles from red (slowest, worst relative to benchmark) to green (fastest, closest to benchmark)`;
+  const todayKey = useMemo(() => cityTodayKey(), []);
+  const cutoffKey = useMemo(
+    () => (cutoffDate ? instantToCivilKey(cutoffDate) : null),
+    [cutoffDate],
+  );
+  const feedReady = feedState === "ready";
 
   /* ── Memoised cells ─────────────────────────────────────────── */
   const cells = useMemo(() => {
-    const todayD    = new Date();
-    const todayStr  = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
-    const isCurrentMo = widgetCalYear === todayD.getFullYear() && widgetCalMonth === todayD.getMonth();
-
-    const cutoffDateStr = cutoffDate
-      ? `${cutoffDate.getFullYear()}-${String(cutoffDate.getMonth()+1).padStart(2,"0")}-${String(cutoffDate.getDate()).padStart(2,"0")}`
-      : null;
-
     return Array.from({ length: 42 }, (_, i) => {
       const dayNum = i - firstDay + 1;
 
       if (dayNum < 1 || dayNum > daysInMo) {
         return (
           <div key={`e${i}`} role="gridcell" aria-hidden="true"
-            style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"5px 0" }}>
-            <div style={{ width:CIRCLE_D, height:CIRCLE_D }} />
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "5px 0" }}>
+            <div style={{ width: CIRCLE_D, height: CIRCLE_D }} />
           </div>
         );
       }
 
-      const dateKey       = `${prefixStr}-${String(dayNum).padStart(2,"0")}`;
-      const s             = dailyStats.get(dateKey);
-      const entry         = dayBands.get(dateKey);
-      const isBeyondCutoff = !!cutoffDateStr && dateKey > cutoffDateStr;
-      const isFuture      = !isBeyondCutoff && isCurrentMo && dateKey > todayStr;
-      const hasData       = !!s && !!entry && entry.band >= 0 && !isFuture && !isBeyondCutoff;
-      const band          = entry?.band ?? -1;
+      const dateKey = `${prefixStr}-${String(dayNum).padStart(2, "0")}`;
+      const record = anomalies.get(dateKey);
+      const scorable = isScorable(record);
+      const isBeyondCutoff = !!cutoffKey && dateKey > cutoffKey;
+      const isFuture = dateKey > todayKey;
+      // A Saturday under "weekday evenings" is not missing evidence — it is
+      // simply not part of the filter, and must not read as a failed day.
+      const outsideFilter = !record && isDateExcludedByTod(dateKey, tod);
 
-      const dateObj  = new Date(dateKey + "T12:00:00");
-      const dayLabel = dateObj.toLocaleDateString("en-IN", {
-        weekday:"long", day:"numeric", month:"long", year:"numeric",
+      const dayLabel = formatCivilDate(dateKey, {
+        weekday: "long", day: "numeric", month: "long", year: "numeric",
       });
 
       let circleStyle: React.CSSProperties;
       let txtClr: string;
 
       if (isBeyondCutoff || isFuture) {
-        circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+        circleStyle = { border: `2px dashed ${thm.textMuted}`, background: "transparent" };
         txtClr = thm.textMuted;
-      } else if (hasData) {
-        const effectiveTheme = isBenchmarkRoute ? "benchmark" : thm.key;
-        const bg = decileColor(effectiveTheme, band);
-        circleStyle = { background:bg, border:`2px solid ${bg}`, boxShadow:"0 2px 8px rgba(0,0,0,0.12)" };
+      } else if (!feedReady) {
+        circleStyle = { border: `2px dashed ${thm.textMuted}`, background: "transparent" };
+        txtClr = thm.textMuted;
+      } else if (record && scorable && record.category) {
+        const bg = categoryColor(thm.key, record.category);
+        const provisional = record.status === "provisional";
+        circleStyle = {
+          background: bg,
+          border: `2px ${provisional ? "dashed" : "solid"} ${provisional ? textOn(bg) : bg}`,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+        };
         txtClr = textOn(bg);
-      } else if (s) {
-        circleStyle = { border:"2px dashed #6b7280", background:"transparent" };
-        txtClr = "#6b7280";
+      } else if (record) {
+        // Present but not scorable: incomplete coverage, sparse history, or no
+        // readings. Outlined (never filled) so it cannot read as "usual".
+        const dotted = record.status === "insufficient_history";
+        circleStyle = {
+          border: `2px ${dotted ? "dotted" : "dashed"} ${thm.textMuted}`,
+          background: "transparent",
+        };
+        txtClr = thm.textMuted;
+      } else if (outsideFilter) {
+        // Outside the selected filter: the number stays legible but is clearly
+        // not a scored day — no ring, just muted text.
+        circleStyle = { border: "2px solid transparent", background: "transparent" };
+        txtClr = thm.textMuted;
       } else {
-        circleStyle = { border:`2px dashed ${thm.textMuted}`, background:"transparent" };
+        circleStyle = { border: `2px dashed ${thm.textMuted}`, background: "transparent" };
         txtClr = thm.textMuted;
       }
 
-      const ariaLabel = hasData && entry
-        ? `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ` +
-          `${Math.round(entry.tip.avgSpeed)} km/h. ` +
-          (isBenchmarkRoute
-            ? `Benchmark reference. Day ${band + 1} of ${DECILES}.`
-            : `Decile ${band + 1} of 10. ${Math.round(entry.tip.ratio * 100)}% of benchmark.`)
-        : isFuture ? `${dayLabel}. Future date.`
-        : isBeyondCutoff ? `${dayLabel}. Beyond cutoff.`
-        : s ? `${dayLabel}. No benchmark data for this day.`
-        : `${dayLabel}. No data.`;
+      const interactionLabel = !feedReady
+        ? FEED_MESSAGES[(feedState as keyof typeof FEED_MESSAGES)] ?? "Comparison data unavailable"
+        : isFuture
+          ? "Future date"
+          : isBeyondCutoff
+            ? "Beyond cutoff"
+            : record
+              ? categoryText(record)
+              : outsideFilter
+                ? `Not part of ${TOD_LABELS[tod]}`
+                : "No observations";
+
+      const details = (() => {
+        if (!record || !feedReady) {
+          return outsideFilter ? `This weekday is not part of ${TOD_LABELS[tod]}.` : "";
+        }
+        if (isScorable(record)) {
+          const parts = [categoryText(record)];
+          if (record.status === "provisional") parts.push("Provisional");
+          if (record.observedMinutes !== null) {
+            parts.push(`Estimated journey ${formatMinutes(record.observedMinutes)}`);
+          }
+          if (record.typicalMinutes !== null) {
+            parts.push(`typical comparable ${civilWeekdayName(record.date)} ${formatMinutes(record.typicalMinutes)}`);
+          }
+          const delta = describeDelta(record);
+          if (delta) parts.push(delta);
+          const rank = describeRank(record);
+          if (rank) parts.push(rank);
+          return `${parts.join(". ")}.`;
+        }
+        if (record.status === "insufficient_history") {
+          return `${STATUS_LABELS.insufficient_history}: ${record.referenceDays ?? 0} comparable ${civilWeekdayName(record.date)}s, ${MIN_COMPARABLE_DAYS} needed.`;
+        }
+        if (record.status === "incomplete_window") {
+          return `${STATUS_LABELS.incomplete_window}: ${record.observedSlots.length} of ${record.expectedSlots.length} hourly estimates.`;
+        }
+        return `${STATUS_LABELS[record.status] || "No comparable data"}.`;
+      })();
+
+      const ariaLabel = `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ${interactionLabel}. ${details}`.trim();
+      const interactive = feedReady && !!record && !isFuture && !isBeyondCutoff;
 
       return (
         <div
           key={dateKey}
           role="gridcell"
-          tabIndex={hasData ? 0 : undefined}
+          tabIndex={interactive ? 0 : undefined}
           aria-label={ariaLabel}
-          aria-describedby={hasData && entry ? entry.tip.id : undefined}
-          data-dk={hasData ? dateKey : undefined}
-          onClick={hasData && onDateClick ? () => onDateClick(dateKey) : undefined}
-          onMouseEnter={hasData && entry ? (e) => showTip(entry.tip, e.currentTarget) : undefined}
-          onMouseLeave={hasData ? hideTip : undefined}
-          onFocus={hasData && entry ? (e) => showTip(entry.tip, e.currentTarget) : undefined}
-          onBlur={hasData ? hideTip : undefined}
-          style={{ display:"flex", alignItems:"center", justifyContent:"center",
-            padding:"5px 0", cursor: hasData ? "pointer" : "default",
-            outline: "none", borderRadius: "50%" }}
+          aria-describedby={interactive ? `anomaly-tip-${dateKey}` : undefined}
+          data-dk={interactive ? dateKey : undefined}
+          data-category={scorable ? record?.category ?? undefined : undefined}
+          data-status={record?.status}
+          onClick={interactive && onDateClick ? () => onDateClick(dateKey) : undefined}
+          onMouseEnter={interactive && record ? (e) => showTip(record, e.currentTarget) : undefined}
+          onMouseLeave={interactive ? hideTip : undefined}
+          onFocus={interactive && record ? (e) => showTip(record, e.currentTarget) : undefined}
+          onBlur={interactive ? hideTip : undefined}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "5px 0", cursor: interactive ? "pointer" : "default",
+            outline: "none", borderRadius: "50%",
+          }}
         >
-          <div style={{ width:CIRCLE_D, height:CIRCLE_D, borderRadius:"50%",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            transition:"transform 0.13s, box-shadow 0.13s",
+          <div style={{
+            width: CIRCLE_D, height: CIRCLE_D, borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "transform 0.13s, box-shadow 0.13s",
             ...circleStyle,
           }}>
-            <span style={{ fontSize:16, fontWeight:800, color:txtClr,
-              lineHeight:1, userSelect:"none", opacity: isFuture ? 0.4 : 1 }}>
+            <span style={{
+              fontSize: 16, fontWeight: 800, color: txtClr,
+              lineHeight: 1, userSelect: "none",
+              opacity: isFuture || outsideFilter ? 0.4 : 1,
+            }}>
               {dayNum}
             </span>
           </div>
         </div>
       );
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dailyStats, dayBands, firstDay, daysInMo, prefixStr, thm.key, thm.textMuted,
-      widgetCalYear, widgetCalMonth, cutoffDate, onDateClick, selectedRoute, tod, showTip, hideTip]);
+  }, [anomalies, firstDay, daysInMo, prefixStr, thm.key, thm.textMuted, cutoffKey,
+      todayKey, onDateClick, selectedRoute, tod, showTip, hideTip, feedReady, feedState]);
 
   /* ── Tooltip rendering ──────────────────────────────────────── */
   const renderTooltip = () => {
     if (!tip) return null;
-    const d = tip.data;
-    const v = verdict(d.band, thm.key);
+    const r = tip.record;
     const isGray = thm.key === "gray";
+    const scorable = isScorable(r);
 
-    /* Theme-adaptive tooltip surface */
-    const tipBg      = isGray ? "#FAFAFA" : "#0F172A";
-    const tipText    = isGray ? "#111"    : "#F0F4F8";
-    const tipMuted   = isGray ? "#737373" : "#64748B";
-    const tipBorder  = isGray ? "#D4D4D4" : "#334155";
-    const tipShadow  = isGray ? "2px 2px 0 #000" : "4px 4px 0 rgba(0,0,0,0.35)";
+    const tipBg = isGray ? "#FAFAFA" : "#0F172A";
+    const tipText = isGray ? "#111" : "#F0F4F8";
+    const tipMuted = isGray ? "#737373" : "#94A3B8";
+    const tipBorder = isGray ? "#D4D4D4" : "#334155";
+    const tipShadow = isGray ? "2px 2px 0 #000" : "4px 4px 0 rgba(0,0,0,0.35)";
     const tipDivider = isGray ? "#E5E5E5" : "#1E293B";
 
-    const ratioPct = d.benchmarkSpeed > 0 ? Math.round(d.ratio * 100) : 0;
-    const fillPct  = Math.min(100, Math.max(0, ratioPct));
+    const accent = r.category ? categoryColor(thm.key, r.category) : thm.textMuted;
+    const weekday = civilWeekdayName(r.date);
+
+    const row = (label: string, value: string) => (
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 3 }}>
+        <span style={{ color: tipMuted }}>{label}</span>
+        <span style={{ fontWeight: 600, textAlign: "right" }}>{value}</span>
+      </div>
+    );
 
     return (
       <div
-        id={d.id}
+        id={`anomaly-tip-${r.date}`}
         role="tooltip"
         aria-live="polite"
         style={{
-          position:"fixed",
-          left: Math.max(8, Math.min(tip.x - 156, window.innerWidth - 320)),
+          position: "fixed",
+          left: Math.max(8, Math.min(tip.x - 156, window.innerWidth - 328)),
           top: tip.y - 8,
-          transform:"translateY(-100%)",
-          width:312,
-          padding:"14px 17px",
-          background:tipBg,
-          color:tipText,
-          borderRadius:0,
-          fontSize:14,
-          lineHeight:1.5,
-          fontFamily:"var(--app-font)",
-          boxShadow:tipShadow,
-          zIndex:50,
-          pointerEvents:"none",
-          border:`1px solid ${tipBorder}`,
+          transform: "translateY(-100%)",
+          width: 320,
+          padding: "14px 17px",
+          background: tipBg,
+          color: tipText,
+          borderRadius: 0,
+          fontSize: 14,
+          lineHeight: 1.5,
+          fontFamily: "var(--app-font)",
+          boxShadow: tipShadow,
+          zIndex: 50,
+          pointerEvents: "none",
+          border: `1px solid ${tipBorder}`,
         }}
       >
-        {/* ── Date ── */}
-        <div style={{ fontWeight:700, fontSize:17, marginBottom:2 }}>
-          {new Date(d.dateKey + "T12:00:00").toLocaleDateString("en-IN", {
-            weekday:"short", day:"numeric", month:"short", year:"2-digit",
-          })}
+        <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 2 }}>
+          {formatCivilDate(r.date, { weekday: "short", day: "numeric", month: "short", year: "2-digit" })}
         </div>
-
-        {/* ── Route · Time slot ── */}
-        <div style={{ color:tipMuted, fontSize:13, marginBottom:12 }}>
+        <div style={{ color: tipMuted, fontSize: 13, marginBottom: 12 }}>
           {selectedRoute} · {TOD_LABELS[tod]}
         </div>
 
-        <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
+        <div style={{ height: 1, background: tipDivider, marginBottom: 12 }} />
 
-        {/* ── Verdict badge ── */}
-        <div style={{ display:"inline-block", padding:"4px 10px", marginBottom:12,
-          background:v.color + "22", border:`1px solid ${v.color}44`, borderRadius:0,
-          fontSize:13, fontWeight:700, color:v.color }}>
-          {isBenchmarkRoute
-            ? (d.band >= 0 ? `Benchmark reference · ${d.band + 1}/${DECILES}` : "Benchmark reference")
-            : (d.band >= 0 ? `${v.text} · ${d.band + 1}/${DECILES}` : v.text)
-          }
+        {/* ── Category badge ── */}
+        <div style={{
+          display: "inline-block", padding: "4px 10px", marginBottom: 12,
+          background: accent + "22", border: `1px solid ${accent}66`, borderRadius: 0,
+          fontSize: 13, fontWeight: 700, color: accent,
+        }}>
+          {categoryText(r)}
+          {r.status === "provisional" ? " · Provisional" : ""}
         </div>
 
-        <div style={{ height:1, background:tipDivider, marginBottom:12 }} />
+        <div style={{ height: 1, background: tipDivider, marginBottom: 12 }} />
 
-        {/* ── Speed comparison ── */}
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-          <div>
-            <div style={{ fontSize:29, fontWeight:800, lineHeight:1.1 }}>
-              {Math.round(d.avgSpeed)}
-              <span style={{ fontSize:14, fontWeight:600, color:tipMuted }}> km/h</span>
-            </div>
-            <div style={{ color:tipMuted, fontSize:12 }}>this route</div>
+        {r.observedMinutes !== null && (
+          <div style={{ fontSize: 29, fontWeight: 800, lineHeight: 1.1, marginBottom: 2 }}>
+            {Math.round(r.observedMinutes * 10) / 10}
+            <span style={{ fontSize: 14, fontWeight: 600, color: tipMuted }}> min</span>
           </div>
-          {d.benchmarkSpeed > 0 && (
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:29, fontWeight:800, lineHeight:1.1 }}>
-                {Math.round(d.benchmarkSpeed)}
-                <span style={{ fontSize:14, fontWeight:600, color:tipMuted }}> km/h</span>
-              </div>
-              <div style={{ color:tipMuted, fontSize:12 }}>benchmark</div>
-            </div>
-          )}
+        )}
+        <div style={{ color: tipMuted, fontSize: 12, marginBottom: 10 }}>
+          estimated journey time · {TOD_NOUNS[tod]}
         </div>
 
-        {/* ── Ratio bar ── */}
-        {d.benchmarkSpeed > 0 && (
+        {scorable ? (
           <>
-            <div style={{ margin:"6px 0 4px", height:6, background:tipDivider, borderRadius:3, overflow:"hidden" }}>
-              <div style={{ width:`${fillPct}%`, height:"100%", borderRadius:3,
-                background:`linear-gradient(90deg, ${pal[0]}, ${pal[4]}, ${pal[9]})` }} />
-            </div>
-            <div style={{ fontSize:12, color:tipMuted, marginBottom:8, fontWeight:600 }}>
-              {isBenchmarkRoute ? "benchmark reference" : `${ratioPct}% of benchmark`}
+            {r.typicalMinutes !== null && row(`Typical comparable ${weekday}`, formatMinutes(r.typicalMinutes))}
+            {r.deltaMinutes !== null && row("Difference", `${formatSignedMinutes(r.deltaMinutes)} (${formatPercent(r.deltaFraction)})`)}
+            <div style={{ fontSize: 12, color: tipMuted, marginTop: 6, marginBottom: 10 }}>
+              {describeDelta(r)}
+              {describeRank(r) ? ` · ${describeRank(r)}` : ""}
             </div>
           </>
-        )}
-
-        {/* ── Band strip ── */}
-        {d.band >= 0 && (
-          <div style={{ display:"flex", gap:1, marginBottom:8 }}>
-            {pal.map((c, i) => (
-              <div key={i} style={{
-                flex:1, height:10, background:c,
-                transform: i === d.band ? "scaleY(1.4)" : "none",
-                border: i === d.band ? "2px solid #fff" : "none",
-                boxSizing: "border-box",
-              }} />
-            ))}
+        ) : (
+          <div style={{ fontSize: 12.5, color: tipMuted, marginBottom: 10, lineHeight: 1.5 }}>
+            {r.status === "insufficient_history" && (
+              <>
+                {r.referenceDays ?? 0} comparable {weekday}s in the preceding {r.lookbackDays ?? 90} days.
+                {" "}{MIN_COMPARABLE_DAYS} are needed before a colour is shown.
+              </>
+            )}
+            {r.status === "incomplete_window" && (
+              <>
+                Incomplete coverage: {r.observedSlots.length} of {r.expectedSlots.length} expected
+                hourly estimates ({describeSlots(r.observedSlots) || "none"}). A partial{" "}
+                {TOD_NOUNS[tod]} is not shown as a normal one.
+              </>
+            )}
+            {r.status === "not_started" && <>This {TOD_NOUNS[tod]} has not started yet.</>}
+            {r.status === "no_observations" && <>No readings were collected for this {TOD_NOUNS[tod]}.</>}
+            {r.status === "future" && <>This date is in the future.</>}
           </div>
         )}
 
-        <div style={{ height:1, background:tipDivider, marginBottom:10 }} />
+        <div style={{ height: 1, background: tipDivider, marginBottom: 10 }} />
 
-        {/* ── Footnote ── */}
-        <div style={{ fontSize:12, color:tipMuted }}>
-          {isBenchmarkRoute
-            ? `This is Bangalore's benchmark route · ${TOD_LABELS[tod]}`
-            : `Compared to ${benchmarkRouteLabel} · same conditions`
-          }
+        <div style={{ fontSize: 11.5, color: tipMuted, lineHeight: 1.5 }}>
+          Based on {describeSample(r)}
+          {r.observedSlots.length > 0 ? ` (${describeSlots(r.observedSlots)})` : ""};
+          origin–destination journey comparison.
         </div>
+        {r.lastObservedAt && (
+          <div style={{ fontSize: 11.5, color: tipMuted, marginTop: 2 }}>
+            Last observation {r.lastObservedAt.slice(11)} city time.
+          </div>
+        )}
+        {r.qualityFlags.includes("stale_feed") && (
+          <div style={{ fontSize: 11.5, color: accent, marginTop: 2, fontWeight: 600 }}>
+            Feed may be stale.
+          </div>
+        )}
+        {r.qualityFlags.includes("distance_varied") && (
+          <div style={{ fontSize: 11.5, color: tipMuted, marginTop: 2 }}>
+            Route distance varied
+            {r.distanceMinKm !== null && r.distanceMaxKm !== null
+              ? ` (${r.distanceMinKm}–${r.distanceMaxKm} km)`
+              : ""}.
+          </div>
+        )}
 
-        {/* Tail */}
         <div style={{
-          position:"absolute", bottom:-6, left:"50%", transform:"translateX(-50%)",
-          width:0, height:0,
-          borderLeft:"6px solid transparent", borderRight:"6px solid transparent",
-          borderTop:`6px solid ${tipBg}`,
+          position: "absolute", bottom: -6, left: "50%", transform: "translateX(-50%)",
+          width: 0, height: 0,
+          borderLeft: "6px solid transparent", borderRight: "6px solid transparent",
+          borderTop: `6px solid ${tipBg}`,
         }} />
       </div>
     );
@@ -403,15 +475,17 @@ export function CalendarWidget({
 
   /* ── Render ─────────────────────────────────────────────────── */
   return (
-    <div style={{ position:"relative" }}>
+    <div style={{ position: "relative" }}>
 
       {/* Day-of-week headers */}
-      <div role="row" style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", marginBottom:2 }}>
+      <div role="row" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 2 }}>
         {DAY_HDR.map(d => (
           <div key={d} role="columnheader"
-            style={{ textAlign:"center", fontSize:10, fontWeight:700,
-              textTransform:"uppercase", letterSpacing:"0.06em",
-              color: thm.textMuted, padding:"4px 0" }}>
+            style={{
+              textAlign: "center", fontSize: 10, fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: "0.06em",
+              color: thm.textMuted, padding: "4px 0",
+            }}>
             {d}
           </div>
         ))}
@@ -419,116 +493,142 @@ export function CalendarWidget({
 
       {/* Calendar grid — fixed height for 6 rows to prevent layout shift */}
       <div key={fadeKey} role="grid" aria-label="Traffic calendar"
-        style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)",
+        style={{
+          display: "grid", gridTemplateColumns: "repeat(7,1fr)",
           minHeight: 6 * (CIRCLE_D + 10),
-          animation:"cal-fade-in 0.2s ease" }}>
+          animation: "cal-fade-in 0.2s ease",
+        }}>
         {cells}
       </div>
 
-      {/* ⚠ DEBUG PANEL — ?debug=1 to show */}
+      {feedState === "unavailable" && (
+        <p role="status" style={{ fontSize: 12, color: thm.textMuted, margin: "8px 0 0" }}>
+          Day comparisons are unavailable right now — the anomaly export could not be loaded.
+          No fallback colours are shown.
+        </p>
+      )}
+      {feedState === "unsupported" && (
+        <p role="status" style={{ fontSize: 12, color: thm.textMuted, margin: "8px 0 0" }}>
+          This build does not understand the comparison method in the current export
+          {feedMeta?.methodVersion ? ` (${feedMeta.methodVersion})` : ""}. Colours are suppressed
+          rather than mismatched.
+        </p>
+      )}
+
+      {/* ⚠ DEBUG PANEL — ?debug=1 to show. Reads the same records the cells
+          render, so diagnostics and colours cannot disagree. */}
       {debug && (() => {
         const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
-        const bmRoute = benchmarkRouteLabel;
-        const bmTotalDist = allRows.filter(r => r.label_short === bmRoute).reduce((s, r) => s + r.distance_km, 0);
-        const bmTotalRows = allRows.filter(r => r.label_short === bmRoute).length;
-
-        const rows: {
-          dateKey: string; subjectSpeed: number; bmSpeed: number;
-          ratio: number; band: number; color: string;
-        }[] = [];
-        let missingBm = 0;
-        const subjDateKeys: string[] = [];
-        const bmDateKeys: string[] = [];
-
-        for (const [dateKey, s] of dailyStats.entries()) {
-          if (s.avgSpeed <= 0) continue;
-          if (!dateKey.startsWith(prefixStr)) continue;
-          subjDateKeys.push(dateKey);
-          const bm = benchmarkDailyStats.get(dateKey);
-          const bmOk = bm && bm.avgSpeed > 0;
-          if (bmOk) bmDateKeys.push(dateKey);
-          if (!bmOk) { missingBm++; continue; }
-          const ratio = s.avgSpeed / bm!.avgSpeed;
-          const band = ratioToDecile(ratio);
-          const effectiveDbgTheme = isBenchmarkRoute ? "benchmark" : thm.key;
-          rows.push({ dateKey, subjectSpeed: s.avgSpeed, bmSpeed: bm!.avgSpeed, ratio, band, color: decileColor(effectiveDbgTheme, band) });
-        }
-
-        const dateFmt = (dk: string) => new Date(dk + "T12:00:00").toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short" });
+        const rows = [...anomalies.values()]
+          .filter((r) => r.date.startsWith(prefixStr))
+          .sort((a, b) => a.date.localeCompare(b.date));
 
         return (
           <div style={{
-            border:"2px solid #EF4444", background:"#FEF2F2", padding:12, marginTop:12,
-            fontFamily:mono, fontSize:11, lineHeight:1.6, color:"#1F2937", borderRadius:0,
+            border: "2px solid #EF4444", background: "#FEF2F2", padding: 12, marginTop: 12,
+            fontFamily: mono, fontSize: 11, lineHeight: 1.6, color: "#1F2937", borderRadius: 0,
           }}>
-            <div style={{ fontWeight:800, fontSize:13, color:"#DC2626", marginBottom:8 }}>
-              ⚠ DEBUG — remove before release
+            <div style={{ fontWeight: 800, fontSize: 13, color: "#DC2626", marginBottom: 8 }}>
+              ⚠ DEBUG — calendar anomalies
             </div>
-            <div style={{ marginBottom:10, lineHeight:1.8 }}>
-              <div><strong>Benchmark route resolved as:</strong> {bmRoute}</div>
-              <div><strong>Benchmark route path length / data points:</strong> {bmTotalDist.toFixed(1)} km total / {bmTotalRows} rows</div>
-              <div><strong>Subject route:</strong> {selectedRoute}</div>
-              <div><strong>Time slot filter applied to benchmark:</strong> yes — {tod}</div>
-              <div><strong>Total dates with subject data:</strong> {subjDateKeys.length}</div>
-              <div><strong>Total dates with benchmark data:</strong> {bmDateKeys.length}</div>
-              <div><strong>Dates where benchmark data was missing:</strong> {missingBm}</div>
-              <div><strong>benchmark_self_comparison:</strong> <span style={{ color: isBenchmarkRoute ? "#DC2626" : "#16a34a", fontWeight: 700 }}>{String(isBenchmarkRoute)}</span></div>
-              <div><strong>calendar_render_mode:</strong> {isBenchmarkRoute ? "benchmark_reference_mode" : "relative_benchmark"}</div>
-              <div><strong>dot_palette_mode:</strong> {isBenchmarkRoute ? "benchmark_special_case" : "standard"}</div>
-              {isBenchmarkRoute && (
-                <div style={{ color: "#DC2626", fontWeight: 600, marginTop: 4 }}>
-                  ⚠ Selected route is the benchmark route; relative ratio is self-referential.
-                </div>
-              )}
-            </div>
-            <div style={{ marginBottom:10, padding:"8px", background:"#FEE2E2", border:"1px solid #FCA5A5" }}>
-              <div style={{ fontWeight:700, marginBottom:4 }}>Empirical Thresholds ({bandThresholds.observationCount} observations, {bandThresholds.computedAt ? new Date(bandThresholds.computedAt).toLocaleString() : "not computed"})</div>
-              <div style={{ fontSize:10, lineHeight:1.6 }}>
-                <div><strong>BAND_THRESHOLDS:</strong> [{bandThresholds.thresholds.map(t => t.toFixed(3)).join(", ")}]</div>
-                <div><strong>Quantiles:</strong> p1={bandThresholds.quantiles.p1.toFixed(3)} p5={bandThresholds.quantiles.p5.toFixed(3)} p15={bandThresholds.quantiles.p15.toFixed(3)} p30={bandThresholds.quantiles.p30.toFixed(3)} p45={bandThresholds.quantiles.p45.toFixed(3)} p60={bandThresholds.quantiles.p60.toFixed(3)} p75={bandThresholds.quantiles.p75.toFixed(3)} p85={bandThresholds.quantiles.p85.toFixed(3)} p95={bandThresholds.quantiles.p95.toFixed(3)}</div>
-              </div>
+            <div style={{ marginBottom: 10, lineHeight: 1.8 }}>
+              <div><strong>feed state:</strong> {feedState}{feedMeta?.error ? ` (${feedMeta.error})` : ""}</div>
+              <div><strong>method_version:</strong> {feedMeta?.methodVersion ?? "–"}</div>
+              <div><strong>generated_at:</strong> {feedMeta?.generatedAt ?? "–"}</div>
+              <div><strong>records this month:</strong> {rows.length}</div>
+              <div><strong>route · time filter:</strong> {selectedRoute} · {tod}</div>
             </div>
             {rows.length > 0 && (
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:10.5 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10.5 }}>
                 <thead>
-                  <tr style={{ borderBottom:"2px solid #DC2626", textAlign:"left" }}>
-                    <th style={{ padding:"3px 6px" }}>Date</th>
-                    <th style={{ padding:"3px 6px" }}>Subject route</th>
-                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Subject speed</th>
-                    <th style={{ padding:"3px 6px" }}>Benchmark route</th>
-                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Benchmark speed</th>
-                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Ratio</th>
-                    <th style={{ padding:"3px 6px", textAlign:"right" }}>Band</th>
-                    <th style={{ padding:"3px 6px" }}>Dot color</th>
+                  <tr style={{ borderBottom: "2px solid #DC2626", textAlign: "left" }}>
+                    <th style={{ padding: "3px 6px" }}>Date</th>
+                    <th style={{ padding: "3px 6px" }}>Status</th>
+                    <th style={{ padding: "3px 6px" }}>Category</th>
+                    <th style={{ padding: "3px 6px", textAlign: "right" }}>Observed</th>
+                    <th style={{ padding: "3px 6px", textAlign: "right" }}>Typical</th>
+                    <th style={{ padding: "3px 6px", textAlign: "right" }}>Δ</th>
+                    <th style={{ padding: "3px 6px", textAlign: "right" }}>Rank</th>
+                    <th style={{ padding: "3px 6px", textAlign: "right" }}>Ref days</th>
+                    <th style={{ padding: "3px 6px" }}>Slots</th>
+                    <th style={{ padding: "3px 6px" }}>Flags</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.dateKey} style={{ borderBottom:"1px solid #FECACA", background: i % 2 === 0 ? "transparent" : "#FEF2F280" }}>
-                      <td style={{ padding:"2px 6px", whiteSpace:"nowrap" }}>{dateFmt(r.dateKey)}</td>
-                      <td style={{ padding:"2px 6px" }}>{selectedRoute}</td>
-                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.subjectSpeed} km/h</td>
-                      <td style={{ padding:"2px 6px" }}>{bmRoute}</td>
-                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.bmSpeed} km/h</td>
-                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.ratio.toFixed(3)}</td>
-                      <td style={{ padding:"2px 6px", textAlign:"right" }}>{r.band + 1}</td>
-                      <td style={{ padding:"2px 6px" }}>
-                        <span style={{ display:"inline-block", width:12, height:12, background:r.color, verticalAlign:"middle", marginRight:4 }} />
-                        <span>{r.color}</span>
-                      </td>
+                    <tr key={r.date} style={{ borderBottom: "1px solid #FECACA", background: i % 2 === 0 ? "transparent" : "#FEF2F280" }}>
+                      <td style={{ padding: "2px 6px", whiteSpace: "nowrap" }}>{r.date}</td>
+                      <td style={{ padding: "2px 6px" }}>{r.status}</td>
+                      <td style={{ padding: "2px 6px" }}>{r.category ?? "–"}</td>
+                      <td style={{ padding: "2px 6px", textAlign: "right" }}>{formatMinutes(r.observedMinutes)}</td>
+                      <td style={{ padding: "2px 6px", textAlign: "right" }}>{formatMinutes(r.typicalMinutes)}</td>
+                      <td style={{ padding: "2px 6px", textAlign: "right" }}>{formatSignedMinutes(r.deltaMinutes)}</td>
+                      <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.rankScore ?? "–"}</td>
+                      <td style={{ padding: "2px 6px", textAlign: "right" }}>{r.referenceDays ?? "–"}</td>
+                      <td style={{ padding: "2px 6px" }}>{r.observedSlots.join(",") || "–"}</td>
+                      <td style={{ padding: "2px 6px" }}>{r.qualityFlags.join(",") || "–"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
+            {rows.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 10 }}>
+                reference_audit_id: {rows[rows.length - 1].referenceAuditId || "–"} ·
+                source_revision: {rows[rows.length - 1].sourceRevision || "–"}
+              </div>
+            )}
           </div>
         );
       })()}
 
-      {/* Legend moved to Dashboard footer row alongside R³S² context */}
+      {/* Legend lives in Dashboard footer row alongside R³S² context */}
 
       {/* Tooltip — portalled to body to escape card overflow:hidden */}
       {tip && createPortal(renderTooltip(), document.body)}
+    </div>
+  );
+}
+
+/** Compact five-category legend, ordered worst → best. */
+export function CalendarLegend({ themeKey, textMuted }: { themeKey: string; textMuted: string }) {
+  return (
+    <div
+      role="img"
+      aria-label="Legend: each day is compared with the same weekday and hours on this route over the preceding 90 days. Categories run from much worse than usual to much better than usual; outlined days have no comparable result."
+      style={{
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        fontSize: 10, color: textMuted, fontWeight: 600, flexShrink: 0,
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {CATEGORY_LEGEND_ORDER.map((category) => (
+          <span key={category} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <span style={{
+              width: 11, height: 11, background: categoryColor(themeKey, category),
+              borderRadius: "50%", display: "inline-block",
+            }} />
+            <span>{CATEGORY_LABELS[category].replace(" than usual", "").replace("Within the usual range", "Usual")}</span>
+          </span>
+        ))}
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={{
+          width: 11, height: 11, border: `2px dashed ${textMuted}`,
+          borderRadius: "50%", display: "inline-block",
+        }} />
+        <span>No comparable result</span>
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={{
+          width: 11, height: 11, display: "inline-flex", alignItems: "center",
+          justifyContent: "center", fontSize: 8, fontWeight: 800,
+          color: textMuted, opacity: 0.5,
+        }}>
+          31
+        </span>
+        <span>Outside filter</span>
+      </span>
     </div>
   );
 }

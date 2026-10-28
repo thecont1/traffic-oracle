@@ -143,38 +143,26 @@ export const TOOLTIP_CONTENT = {
     ].join("\n"),
   },
 
-  // ── Daily Speeds Calendar ───────────────────────────────────────
+  // ── Good Days and Bad Days (historical day anomalies) ──────────
   dailyCalendar: {
     title: "Good Days and Bad Days",
     body: [
       "What am I looking at?",
       "",
-      "This calendar shows how this road performed day by day against Bangalore's benchmark route at the same time of day.",
+      "This calendar shows whether each day's journey on this route was unusually slow or fast for its weekday and time of day.",
       "",
-      "• Each filled circle is a day with traffic data",
-      "• Green means this route kept up better with the city's benchmark road",
-      "• Red means it fell further behind",
-      "• Hover a day to see the comparison in more detail",
-      "• Click a past day to open it in Time Traveller",
+      "• Every filled circle is one day, compared with the same weekday and the same hours on this route over the preceding 90 days",
+      "• Green means faster than usual for that weekday and time",
+      "• Orange and red mean slower than usual, with red for the most unusual delays",
+      "• Neutral means the day was within its usual range, or the difference was too small to call",
+      "• A dashed or dotted circle has no comparable result: not enough history, incomplete coverage, or no observation at all",
+      "• A provisional circle is still collecting hourly estimates; hover it to see which hours were compared",
       "",
-      "The short line below the calendar is a recent route-quality summary. It uses the R³S² score to show how this road has been performing lately compared with the rest of the city.",
-    ].join("\n"),
-  },
-
-  // ── Daily Calendar — Benchmark Route Special Case ──────────────
-  dailyCalendarBenchmark: {
-    title: "Good Days and Bad Days",
-    body: [
-      "What am I looking at?",
+      "The reference is always the previous 90 days on this route. It is independent of the main question's baseline and period controls, so changing those cannot recolour this calendar.",
       "",
-      "This is Bangalore's benchmark route — the road the rest of the city is judged against.",
+      "It is built from Google Maps journey estimates at collection time — four hourly estimates for an evening, not continuous measurement of traffic. It compares a journey between the same two places, not a fixed stretch of road.",
       "",
-      "These dots show how this road itself behaved day to day. They are not a comparison against a better road.",
-      "",
-      "• Hover any filled day to see its speed and a verdict",
-      "• Click any past day to open it in Time Traveller",
-      "",
-      "The short line below the calendar is a recent route-quality summary using the R³S² score.",
+      "The short line below the calendar is a separate city-relative route-quality summary (R³S²).",
     ].join("\n"),
   },
 

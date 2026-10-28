@@ -1,241 +1,364 @@
 /**
- * Integration tests for CalendarWidget.
+ * Integration tests for the anomaly-driven CalendarWidget.
  *
- * Renders the component inside a ThemeProvider with known fixture data
- * and asserts:
- *   1. 42 cells rendered (6 rows × 7 cols).
- *   2. Day headers (Mon–Sun) are present.
- *   3. Legend shows decile markers (p0 through p90).
- *   4. Cells with data have a coloured background.
- *   5. Cells without data have a dashed border.
- *   6. Clicking a date with data fires onDateClick.
- *   7. No benchmark data renders dashed border.
+ * The widget no longer computes anything: it renders the records the upstream
+ * export supplied. These tests therefore assert the *contract* with those
+ * records — which statuses get a fill, which get an outline, what the
+ * accessible name says, and that an unavailable or unsupported feed produces no
+ * colours at all rather than falling back to a different comparison.
  */
 
 import { describe, it, expect, beforeEach } from "bun:test";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { CalendarWidget } from "../../src/components/CalendarWidget";
+import { CalendarWidget, CalendarLegend, categoryColor } from "../../src/components/CalendarWidget";
 import { ThemeProvider } from "../../src/lib/ThemeContext";
-import type { DayStats, TrafficRow, BandThresholdsResult } from "../../src/lib/useTrafficData";
+import type { CalendarAnomaly } from "../../src/lib/calendarAnomalies";
 
-/* ── Helpers ─────────────────────────────────────────────────────── */
+/* ── Fixtures ────────────────────────────────────────────────────── */
 
-function ds(avgSpeed: number, overrides: Partial<DayStats> = {}): DayStats {
+function anomaly(date: string, overrides: Partial<CalendarAnomaly> = {}): CalendarAnomaly {
   return {
-    dateKey: "",
-    avgSpeed,
-    minSpeed: avgSpeed - 5,
-    maxSpeed: avgSpeed + 5,
-    minTime: "5:00 AM",
-    maxTime: "10:00 PM",
-    p05Speed: avgSpeed - 8,
-    p95Speed: avgSpeed + 8,
-    avgDuration: 0,
-    p05Duration: 0,
-    medianDuration: 0,
-    p95Duration: 0,
-    count: 10,
+    routeCode: "R1",
+    date,
+    tod: "all",
+    methodVersion: "calendar-anomaly-v1",
+    cityTimezone: "Asia/Kolkata",
+    referenceClass: "same_weekday",
+    observedMinutes: 30,
+    observedSlots: [18, 19, 20, 21],
+    expectedSlots: [18, 19, 20, 21],
+    observationCount: 8,
+    lastObservedAt: `${date}T21:05`,
+    lookbackDays: 90,
+    referenceStart: "2025-01-01",
+    referenceEndExclusive: "2025-04-09",
+    referenceDays: 12,
+    typicalMinutes: 29,
+    deltaMinutes: 1,
+    deltaFraction: 0.034,
+    rankScore: 0.6,
+    lessCount: 4,
+    tieCount: 0,
+    category: "usual",
+    status: "final",
+    qualityFlags: [],
+    distanceMinKm: 10,
+    distanceMaxKm: 10,
+    generatedAt: "2025-04-11T02:00",
+    sourceRevision: "abc123",
+    referenceAuditId: "ref-2025-04-10",
     ...overrides,
   };
 }
 
-function makeRow(dateKey: string, speed: number, hour = 10): TrafficRow {
-  return {
-    timestamp: new Date(`${dateKey}T${String(hour).padStart(2,"0")}:00:00`),
-    route_code: "R1",
-    label_short: "Test Route",
-    duration_min: Math.round((10 / speed) * 60 * 10) / 10,
-    distance_km: 10,
-    speed_kmh: speed,
-    hour,
-    dayOfWeek: new Date(`${dateKey}T12:00:00`).getDay(),
-    weekKey: "",
-    temp_c: null, realfeel_c: null, humidity_pct: null, aqi: null, rsi_flag: null,
-  };
-}
-
-function buildStats(speed: number, count: number, year: number, month: number) {
-  const map = new Map<string, DayStats>();
-  const base = new Date(year, month, 15).getTime();
-  for (let i = 1; i <= count; i++) {
-    const d = new Date(base - i * 86400000);
-    const key = d.toISOString().slice(0, 10);
-    map.set(key, { ...ds(speed), dateKey: key });
-  }
+function recordMap(records: CalendarAnomaly[]): Map<string, CalendarAnomaly> {
+  const map = new Map<string, CalendarAnomaly>();
+  for (const record of records) map.set(record.date, record);
   return map;
 }
-
-/** Build benchmark daily stats with a given speed for the same dates. */
-function buildBenchmarkStats(subjectStats: Map<string, DayStats>, bmSpeed: number) {
-  const map = new Map<string, DayStats>();
-  for (const [key, s] of subjectStats) {
-    map.set(key, { ...ds(bmSpeed), dateKey: key });
-  }
-  return map;
-}
-
-const DEFAULT_THRESHOLDS: BandThresholdsResult = {
-  thresholds: [0, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
-  quantiles: { p1:0.15,p2:0.18,p5:0.25,p10:0.30,p15:0.35,p25:0.42,p30:0.45,p40:0.50,p45:0.55,p50:0.60,p55:0.65,p60:0.70,p70:0.75,p75:0.80,p85:0.85,p90:0.90,p95:0.95,p98:0.98,p99:1.00 },
-  observationCount: 1000,
-  computedAt: Date.now(),
-};
 
 function renderCal(
-  dailyStats: Map<string, DayStats>,
-  year?: number,
-  month?: number,
-  onDateClick?: (dk: string) => void,
-  benchmarkDailyStats?: Map<string, DayStats>,
+  records: CalendarAnomaly[],
+  options: {
+    year?: number;
+    month?: number;
+    onDateClick?: (dk: string) => void;
+    feedState?: "ready" | "loading" | "unavailable" | "unsupported";
+    cutoffDate?: Date | null;
+    theme?: "colour" | "gray" | "pastel";
+    tod?: CalendarAnomaly["tod"];
+  } = {},
 ) {
-  const now = new Date();
-  const bmStats = benchmarkDailyStats ?? buildBenchmarkStats(dailyStats, 50);
+  const { year = 2025, month = 3, onDateClick, feedState = "ready", cutoffDate = null } = options;
   return render(
-    <ThemeProvider initialTheme="colour">
+    <ThemeProvider initialTheme={options.theme ?? "colour"}>
       <CalendarWidget
-        dailyStats={dailyStats}
-        allRows={[]}
+        anomalies={recordMap(records)}
+        feedState={feedState}
+        feedMeta={{ methodVersion: "calendar-anomaly-v1", generatedAt: "2025-04-11T02:00", error: null }}
         selectedRoute="Test Route"
-        tod="all"
-        benchmarkDailyStats={bmStats}
-        benchmarkRouteLabel="Benchmark Route"
-        bandThresholds={DEFAULT_THRESHOLDS}
-        widgetCalYear={year ?? now.getFullYear()}
-        widgetCalMonth={month ?? now.getMonth()}
+        tod={options.tod ?? "all"}
+        widgetCalYear={year}
+        widgetCalMonth={month}
         onDateClick={onDateClick}
+        cutoffDate={cutoffDate}
       />
     </ThemeProvider>,
   );
 }
 
-/* ── Tests ───────────────────────────────────────────────────────── */
+function circleOf(dateKey: string): HTMLElement | null {
+  const cell = document.querySelector(`[data-dk="${dateKey}"]`);
+  return (cell?.querySelector("div") as HTMLElement | null) ?? null;
+}
 
-describe("CalendarWidget integration", () => {
+function cellWithLabelContaining(text: string): HTMLElement | null {
+  for (const cell of Array.from(document.querySelectorAll('[role="gridcell"]'))) {
+    if ((cell.getAttribute("aria-label") ?? "").includes(text)) return cell as HTMLElement;
+  }
+  return null;
+}
+
+/* ── Structure ───────────────────────────────────────────────────── */
+
+describe("CalendarWidget structure", () => {
   beforeEach(() => cleanup());
 
-  it("renders 42 cells in the calendar grid", () => {
-    const stats = buildStats(30, 30, 2025, 3);
-    const { container } = renderCal(stats, 2025, 3);
-
+  it("renders 42 cells in a 6×7 grid", () => {
+    const { container } = renderCal([], {});
     const grid = container.querySelector('[role="grid"]');
     expect(grid).toBeTruthy();
-    const gridcells = grid!.querySelectorAll('[role="gridcell"]');
-    expect(gridcells.length).toBe(42);
+    expect(grid!.querySelectorAll('[role="gridcell"]').length).toBe(42);
   });
 
-  it("renders day headers Mon–Sun", () => {
-    const stats = buildStats(30, 30, 2025, 3);
-    renderCal(stats, 2025, 3);
-
+  it("renders Mon–Sun column headers and an accessible grid name", () => {
+    const { container } = renderCal([], {});
     for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
       expect(screen.getByText(day)).toBeTruthy();
     }
+    expect(container.querySelector('[aria-label="Traffic calendar"]')).toBeTruthy();
+    expect(container.querySelectorAll('[role="columnheader"]').length).toBe(7);
   });
 
-  it("shows legend with Slow/Fast labels", () => {
-    const stats = buildStats(30, 30, 2025, 3);
-    renderCal(stats, 2025, 3);
+  it("places the 1st of the month under the correct weekday column", () => {
+    // 2025-04-01 was a Tuesday → offset 1 from Monday.
+    const { container } = renderCal([], { year: 2025, month: 3 });
+    const cells = container.querySelectorAll('[role="gridcell"]');
+    expect(cells[0].getAttribute("aria-hidden")).toBe("true");
+    expect(cells[1].getAttribute("aria-label")).toContain("Tuesday, 1 April 2025");
+  });
+});
 
-    expect(screen.getByText("Slow")).toBeTruthy();
-    expect(screen.getByText("Fast")).toBeTruthy();
+/* ── Status → visual treatment ───────────────────────────────────── */
+
+describe("CalendarWidget status treatment", () => {
+  beforeEach(() => cleanup());
+
+  it("fills a final day with its category colour", () => {
+    renderCal([anomaly("2025-04-10", { category: "much_worse" })]);
+    const circle = circleOf("2025-04-10");
+    expect(circle).toBeTruthy();
+    expect(circle!.style.background).not.toBe("transparent");
+    expect(circle!.style.background).not.toBe("");
+    expect(circle!.style.border).toContain("solid");
   });
 
-  it("dates with data get a coloured background", () => {
-    const stats = buildStats(30, 30, 2025, 3);
-    const bmStats = buildBenchmarkStats(stats, 50);
-    stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
-    bmStats.set("2025-04-10", { ...ds(50), dateKey: "2025-04-10" });
-    renderCal(stats, 2025, 3, undefined, bmStats);
+  it("outlines a provisional day instead of ringing it solid", () => {
+    renderCal([anomaly("2025-04-10", { category: "worse", status: "provisional" })]);
+    const circle = circleOf("2025-04-10");
+    expect(circle!.style.border).toContain("dashed");
+    expect(circle!.style.background).not.toBe("transparent");
+  });
 
-    const cell = document.querySelector('[data-dk="2025-04-10"]');
+  it("leaves a day with no record unfilled and unclickable", () => {
+    renderCal([anomaly("2025-04-10")]);
+    const empty = document.querySelector('[aria-label*="5 April 2025"]') as HTMLElement | null;
+    expect(empty).toBeTruthy();
+    expect(empty!.getAttribute("data-dk")).toBeNull();
+    expect(empty!.querySelector("div")!.style.background).toBe("transparent");
+  });
+
+  it("draws insufficient history as dotted, never as a filled 'usual' day", () => {
+    renderCal([
+      anomaly("2025-04-10", {
+        status: "insufficient_history",
+        category: null,
+        typicalMinutes: null,
+        deltaMinutes: null,
+        deltaFraction: null,
+        rankScore: null,
+        lessCount: null,
+        referenceDays: 3,
+      }),
+    ]);
+    const circle = circleOf("2025-04-10");
+    expect(circle!.style.border).toContain("dotted");
+    expect(circle!.style.background).toBe("transparent");
+    const cell = cellWithLabelContaining("Not enough comparable history");
     expect(cell).toBeTruthy();
-    const circle = cell!.querySelector("div")!;
-    expect(circle.style.background).not.toBe("transparent");
-    expect(circle.style.background).not.toBe("");
-    expect(circle.style.border).toContain("solid");
   });
 
-  it("dates with no data get dashed border style", () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const stats = new Map<string, DayStats>();
-    const d1Key = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    stats.set(d1Key, { ...ds(30), dateKey: d1Key });
-    renderCal(stats, year, month);
+  it("draws incomplete coverage as dashed, never as a filled day", () => {
+    renderCal([
+      anomaly("2025-04-10", {
+        status: "incomplete_window",
+        category: null,
+        observedSlots: [18, 19],
+        typicalMinutes: null,
+        deltaMinutes: null,
+      }),
+    ]);
+    const circle = circleOf("2025-04-10");
+    expect(circle!.style.border).toContain("dashed");
+    expect(circle!.style.background).toBe("transparent");
+    expect(cellWithLabelContaining("Incomplete coverage")).toBeTruthy();
+  });
 
-    const day5 = now.getDate() > 5 ? (() => {
-      const spans = document.querySelectorAll("span");
-      let circle: HTMLElement | null = null;
-      spans.forEach(span => {
-        if (span.textContent === "5") circle = span.parentElement as HTMLElement;
-      });
-      return circle;
-    })() : null;
+  it("marks weekends outside a weekday filter as not part of the filter", () => {
+    // 2025-04-12 is a Saturday; the export has no weekday_evening row for it.
+    renderCal([anomaly("2025-04-11", { tod: "weekday_evening", category: "worse" })], {
+      tod: "weekday_evening",
+    });
+    const saturday = document.querySelector('[aria-label*="12 April 2025"]') as HTMLElement | null;
+    expect(saturday).toBeTruthy();
+    expect(saturday!.getAttribute("aria-label")).toContain("Not part of Weekday Evenings");
+    expect(saturday!.getAttribute("data-dk")).toBeNull();
+    expect(saturday!.querySelector("div")!.style.background).toBe("transparent");
+  });
 
-    if (day5) {
-      expect(day5.style.background).toBe("transparent");
-      const wrapper = day5.parentElement;
-      expect(wrapper!.getAttribute("data-dk")).toBeNull();
+  it("still calls a genuinely missing weekday reading 'No observations'", () => {
+    renderCal([], { tod: "weekday_evening" });
+    const thursday = document.querySelector('[aria-label*="10 April 2025"]') as HTMLElement | null;
+    expect(thursday!.getAttribute("aria-label")).toContain("No observations");
+  });
+
+  it("ignores a category that contradicts a non-scorable status", () => {
+    renderCal([
+      anomaly("2025-04-10", { status: "incomplete_window", category: "much_worse" }),
+    ]);
+    const circle = circleOf("2025-04-10");
+    expect(circle!.style.background).toBe("transparent");
+  });
+});
+
+/* ── Feed states ─────────────────────────────────────────────────── */
+
+describe("CalendarWidget feed states", () => {
+  beforeEach(() => cleanup());
+
+  it("renders no fills when the export is unavailable", () => {
+    renderCal([anomaly("2025-04-10", { category: "much_worse" })], { feedState: "unavailable" });
+    for (const cell of Array.from(document.querySelectorAll('[role="gridcell"][aria-label]'))) {
+      const circle = cell.querySelector("div") as HTMLElement;
+      expect(circle.style.background).toBe("transparent");
+    }
+    expect(screen.getByRole("status").textContent).toContain("unavailable");
+  });
+
+  it("renders no fills when the method version is unsupported", () => {
+    renderCal([anomaly("2025-04-10", { category: "worse" })], { feedState: "unsupported" });
+    for (const cell of Array.from(document.querySelectorAll('[role="gridcell"][aria-label]'))) {
+      const circle = cell.querySelector("div") as HTMLElement;
+      expect(circle.style.background).toBe("transparent");
+    }
+    expect(screen.getByRole("status").textContent).toContain("does not understand");
+  });
+
+  it("does not render future days as clickable or filled", () => {
+    renderCal([anomaly("2035-04-10", { category: "better" })], { year: 2035, month: 3 });
+    for (const cell of Array.from(document.querySelectorAll('[role="gridcell"]'))) {
+      expect(cell.getAttribute("data-dk")).toBeNull();
     }
   });
 
-  it("fires onDateClick when clicking a date with data", () => {
-    const clicked: string[] = [];
-    const stats = buildStats(30, 30, 2025, 3);
-    const bmStats = buildBenchmarkStats(stats, 50);
-    stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
-    bmStats.set("2025-04-10", { ...ds(50), dateKey: "2025-04-10" });
-    renderCal(stats, 2025, 3, (dk) => clicked.push(dk), bmStats);
+  it("hides days beyond an active Time Traveller cutoff", () => {
+    renderCal(
+      [anomaly("2025-04-10", { category: "better" }), anomaly("2025-04-20", { category: "worse" })],
+      { cutoffDate: new Date("2025-04-15T12:00:00+05:30") },
+    );
+    expect(circleOf("2025-04-10")!.style.background).not.toBe("transparent");
+    const later = document.querySelector('[aria-label*="20 April 2025"]') as HTMLElement | null;
+    expect(later!.getAttribute("data-dk")).toBeNull();
+    expect(later!.querySelector("div")!.style.background).toBe("transparent");
+  });
+});
 
-    const cell = document.querySelector('[data-dk="2025-04-10"]');
-    expect(cell).toBeTruthy();
-    fireEvent.click(cell!);
+/* ── Interaction and accessibility ───────────────────────────────── */
+
+describe("CalendarWidget interaction", () => {
+  beforeEach(() => cleanup());
+
+  it("fires onDateClick only for days with a record", () => {
+    const clicked: string[] = [];
+    renderCal([anomaly("2025-04-10", { category: "worse" })], {
+      onDateClick: (dk) => clicked.push(dk),
+    });
+    fireEvent.click(document.querySelector('[data-dk="2025-04-10"]')!);
     expect(clicked).toEqual(["2025-04-10"]);
   });
 
-  it("no benchmark data renders dashed border", () => {
-    const stats = new Map<string, DayStats>();
-    stats.set("2025-04-10", { ...ds(30), dateKey: "2025-04-10" });
-    // Empty benchmark map → no benchmark data for any day
-    const emptyBm = new Map<string, DayStats>();
-    renderCal(stats, 2025, 3, undefined, emptyBm);
+  it("names the comparison, estimate, typical value and effect size", () => {
+    renderCal([
+      anomaly("2025-04-10", {
+        category: "much_worse",
+        observedMinutes: 43.5,
+        typicalMinutes: 28.4,
+        deltaMinutes: 15.1,
+        deltaFraction: 0.5317,
+        lessCount: 12,
+        referenceDays: 12,
+      }),
+    ]);
+    const label = document.querySelector('[data-dk="2025-04-10"]')!.getAttribute("aria-label") ?? "";
+    expect(label).toContain("Much worse than usual");
+    expect(label).toContain("43.5 min");
+    expect(label).toContain("typical comparable Thursday 28.4 min");
+    expect(label).toContain("About 15.1 min longer, or 53%");
+    expect(label).toContain("Longer than all 12 comparable Thursdays");
+  });
 
-    const allCells = document.querySelectorAll('[role="gridcell"]');
-    let day10Cell: HTMLElement | null = null;
-    allCells.forEach(c => {
-      const label = c.getAttribute("aria-label") ?? "";
-      if (label.includes("No benchmark")) day10Cell = c as HTMLElement;
-    });
-    expect(day10Cell).toBeTruthy();
-    if (day10Cell) {
-      const circle = day10Cell.querySelector("div")!;
-      expect(circle.style.border).toContain("dashed");
-      expect(circle.style.background).toBe("transparent");
+  it("shows the typical value and rank in the hover tooltip", async () => {
+    renderCal([
+      anomaly("2025-04-10", {
+        category: "much_worse",
+        observedMinutes: 43.5,
+        typicalMinutes: 28.4,
+        deltaMinutes: 15.1,
+        deltaFraction: 0.5317,
+        lessCount: 11,
+        referenceDays: 12,
+      }),
+    ]);
+    fireEvent.mouseEnter(document.querySelector('[data-dk="2025-04-10"]')!);
+    const tip = await screen.findByRole("tooltip");
+    expect(tip.textContent).toContain("Typical comparable Thursday");
+    expect(tip.textContent).toContain("28.4 min");
+    expect(tip.textContent).toContain("Longer than 11 of 12 comparable Thursdays");
+  });
+
+  it("is keyboard reachable and hides the tooltip on Escape", async () => {
+    renderCal([anomaly("2025-04-10", { category: "better" })]);
+    const cell = document.querySelector('[data-dk="2025-04-10"]') as HTMLElement;
+    expect(cell.tabIndex).toBe(0);
+    fireEvent.focus(cell);
+    expect(await screen.findByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await Promise.resolve();
+  });
+});
+
+/* ── Legend ──────────────────────────────────────────────────────── */
+
+describe("CalendarWidget legend and palette", () => {
+  beforeEach(() => cleanup());
+
+  it("labels all five categories plus the no-result state", () => {
+    render(<CalendarLegend themeKey="colour" textMuted="#888" />);
+    for (const text of ["Much worse", "Worse", "Usual", "Better", "Much better", "No comparable result", "Outside filter"]) {
+      expect(screen.getByText(text)).toBeTruthy();
     }
   });
 
-  it("calendar has accessible grid role", () => {
-    const stats = buildStats(30, 30, 2025, 3);
-    const { container } = renderCal(stats, 2025, 3);
-
-    expect(container.querySelector('[role="grid"]')).toBeTruthy();
-    expect(container.querySelector('[role="columnheader"]')).toBeTruthy();
-    expect(container.querySelector('[aria-label="Traffic calendar"]')).toBeTruthy();
+  it("keeps the grey theme ordered: darker means worse, monotonic across all five", () => {
+    const lumen = (hex: string) => {
+      const channel = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255;
+      const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * toLinear(channel(1)) + 0.7152 * toLinear(channel(3)) + 0.0722 * toLinear(channel(5));
+    };
+    const ramp = (["much_worse", "worse", "usual", "better", "much_better"] as const)
+      .map((category) => lumen(categoryColor("gray", category)));
+    // Each step must be strictly lighter than the one before it.
+    for (let i = 1; i < ramp.length; i += 1) {
+      expect(ramp[i]).toBeGreaterThan(ramp[i - 1] + 0.02);
+    }
   });
 
-  it("data cells have aria-label with speed and decile info", () => {
-    const stats = buildStats(30, 30, 2025, 3);
-    const bmStats = buildBenchmarkStats(stats, 50);
-    stats.set("2025-04-10", { ...ds(35), dateKey: "2025-04-10" });
-    bmStats.set("2025-04-10", { ...ds(50), dateKey: "2025-04-10" });
-    renderCal(stats, 2025, 3, undefined, bmStats);
-
-    const cell = document.querySelector('[data-dk="2025-04-10"]');
-    expect(cell).toBeTruthy();
-    const ariaLabel = cell!.getAttribute("aria-label") ?? "";
-    expect(ariaLabel).toContain("km/h");
-    expect(ariaLabel).toContain("Decile");
-    expect(ariaLabel).toContain("benchmark");
+  it("resolves a distinct colour per category in every theme", () => {
+    for (const theme of ["colour", "gray", "pastel"]) {
+      const swatches = (["much_worse", "worse", "usual", "better", "much_better"] as const).map(
+        (category) => categoryColor(theme, category),
+      );
+      expect(new Set(swatches).size).toBe(5);
+    }
   });
 });

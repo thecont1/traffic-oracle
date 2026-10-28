@@ -12,10 +12,10 @@ import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
-  useBenchmarkRoutes, useBenchmarkDailyStats, useEmpiricalBandThresholds,
+  useBenchmarkRoutes,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
@@ -24,7 +24,8 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
-import { CalendarWidget, PALETTES } from "@/components/CalendarWidget";
+import { CalendarWidget, CalendarLegend } from "@/components/CalendarWidget";
+import { anomaliesForRoute, cityToday, useCalendarAnomalies } from "@/lib/calendarAnomalies";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -908,17 +909,25 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
   const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
   const benchmarkRoutes = useBenchmarkRoutes(allRows);
-  const benchmarkDailyStats = useBenchmarkDailyStats(allRows, benchmarkRoutes, tod);
+  // The benchmark route label is still used by R³S² city-relative context —
+  // it is no longer part of the calendar's own comparison.
   const benchmarkRouteLabel = benchmarkRoutes[0] ?? "the longest route";
 
   // ── R³S² data loading and context ─────────────────────────────
   const selectedRouteCode = selectedRouteInfo?.route_code ?? "";
   const rrsData = useRrsData();
   const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod, benchmarkRouteLabel);
-  const bandThresholds = useEmpiricalBandThresholds(allRows, benchmarkRoutes);
+
+  // ── Calendar day anomalies (canonical, pre-computed upstream) ─
+  // Refetch when the traffic feed advances so today's provisional record tracks
+  // new observations; historical finals are stable for unchanged past inputs.
+  const anomalyFeed = useCalendarAnomalies(dataTimestamp?.getTime() ?? null);
+  const anomalyRecords = useMemo(
+    () => anomaliesForRoute(anomalyFeed, selectedRouteCode, tod),
+    [anomalyFeed, selectedRouteCode, tod],
+  );
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -955,8 +964,9 @@ function DashboardInner() {
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
 
-  const [widgetCalYear, setWidgetCalYear] = useState(() => new Date().getFullYear());
-  const [widgetCalMonth, setWidgetCalMonth] = useState(() => new Date().getMonth());
+  // Calendar months are city-local civil months, not viewer-local ones.
+  const [widgetCalYear, setWidgetCalYear] = useState(() => cityToday().year);
+  const [widgetCalMonth, setWidgetCalMonth] = useState(() => cityToday().month - 1);
 
   const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
   const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;
@@ -2559,10 +2569,7 @@ function DashboardInner() {
                             ✳︎ Good Days and Bad Days
                           </p>
                           <InfoTip thm={thm}>
-                            {selectedRoute === benchmarkRouteLabel
-                              ? TOOLTIP_CONTENT.dailyCalendarBenchmark.body
-                              : TOOLTIP_CONTENT.dailyCalendar.body
-                            }
+                            {TOOLTIP_CONTENT.dailyCalendar.body}
                           </InfoTip>
                           <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                             transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
@@ -2576,19 +2583,25 @@ function DashboardInner() {
                       </div>
                       {calendarCardOpen && (
                         <>
+                          <p style={{ fontSize: 12, color: thm.textMuted, margin: "0 0 8px", lineHeight: 1.5 }}>
+                            Each day is compared with the same weekday and hours on this route
+                            over the preceding 90 days. This 90-day reference is independent of
+                            the main question's baseline.
+                          </p>
                           <CalendarWidget
-                            dailyStats={calendarDailyStats}
-                            allRows={allRows}
+                            anomalies={anomalyRecords}
+                            feedState={anomalyFeed.state}
+                            feedMeta={{
+                              methodVersion: anomalyFeed.methodVersion,
+                              generatedAt: anomalyFeed.generatedAt,
+                              error: anomalyFeed.error,
+                            }}
                             selectedRoute={selectedRoute}
                             tod={tod}
-                            benchmarkDailyStats={benchmarkDailyStats}
-                            benchmarkRouteLabel={benchmarkRouteLabel}
-                            bandThresholds={bandThresholds}
                             cutoffDate={tt.isActive ? tt.simulatedNow : null}
                             widgetCalYear={widgetCalYear}
                             widgetCalMonth={widgetCalMonth}
                             onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
-                            isBenchmarkRoute={selectedRoute === benchmarkRouteLabel}
                             debug={!!URL_PARAMS.debug}
                           />
                           {/* ── Footer row: R³S² context + legend ── */}
@@ -2604,29 +2617,8 @@ function DashboardInner() {
                               <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
                             )}
 
-                            {/* Right: Slow–Fast legend */}
-                            {(() => {
-                              const effectiveTheme = selectedRoute === benchmarkRouteLabel ? "benchmark" : thm.key;
-                              const pal = PALETTES[effectiveTheme] ?? PALETTES.colour;
-                              return (
-                                <div role="img" aria-label="Legend: 10 speed deciles from red (slowest) to green (fastest)"
-                                  style={{
-                                    display: "flex", alignItems: "center", gap: 4,
-                                    fontSize: 10, color: thm.textMuted, fontWeight: 600,
-                                    flexShrink: 0,
-                                  }}>
-                                  <span>Slow</span>
-                                  <div>
-                                    <div style={{ display: "flex", gap: 1 }}>
-                                      {pal.map((c, i) => (
-                                        <div key={i} style={{ width: 14, height: 14, background: c }} />
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <span>Fast</span>
-                                </div>
-                              );
-                            })()}
+                            {/* Right: five-category anomaly legend */}
+                            <CalendarLegend themeKey={thm.key} textMuted={thm.textMuted} />
                           </div>
                           {/* ── R³S² DEBUG Block — ?debug=1 to show ── */}
                           {URL_PARAMS.debug && rrsCtx && (

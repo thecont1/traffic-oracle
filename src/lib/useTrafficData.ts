@@ -804,10 +804,18 @@ export function useBenchmarkRoutes(allRows: TrafficRow[]): string[] {
   }, [allRows]);
 }
 
-/** Daily stats for the benchmark route, using the same ToD filter.
- *  When multiple benchmark candidates exist, the caller can pass
- *  `benchmarkRoutes` (ranked descending by avg distance) so we pick
- *  the first route that has rows for a given day. */
+/**
+ * Daily stats for the benchmark route, using the same ToD filter.
+ * When multiple benchmark candidates exist, the caller can pass
+ * `benchmarkRoutes` (ranked descending by avg distance) so we pick
+ * the first route that has rows for a given day.
+ *
+ * @deprecated The "Good Days and Bad Days" calendar no longer compares against
+ * a benchmark route — it uses the upstream day-anomaly export
+ * (`src/lib/calendarAnomalies.ts`). Kept because R³S² and other surfaces still
+ * derive city-relative context from route ranking. Do not reintroduce this as
+ * a calendar baseline.
+ */
 export function useBenchmarkDailyStats(
   allRows: TrafficRow[],
   benchmarkRoutes: string[],
@@ -894,7 +902,13 @@ function setCachedThresholds(result: BandThresholdsResult): void {
 
 /** Compute empirical ratio distribution across all routes and dates.
  *  Uses tod='all' to capture the full range of traffic conditions.
- *  Results are cached in localStorage and recomputed when stale. */
+ *  Results are cached in localStorage and recomputed when stale.
+ *
+ *  @deprecated No calendar caller: the calendar's five categories come from the
+ *  upstream day-anomaly export, not from pooled city ratios with cached
+ *  thresholds. Kept (with its tests) because other city-relative surfaces may
+ *  still want a pooled ratio distribution; the calendar-specific cache policy
+ *  was the problem, not the helper. */
 export function useEmpiricalBandThresholds(
   allRows: TrafficRow[],
   benchmarkRoutes: string[],

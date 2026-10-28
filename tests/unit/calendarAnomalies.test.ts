@@ -11,6 +11,7 @@ import { describe, it, expect } from "bun:test";
 import * as Papa from "papaparse";
 import {
   ANOMALY_CSV_URL,
+  feedAfterFetchError,
   isBeforePublishedWindow,
   CATEGORY_LABELS,
   SUPPORTED_METHOD_VERSIONS,
@@ -159,6 +160,27 @@ describe("parseAnomalyCsv", () => {
     ]));
     expect(feed.earliestDate).toBe("2025-04-10");
     expect(feed.latestDate).toBe("2025-04-30");
+  });
+
+  it("keeps a loaded feed when a refresh fails", () => {
+    const ready = parseAnomalyCsvText(csv([row({ date: "2025-04-10" })]));
+    expect(ready.state).toBe("ready");
+
+    // A poll that fails must not erase colours the reader can already see.
+    const next = feedAfterFetchError(ready, "HTTP 503");
+    expect(next.state).toBe("ready");
+    expect(next.byKey).toBe(ready.byKey);
+    expect(next.error).toBe("HTTP 503");
+  });
+
+  it("reports unavailable when nothing has loaded yet", () => {
+    const ready = parseAnomalyCsvText(csv([row({ date: "2025-04-10" })]));
+    const loading = { ...ready, state: "loading" as const, byKey: new Map() };
+
+    const next = feedAfterFetchError(loading, "HTTP 503");
+    expect(next.state).toBe("unavailable");
+    expect(next.error).toBe("HTTP 503");
+    expect(next.byKey.size).toBe(0);
   });
 
   it("keeps route identity separate from the display label", () => {

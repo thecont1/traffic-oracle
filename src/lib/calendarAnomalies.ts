@@ -466,6 +466,21 @@ export function parseAnomalyCsv(csvText: string): CalendarAnomalyFeed {
 let feedCache: { key: string; feed: CalendarAnomalyFeed } | null = null;
 
 /**
+ * Feed to keep after a failed fetch. A failed *refresh* must not erase a
+ * comparison the reader can already see — the error rides along until the next
+ * successful load. Only a feed with nothing loaded becomes unavailable.
+ */
+export function feedAfterFetchError(
+  previous: CalendarAnomalyFeed,
+  message: string,
+): CalendarAnomalyFeed {
+  if (previous.state === "ready") {
+    return { ...previous, error: message };
+  }
+  return { ...EMPTY_FEED, state: "unavailable", error: message };
+}
+
+/**
  * Load the anomaly export. `refreshKey` should change when new traffic data
  * arrives (the provisional record for the evaluation day changes with it).
  */
@@ -497,12 +512,9 @@ export function useCalendarAnomalies(refreshKey?: string | number | null): Calen
       })
       .catch((error: unknown) => {
         if (cancelled || (error as { name?: string })?.name === "AbortError") return;
-        const next: CalendarAnomalyFeed = {
-          ...EMPTY_FEED,
-          state: "unavailable",
-          error: error instanceof Error ? error.message : String(error),
-        };
-        setFeed(next);
+        const message = error instanceof Error ? error.message : String(error);
+        // Keep a successful feed on screen; only a failed first load blanks it.
+        setFeed((previous) => feedAfterFetchError(previous, message));
         // Do not cache failures — the next data refresh retries.
       });
 

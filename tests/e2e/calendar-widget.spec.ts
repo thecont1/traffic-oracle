@@ -2,9 +2,10 @@
  * E2E tests for the "Good Days and Bad Days" calendar widget.
  *
  * The widget renders a pre-computed day-anomaly export, so these tests must
- * serve one: `buildAnomaliesCsv()` synthesises rows for the current Kolkata
- * civil month (the month the calendar opens on) for the fixture route `R-100`,
- * mixing every status the widget has to distinguish.
+ * serve one: `buildAnomaliesCsv()` synthesises rows for the month the calendar
+ * opens on, for the fixture route `R-100`, mixing every status the widget has
+ * to distinguish. The browser clock is pinned (see FIXED_NOW) so the month and
+ * the asserted days never depend on the day the suite happens to run.
  *
  * Covered:
  *   1. 42 cells in a 6×7 grid.
@@ -38,14 +39,15 @@ const COLUMNS = [
   "generated_at", "source_revision", "reference_audit_id",
 ];
 
-/** Current civil date in Asia/Kolkata — the calendar's own clock. */
-function cityToday(): { year: number; month: number; day: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(new Date());
-  const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return { year: pick("year"), month: pick("month"), day: pick("day") };
-}
+/**
+ * Pinned browser clock: 10:00 IST on Monday 20 April 2026.
+ *
+ * The calendar opens on the city's current month, so a run on the 1st would
+ * have no days 2–4 to assert against, and a suite that started before midnight
+ * would disagree with itself about which month is visible.
+ */
+const FIXED_NOW = new Date("2026-04-20T04:30:00Z");
+const TODAY = { year: 2026, month: 4, day: 20 };
 
 function anomaliesRow(date: string, overrides: Record<string, string> = {}): string {
   const base: Record<string, string> = {
@@ -87,13 +89,12 @@ function anomaliesRow(date: string, overrides: Record<string, string> = {}): str
   }).join(",");
 }
 
-/** Rows for days 1..today of the current city month — the visible month. */
+/** Rows for days 1..TODAY.day of the pinned month — the visible month. */
 function buildAnomaliesCsv(): string {
-  const today = cityToday();
-  const prefix = `${today.year}-${String(today.month).padStart(2, "0")}`;
+  const prefix = `${TODAY.year}-${String(TODAY.month).padStart(2, "0")}`;
   const rows: string[] = [COLUMNS.join(",")];
 
-  for (let day = 1; day <= today.day; day += 1) {
+  for (let day = 1; day <= TODAY.day; day += 1) {
     const date = `${prefix}-${String(day).padStart(2, "0")}`;
     if (day === 2) {
       // A clearly worse-than-usual day: the tooltip assertions key off this.
@@ -144,14 +145,15 @@ const CAL_URL = "/?route=Hosur+Road&tod=all&period=1.5m";
 
 const TOD_OPTIONS = ["all", "weekday_morning", "weekday_afternoon", "weekday_evening", "weekends", "late_hours"];
 
-function monthDay(today: { year: number; month: number }, day: number): string {
-  return `${today.year}-${String(today.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+function monthDay(day: number): string {
+  return `${TODAY.year}-${String(TODAY.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /* ══════════════════════════════════════════════════════════════════ */
 
 test.describe("Calendar widget — anomaly export", () => {
   test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(FIXED_NOW);
     await interceptCsvs(page);
   });
 
@@ -177,11 +179,10 @@ test.describe("Calendar widget — anomaly export", () => {
   });
 
   test("fills compared days and outlines days with no comparable result", async ({ page }) => {
-    const today = cityToday();
     await page.goto(CAL_URL);
     await page.waitForSelector("text=Mon");
 
-    await expect(page.locator(`[data-dk="${monthDay(today, 2)}"]`))
+    await expect(page.locator(`[data-dk="${monthDay(2)}"]`))
       .toHaveAttribute("data-category", "much_worse");
 
     // Insufficient history and incomplete coverage are present but never filled.
@@ -198,12 +199,28 @@ test.describe("Calendar widget — anomaly export", () => {
     }
   });
 
-  test("hovering a compared day shows the typical value and the rank", async ({ page }) => {
-    const today = cityToday();
+  test("keeps the numbers in the description, not in the name", async ({ page }) => {
     await page.goto(CAL_URL);
     await page.waitForSelector("text=Mon");
 
-    await page.locator(`[data-dk="${monthDay(today, 2)}"]`).hover();
+    const cell = page.locator(`[data-dk="${monthDay(2)}"]`);
+    const label = (await cell.getAttribute("aria-label")) ?? "";
+    expect(label).toContain("Much worse than usual");
+    expect(label).not.toMatch(/\d+(\.\d+)? min/);
+
+    const describedBy = await cell.getAttribute("aria-describedby");
+    expect(describedBy).toBe(`anomaly-desc-${monthDay(2)}`);
+    const description = page.locator(`#${describedBy}`);
+    await expect(description).toHaveCount(1);
+    await expect(description).toContainText("43.5 min");
+    await expect(description).toContainText("28.4 min");
+  });
+
+  test("hovering a compared day shows the typical value and the rank", async ({ page }) => {
+    await page.goto(CAL_URL);
+    await page.waitForSelector("text=Mon");
+
+    await page.locator(`[data-dk="${monthDay(2)}"]`).hover();
     const tip = page.getByRole("tooltip");
     await expect(tip).toBeVisible();
     await expect(tip).toContainText("Much worse than usual");

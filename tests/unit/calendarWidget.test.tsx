@@ -289,7 +289,7 @@ describe("CalendarWidget interaction", () => {
     expect(clicked).toEqual(["2025-04-10"]);
   });
 
-  it("names the comparison, estimate, typical value and effect size", () => {
+  it("names the day and the verdict, and describes the numbers separately", () => {
     renderCal([
       anomaly("2025-04-10", {
         category: "much_worse",
@@ -301,14 +301,25 @@ describe("CalendarWidget interaction", () => {
         referenceDays: 12,
       }),
     ]);
-    const label = document.querySelector('[data-dk="2025-04-10"]')!.getAttribute("aria-label") ?? "";
+    const cell = document.querySelector('[data-dk="2025-04-10"]') as HTMLElement;
+    const label = cell.getAttribute("aria-label") ?? "";
+    // The name is a name: day, route, filter, verdict. Nothing numeric.
+    expect(label).toContain("Thursday, 10 April 2025");
+    expect(label).toContain("Test Route");
+    expect(label).toContain("All Times");
     expect(label).toContain("Much worse than usual");
-    expect(label).toContain("43.5 min");
-    expect(label).toContain("typical comparable Thursday 28.4 min");
-    expect(label).toContain("About 15.1 min longer, or 53%");
-    expect(label).toContain("Longer than all 12 comparable Thursdays");
-    // The category appears once: it is the cell's verdict, not a prefix to the detail.
+    expect(label).not.toMatch(/\d+(\.\d+)? min/);
+    expect(label).not.toContain("comparable");
     expect(label.match(/Much worse than usual/g)).toHaveLength(1);
+
+    // The figures live in the description the cell points at.
+    const describedBy = cell.getAttribute("aria-describedby");
+    expect(describedBy).toBe("anomaly-desc-2025-04-10");
+    const description = document.getElementById(describedBy!)?.textContent ?? "";
+    expect(description).toContain("43.5 min");
+    expect(description).toContain("typical comparable Thursday 28.4 min");
+    expect(description).toContain("About 15.1 min longer, or 53%");
+    expect(description).toContain("Longer than all 12 comparable Thursdays");
   });
 
   it("shows the typical value and rank in the hover tooltip", async () => {
@@ -337,7 +348,9 @@ describe("CalendarWidget interaction", () => {
     fireEvent.focus(cell);
     expect(await screen.findByRole("tooltip")).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
+    // Escape actually dismisses it — not merely "no error was thrown".
     await Promise.resolve();
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });
 

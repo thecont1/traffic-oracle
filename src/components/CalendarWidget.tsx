@@ -26,6 +26,20 @@ import {
 } from "@/lib/calendarAnomalies";
 
 const CIRCLE_D = 46;
+
+/** Visually hidden, still announced: carries each cell's detailed comparison. */
+const SR_ONLY = {
+  position: "absolute" as const,
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap" as const,
+  border: 0,
+};
+
 const DAY_HDR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /* ── Category palette ────────────────────────────────────────────────
@@ -177,7 +191,10 @@ export function CalendarWidget({
   })();
   const daysInMo = new Date(Date.UTC(widgetCalYear, widgetCalMonth + 1, 0)).getUTCDate();
 
-  const todayKey = useMemo(() => cityTodayKey(), []);
+  // Recomputed on every render: a calendar mounted before midnight must not
+  // keep calling yesterday "today" (the cells memo depends on this value, so
+  // it re-renders once the date actually changes).
+  const todayKey = cityTodayKey();
   const cutoffKey = useMemo(
     () => (cutoffDate ? instantToCivilKey(cutoffDate) : null),
     [cutoffDate],
@@ -298,7 +315,10 @@ export function CalendarWidget({
         return `${STATUS_LABELS[record.status] || "No comparable data"}.`;
       })();
 
-      const ariaLabel = `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ${interactionLabel}. ${details}`.trim();
+      // The accessible name identifies the day — date, route, filter, verdict.
+      // The numbers go in the description below, so walking the grid does not
+      // read a paragraph per cell.
+      const ariaLabel = `${dayLabel}. ${selectedRoute}, ${TOD_LABELS[tod]}. ${interactionLabel}.`;
       const interactive = feedReady && !!record && !isFuture && !isBeyondCutoff;
 
       return (
@@ -307,7 +327,7 @@ export function CalendarWidget({
           role="gridcell"
           tabIndex={interactive ? 0 : undefined}
           aria-label={ariaLabel}
-          aria-describedby={interactive ? `anomaly-tip-${dateKey}` : undefined}
+          aria-describedby={interactive && details ? `anomaly-desc-${dateKey}` : undefined}
           data-dk={interactive ? dateKey : undefined}
           data-category={scorable ? record?.category ?? undefined : undefined}
           data-status={record?.status}
@@ -336,6 +356,9 @@ export function CalendarWidget({
               {dayNum}
             </span>
           </div>
+          {interactive && details ? (
+            <span id={`anomaly-desc-${dateKey}`} style={SR_ONLY}>{details}</span>
+          ) : null}
         </div>
       );
     });
@@ -369,7 +392,6 @@ export function CalendarWidget({
 
     return (
       <div
-        id={`anomaly-tip-${r.date}`}
         role="tooltip"
         aria-live="polite"
         style={{

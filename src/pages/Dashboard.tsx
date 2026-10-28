@@ -981,7 +981,13 @@ function DashboardInner() {
   const widgetCalMinMonthStr = (anomalyFirstStr || calFirstStr)
     ? (anomalyFirstStr || calFirstStr).slice(0, 7)
     : widgetCalPrefixStr;
-  const { y: wCalLy, m: wCalLm } = calLastStr ? parseYM(calLastStr) : { y: widgetCalYear, m: widgetCalMonth };
+  // Forward navigation is bounded by what the export publishes, not by the
+  // traffic daily stats: the export decides which months have rows at all, and
+  // the daily stats are filtered by the selected time of day. Falls back to the
+  // traffic data (then the current month) while the feed is still loading.
+  const anomalyLastStr = anomalyFeed.latestDate ?? "";
+  const calMaxStr = anomalyLastStr || calLastStr;
+  const { y: wCalLy, m: wCalLm } = calMaxStr ? parseYM(calMaxStr) : { y: widgetCalYear, m: widgetCalMonth };
   const widgetCalMaxMonthStr = `${wCalLy}-${String(wCalLm + 1).padStart(2, "0")}`;
   const widgetCalCanBack = widgetCalPrefixStr > widgetCalMinMonthStr;
   const widgetCalCanFwd  = widgetCalPrefixStr < widgetCalMaxMonthStr;

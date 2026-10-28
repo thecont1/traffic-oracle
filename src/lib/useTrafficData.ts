@@ -4,18 +4,20 @@ import * as Papa from "papaparse";
 import appConfig from "../config.json";
 import type { AppConfig } from "./config";
 import { bust } from "./bust";
-import { cityInstant, parseCivilDate, weekKeyForCivil } from "./calendarAnomalies";
+import {
+  cityInstant,
+  formatCityTime12h,
+  instantToCivilKey,
+  parseCivilDate,
+  weekKeyForCivil,
+} from "./calendarAnomalies";
 
 const cfg = appConfig as AppConfig;
 const WORST_CASE_PCT: number = cfg.percentile.worst_case;
 
-/** Format a Date as "h:mm AM/PM" (no leading zero on hour). */
+/** Format a Date as "h:mm AM/PM" on Bangalore's clock (no leading zero). */
 function fmtTime(d: Date): string {
-  const h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, "0");
-  const ampm = h >= 12 ? "PM" : "AM";
-  const h12 = h % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
+  return formatCityTime12h(d);
 }
 const defaultCity = cfg.cities.find(c => c.data_source) ?? cfg.cities[0];
 /** Extract the bare filename from a GitHub raw URL and return a same-origin
@@ -743,8 +745,8 @@ export function useDailyStats(
     );
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of rows) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);
@@ -787,8 +789,8 @@ export function useDailyStatsAllDay(
     const rows = allRows.filter((r) => r.label_short === selectedRoute);
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of rows) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);
@@ -871,8 +873,8 @@ export function useBenchmarkDailyStats(
     );
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of rows) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);
@@ -979,8 +981,7 @@ export function useEmpiricalBandThresholds(
     // Group rows by route+date (no ToD filter — full dataset)
     const byKey = new Map<string, TrafficRow[]>();
     for (const r of allRows) {
-      const d = r.timestamp;
-      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const dateKey = instantToCivilKey(r.timestamp);
       const key = `${r.label_short}|${dateKey}`;
       const arr = byKey.get(key);
       if (arr) arr.push(r); else byKey.set(key, [r]);
@@ -1111,8 +1112,8 @@ export function useFilteredData(
     // Daily aggregation for the chart
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of filtered) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);

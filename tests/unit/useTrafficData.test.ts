@@ -18,6 +18,7 @@ import {
   type TimeOfDay,
   type TimePeriod,
 } from "../../src/lib/useTrafficData";
+import { instantToCivilKey } from "../../src/lib/calendarAnomalies";
 import * as Papa from "papaparse";
 import appConfig from "../../src/config.json";
 import type { AppConfig } from "../../src/lib/config";
@@ -34,6 +35,9 @@ describe("parseCityRowTimestamp", () => {
     expect(stamp.hour).toBe(8);
     expect(stamp.dayOfWeek).toBe(2); // Tuesday, 0 = Sunday
     expect(stamp.weekKey).toBe("2026-04-06");
+    // Daily aggregation groups on this key, so it must be the city's date —
+    // 08:30 IST is still 6 April in Los Angeles.
+    expect(instantToCivilKey(stamp.ts)).toBe("2026-04-07");
   });
 
   it("keeps a Sunday reading in the week that started on Monday", () => {

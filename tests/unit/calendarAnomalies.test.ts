@@ -16,6 +16,7 @@ import {
   civilNoonInstant,
   feedAfterFetchError,
   formatCityStamp,
+  formatCityTime12h,
   formatCityStampWithWeekday,
   weekKeyForCivil,
   isBeforePublishedWindow,
@@ -331,6 +332,12 @@ describe("civil dates", () => {
     expect(cityInstant("2026-10-16", 21, 5).toISOString()).toBe("2026-10-16T15:35:00.000Z");
     expect(cityInstant("2026-10-16", 0, 0).toISOString()).toBe("2026-10-15T18:30:00.000Z");
     expect(() => cityInstant("16/10/2026", 9, 0)).toThrow(RangeError);
+  });
+
+  it("formats the daily observation time on the city clock", () => {
+    expect(formatCityTime12h(new Date("2026-04-07T03:00:00Z"))).toBe("8:30 AM");
+    expect(formatCityTime12h(new Date("2026-04-07T15:35:00Z"))).toBe("9:05 PM");
+    expect(formatCityTime12h(new Date("2026-04-06T18:30:00Z"))).toBe("12:00 AM");
   });
 
   it("reads the city clock time", () => {

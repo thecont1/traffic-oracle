@@ -274,6 +274,19 @@ export function civilNoonInstant(dateKey: string, timeZone: string = CITY_TIMEZO
   return cityInstant(dateKey, 12, 0, timeZone);
 }
 
+/** `8:30 AM` on the city's clock, regardless of the viewer's zone. */
+export function formatCityTime12h(value: Date, timeZone: string = CITY_TIMEZONE): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("hour")}:${get("minute")} ${get("dayPeriod")}`.trim();
+}
+
 /** `HH:MM` on the city's clock, regardless of the viewer's zone. */
 export function cityClockTime(value: Date = new Date(), timeZone: string = CITY_TIMEZONE): string {
   const parts = new Intl.DateTimeFormat("en-GB", {

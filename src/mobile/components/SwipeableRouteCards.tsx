@@ -104,6 +104,7 @@ export default function SwipeableRouteCards({
   const [slideDir, setSlideDir] = useState(0); // -1 exit left, 1 exit right, 0 settled
   const [noTransition, setNoTransition] = useState(false);
   const animating = useRef(false);
+  const [animationBusy, setAnimationBusy] = useState(false);
 
   // Sync with external route selection
   useEffect(() => {
@@ -145,6 +146,7 @@ export default function SwipeableRouteCards({
       if (total === 0 || animating.current) return;
       const newIdx = wrapIdx(currentIdx + direction);
       animating.current = true;
+      setAnimationBusy(true);
 
       // Phase 1: slide content out
       setSlideDir(direction);
@@ -161,7 +163,10 @@ export default function SwipeableRouteCards({
           requestAnimationFrame(() => {
             setNoTransition(false);
             setSlideDir(0);
-            setTimeout(() => { animating.current = false; }, 220);
+            setTimeout(() => {
+              animating.current = false;
+              setAnimationBusy(false);
+            }, 220);
           });
         });
       }, 120);
@@ -273,7 +278,7 @@ export default function SwipeableRouteCards({
           : "translateX(-50%)";
 
   return (
-    <section aria-label="Current route conditions" className="oracle-route-carousel" style={{ position: "relative", marginTop: 14 }}>
+    <section aria-label="Current route conditions" aria-busy={animationBusy} className="oracle-route-carousel" style={{ position: "relative", marginTop: 14 }}>
       {/* ── Title cutting across the top border ──────────── */}
       <div
         style={{

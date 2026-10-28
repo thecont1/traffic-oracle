@@ -392,6 +392,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
   }, [onHoverRoute]);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+  const railRef = useRef<HTMLDivElement>(null);
   const paneBorderColor = ttActive
     ? thm.key === "colour" ? "rgba(167,139,250,0.35)" : thm.key === "pastel" ? "rgba(138,126,104,0.55)" : "rgba(17,17,17,0.45)"
     : thm.paneBorder;
@@ -486,7 +487,10 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
               {/* Info tooltip — click to toggle animated callout */}
               <InfoTip thm={thm}>{TOOLTIP_CONTENT.routeBrowserPane.body}</InfoTip>
             </div>
-            <button onClick={onToggle} title="Close" aria-label="Close route browser"
+            <button onClick={() => {
+              railRef.current?.focus();
+              onToggle();
+            }} title="Close" aria-label="Close route browser"
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14,
                 color: thm.textMuted, padding: 10, borderRadius: 4, lineHeight: 1,
                 minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -539,6 +543,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
 
       {/* Rail — right edge */}
       <div
+        ref={railRef}
         onClick={onToggle}
         role="button"
         tabIndex={0}

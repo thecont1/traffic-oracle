@@ -10,7 +10,7 @@ The dashboard stays code-first because it is an app screen. The composition-firs
 
 ## Implemented
 
-- Compact, phrase-grouped questions replace oversized, heavily padded controls. Desktop and mobile now use the same Chip component.
+- Compact, phrase-grouped questions use the shared Chip component on desktop and mobile. Centre alignment is retained as an explicit user preference.
 - Question controls wrap at narrow widths, retain a 44px minimum height, and no longer enlarge or rotate on hover.
 - Desktop navigation wraps at intermediate widths. The Route Observer map moves inside its dropdown at those widths instead of extending beyond the viewport.
 - The baseline has explicit From/To dates that do not collide when slider handles are close together. Both handles have accessible names and date value text.
@@ -35,9 +35,17 @@ The dashboard stays code-first because it is an app screen. The composition-firs
 
 The local test runner uses an ignored configuration under `tmp/` to select the sandbox's existing Chromium executable. The committed tests remain compatible with the repository's standard Playwright configuration; no machine-specific browser path is committed.
 
+## Review corrections
+
+- Restored centre alignment for the question, wrapped phrases, and hint on both desktop and mobile. Added alignment assertions at all six tested widths.
+- The desktop pane's header Close button focuses the rail before closing. Its ref is attached outside the inert pane content; the keyboard regression verifies focus survives closing and Enter reopens the pane.
+- The carousel exposes `aria-busy` from state updated alongside its animation lock. The swipe test waits for `aria-busy="false"` before dispatching touch events instead of assuming the CSS transform proves readiness. The route-label assertions are preserved; five consecutive reruns passed.
+- Preview transforms now require the normalized absolute project `src/` prefix, including the trailing separator. The same guard protects the fingerprint-hook replacement. Four unit tests cover project source, dependencies with `/src/` in their paths, similarly named sibling folders, and an unrelated fingerprint hook. Query normalization was not added.
+- Production and private-preview builds succeed after these corrections; all 17 selected browser tests still pass.
+
 ## Existing blockers and remaining coverage
 
-- Unit tests: 224 pass and one existing calendar test fails because it expects a “Slow” legend. The failing test was reproduced on unchanged `main`.
+- Unit tests: 228 pass and one existing calendar test fails because it expects a “Slow” legend. The failing test was reproduced on unchanged `main`.
 - TypeScript 5.9.3 reports the existing missing `KVNamespace` type in `src/worker.ts`. The same error was reproduced on unchanged `main`. The repository also does not declare the TypeScript compiler needed by its typecheck script.
 - Vite emits the existing tooltip sourcemap warning but completes both builds.
 - Full WCAG 2.2 AA conformance, screen-reader testing, exhaustive tooltip/chart accessibility, all motion states, browser zoom/reflow, every historical state, Safari/Firefox, and physical-device touch testing are not certified by this pass.

@@ -34,6 +34,8 @@ for (const width of [320, 390, 768, 800, 1024, 1440]) {
   test(`navigation and question stay in bounds at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await ready(page);
+    await expect(page.locator(".oracle-question")).toHaveCSS("text-align", "center");
+    await expect(page.locator(".oracle-question__sentence")).toHaveCSS("justify-content", "center");
     expect(await page.evaluate(() => document.body.scrollWidth <= innerWidth)).toBe(true);
     const clipped = await page.locator("header button, .oracle-question button").evaluateAll(elements =>
       elements.filter(element => {
@@ -73,6 +75,8 @@ test("mobile route arrows and touch swipe update the question without clipping l
   expect(await label.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await expect(page.locator(".oracle-route-carousel [aria-live]")).toContainText("Route");
   // Exercise the same touch events used by the card, not only the arrow fallback.
+  // The lock is released after the visual transition; wait for that explicit signal.
+  await expect(page.locator(".oracle-route-carousel")).toHaveAttribute("aria-busy", "false");
   const slide = page.locator(".oracle-route-carousel [style*='translateX']").first();
   await expect(slide).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
   await slide.dispatchEvent("touchstart", { touches: [{ identifier: 1, clientX: 220, clientY: 150 }] });
@@ -97,8 +101,15 @@ test("desktop baseline, disclosures, theme, zoom and route pane remain operable"
   await expect(page.locator(".oracle-desktop")).not.toHaveClass(/dark/);
   await page.getByRole("button", { name: "Increase interface size" }).click();
   await expect(page.locator(".oracle-header")).toContainText("110%");
-  await page.getByRole("button", { name: "Close route browser", exact: true }).first().click();
+  const closePane = page.locator(".oracle-route-pane__content")
+    .getByRole("button", { name: "Close route browser", exact: true });
+  const rail = page.locator(".oracle-route-pane > [role='button']");
+  await closePane.focus();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".oracle-route-pane__content")).toHaveAttribute("inert", "");
-  await page.getByRole("button", { name: "Open route browser", exact: true }).click();
+  await expect(rail).toBeFocused();
+  await expect(rail).toHaveAccessibleName("Open route browser");
+  await page.keyboard.press("Enter");
   await expect(page.locator(".oracle-route-pane__content")).not.toHaveAttribute("inert", "");
+  await expect(rail).toBeFocused();
 });

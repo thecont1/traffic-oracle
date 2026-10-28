@@ -480,12 +480,13 @@
 .oracle-content { container-type: inline-size; }
 .oracle-question {
   padding: 4px 0 20px;
-  text-align: left;
+  text-align: center;
 }
 .oracle-question__sentence {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px 12px;
   margin: 0;
   font-family: var(--app-font-display);
@@ -498,6 +499,7 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   max-width: 100%;
 }

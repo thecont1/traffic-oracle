@@ -174,6 +174,36 @@ export function anomaliesForRoute(
 // Civil-date helpers — never the viewer's timezone
 // ============================================================================
 
+/**
+ * Cached `Intl.DateTimeFormat` instances, keyed by kind, locale and timezone.
+ *
+ * `instantToCivilKey()` runs once per traffic row — tens of thousands per
+ * render — and constructing a formatter is the expensive half, not formatting.
+ * Formatters are immutable and timezone-bound, so one per key is enough for the
+ * life of the module.
+ */
+const FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function cachedFormatter(
+  kind: string,
+  locale: string,
+  timeZone: string,
+  options: Omit<Intl.DateTimeFormatOptions, "timeZone">,
+): Intl.DateTimeFormat {
+  const key = `${kind}|${locale}|${timeZone}`;
+  let formatter = FORMATTERS.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone });
+    FORMATTERS.set(key, formatter);
+  }
+  return formatter;
+}
+
+const CIVIL_PARTS = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+
+const civilFormatter = (timeZone: string) =>
+  cachedFormatter("civil", "en-CA", timeZone, CIVIL_PARTS);
+
 export interface CivilDate {
   year: number;
   month: number;
@@ -202,12 +232,7 @@ export function toCivilKey(year: number, month1: number, day: number): string {
 
 /** Today's civil date in the route city, independent of the viewer's zone. */
 export function cityToday(timeZone: string = CITY_TIMEZONE): CivilDate {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
+  const parts = civilFormatter(timeZone).formatToParts(new Date());
   const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
   const year = pick("year");
   const month = pick("month");
@@ -229,8 +254,7 @@ export function cityTodayKey(timeZone: string = CITY_TIMEZONE): string {
  * browser's own offset is irrelevant.
  */
 function cityOffsetMs(instant: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  const parts = cachedFormatter("offset", "en-US", timeZone, {
     hourCycle: "h23",
     year: "numeric",
     month: "2-digit",
@@ -276,8 +300,7 @@ export function civilNoonInstant(dateKey: string, timeZone: string = CITY_TIMEZO
 
 /** `8:30 AM` on the city's clock, regardless of the viewer's zone. */
 export function formatCityTime12h(value: Date, timeZone: string = CITY_TIMEZONE): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  const parts = cachedFormatter("clock12", "en-US", timeZone, {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
@@ -289,8 +312,7 @@ export function formatCityTime12h(value: Date, timeZone: string = CITY_TIMEZONE)
 
 /** `HH:MM` on the city's clock, regardless of the viewer's zone. */
 export function cityClockTime(value: Date = new Date(), timeZone: string = CITY_TIMEZONE): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
+  const parts = cachedFormatter("clock24", "en-GB", timeZone, {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
@@ -321,8 +343,7 @@ export function weekKeyForCivil(dateKey: string): string {
 
 /** `16 Oct '26 · 21:05` on the city's clock, never the viewer's. */
 export function formatCityStamp(value: Date, timeZone: string = CITY_TIMEZONE): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
+  const parts = cachedFormatter("stamp", "en-GB", timeZone, {
     day: "numeric",
     month: "short",
     year: "2-digit",
@@ -337,18 +358,13 @@ export function formatCityStamp(value: Date, timeZone: string = CITY_TIMEZONE): 
 
 /** `Wed 16 Oct '26 · 21:05` — the weekday-prefixed form used by the TT banner. */
 export function formatCityStampWithWeekday(value: Date, timeZone: string = CITY_TIMEZONE): string {
-  const weekday = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short" }).format(value);
+  const weekday = cachedFormatter("weekday", "en-GB", timeZone, { weekday: "short" }).format(value);
   return `${weekday} ${formatCityStamp(value, timeZone)}`;
 }
 
 /** Convert an instant (e.g. a Time Traveller cutoff) to its city civil date. */
 export function instantToCivilKey(value: Date, timeZone: string = CITY_TIMEZONE): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(value);
+  const parts = civilFormatter(timeZone).formatToParts(value);
   const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
   return toCivilKey(pick("year"), pick("month"), pick("day"));
 }

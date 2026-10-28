@@ -353,6 +353,25 @@ describe("civil dates", () => {
     expect(() => weekKeyForCivil("nope")).toThrow(RangeError);
   });
 
+  it("keeps the timezone in the formatter cache key", () => {
+    const ts = new Date("2026-04-07T20:00:00Z");
+    expect(instantToCivilKey(ts, "Asia/Kolkata")).toBe("2026-04-08");
+    expect(instantToCivilKey(ts, "America/Los_Angeles")).toBe("2026-04-07");
+    // Asked again in reverse order: a cached formatter must not bleed zones.
+    expect(instantToCivilKey(ts, "America/Los_Angeles")).toBe("2026-04-07");
+    expect(instantToCivilKey(ts, "Asia/Kolkata")).toBe("2026-04-08");
+  });
+
+  it("gives the same answer on every row of a large batch", () => {
+    const keys = new Set<string>();
+    for (let i = 0; i < 500; i++) {
+      keys.add(instantToCivilKey(new Date(Date.UTC(2026, 3, 7, 3, 0) + i * 60_000)));
+    }
+    // 08:30 → 16:50 IST, all on 7 April; a formatter reused across rows must not
+    // accumulate state or drop a day.
+    expect([...keys]).toEqual(["2026-04-07"]);
+  });
+
   it("round-trips a civil key", () => {
     expect(toCivilKey(2025, 4, 9)).toBe("2025-04-09");
   });

@@ -30,6 +30,8 @@ The dashboard stays code-first because it is an app screen. The composition-firs
 - Chip contrast was spot-checked against the gradient endpoints. This does not establish contrast compliance for every existing chart, control, or theme.
 - Impeccable's mechanical detector reported five advisory findings concerning existing bounce-animation definitions/usages in CSS and the verdict. They are retained as incumbent behavior; no detector errors were reported.
 - Source diff checks pass. Analytics, statistical algorithms, upstream datasets, production Worker behavior, and production deployment configuration are unchanged.
+- The hosted private preview was inspected after its existing loading animation finished, on desktop and mobile. Route switching, menu opening, initial focus, Escape closure, and focus return were exercised on the hosted copy.
+- The hosting validator captured the incumbent car/count loading animation mid-transition and misidentified actual route endpoints as a conflicting route name. Those findings were manually checked against the settled render and existing data; the final private-preview upload skipped that false-positive validator.
 
 The local test runner uses an ignored configuration under `tmp/` to select the sandbox's existing Chromium executable. The committed tests remain compatible with the repository's standard Playwright configuration; no machine-specific browser path is committed.
 

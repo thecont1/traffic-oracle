@@ -11,10 +11,13 @@ import { describe, it, expect } from "bun:test";
 import * as Papa from "papaparse";
 import {
   ANOMALY_CSV_URL,
+  cityClockTime,
+  cityInstant,
   civilNoonInstant,
   feedAfterFetchError,
   formatCityStamp,
   formatCityStampWithWeekday,
+  weekKeyForCivil,
   isBeforePublishedWindow,
   CATEGORY_LABELS,
   SUPPORTED_METHOD_VERSIONS,
@@ -322,6 +325,25 @@ describe("civil dates", () => {
     expect(formatCityStamp(new Date("2026-10-15T18:30:00Z"))).toBe("16 Oct '26 · 00:00");
     // The banner variant names the weekday, still on the city's clock.
     expect(formatCityStampWithWeekday(instant)).toBe("Fri 16 Oct '26 · 21:05");
+  });
+
+  it("builds any city wall-clock time, not just noon", () => {
+    expect(cityInstant("2026-10-16", 21, 5).toISOString()).toBe("2026-10-16T15:35:00.000Z");
+    expect(cityInstant("2026-10-16", 0, 0).toISOString()).toBe("2026-10-15T18:30:00.000Z");
+    expect(() => cityInstant("16/10/2026", 9, 0)).toThrow(RangeError);
+  });
+
+  it("reads the city clock time", () => {
+    expect(cityClockTime(new Date("2026-10-16T15:35:00Z"))).toBe("21:05");
+    expect(cityClockTime(new Date("2026-10-15T18:30:00Z"))).toBe("00:00");
+  });
+
+  it("puts a civil date in its Monday-based week", () => {
+    expect(weekKeyForCivil("2026-04-06")).toBe("2026-04-06"); // Monday
+    expect(weekKeyForCivil("2026-04-07")).toBe("2026-04-06"); // Tuesday
+    expect(weekKeyForCivil("2026-04-12")).toBe("2026-04-06"); // Sunday
+    expect(weekKeyForCivil("2026-04-13")).toBe("2026-04-13"); // next Monday
+    expect(() => weekKeyForCivil("nope")).toThrow(RangeError);
   });
 
   it("round-trips a civil key", () => {

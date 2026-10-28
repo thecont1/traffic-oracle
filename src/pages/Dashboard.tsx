@@ -25,7 +25,18 @@ import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
 import { CalendarWidget, CalendarLegend } from "@/components/CalendarWidget";
-import { anomaliesForRoute, cityToday, civilNoonInstant, formatCityStampWithWeekday, useCalendarAnomalies } from "@/lib/calendarAnomalies";
+import {
+  anomaliesForRoute,
+  cityClockTime,
+  cityInstant,
+  cityToday,
+  cityTodayKey,
+  civilNoonInstant,
+  formatCityStampWithWeekday,
+  instantToCivilKey,
+  toCivilKey,
+  useCalendarAnomalies,
+} from "@/lib/calendarAnomalies";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -118,13 +129,12 @@ function DashboardInner() {
   const [ttPopoverOpen, setTtPopoverOpen] = useState(false);
   const ttButtonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
-  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  // The picker chooses a Bangalore date and time; its defaults come from the
+  // city's clock, not the viewer's.
+  const [calMonth, setCalMonth] = useState(() => cityToday().month - 1);
+  const [calYear, setCalYear] = useState(() => cityToday().year);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTime, setSelectedTime] = useState(() => {
-    const now = new Date();
-    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  });
+  const [selectedTime, setSelectedTime] = useState(() => cityClockTime());
 
   // City time, not the viewer's: a US-Pacific browser must not call the same
   // Time Travel moment "Wed 1 Apr 23:30" that the pane calls "2 Apr 12:00".
@@ -527,14 +537,14 @@ function DashboardInner() {
   const dataDays = useMemo(() => {
     const set = new Set<string>();
     for (const r of allRows) {
-      const d = r.timestamp;
-      set.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+      // Timestamps are city instants: their civil date is the city's date.
+      set.add(instantToCivilKey(r.timestamp));
     }
     return set;
   }, [allRows]);
 
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  const cityNow = cityToday();
+  const todayStr = cityTodayKey();
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -1563,15 +1573,15 @@ function DashboardInner() {
                       {["January","February","March","April","May","June","July","August","September","October","November","December"][calMonth]} {calYear}
                     </span>
                     <button onClick={() => {
-                      const nowM = new Date().getMonth();
-                      const nowY = new Date().getFullYear();
+                      const nowM = cityNow.month - 1;
+                      const nowY = cityNow.year;
                       if (calYear > nowY || (calYear === nowY && calMonth >= nowM)) return;
                       if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); }
                       else setCalMonth(m => m+1);
                     }} style={{
                       background:"none", border:"none", cursor:"pointer", color:thm.textMuted,
                       fontSize:18, padding:"4px 8px", borderRadius:4,
-                      opacity: (calYear > today.getFullYear() || (calYear === today.getFullYear() && calMonth >= today.getMonth())) ? 0.3 : 1,
+                      opacity: (calYear > cityNow.year || (calYear === cityNow.year && calMonth >= cityNow.month - 1)) ? 0.3 : 1,
                     }}>›</button>
                   </div>
 
@@ -1644,7 +1654,7 @@ function DashboardInner() {
                     borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
                   }}>
                     <span style={{ fontSize:11, fontWeight:600, color:thm.textSecondary }}>
-                      Time
+                      Time · Bangalore
                     </span>
                     <input
                       type="time"
@@ -1666,9 +1676,15 @@ function DashboardInner() {
                     onClick={() => {
                       if (!selectedDate) return;
                       const [hh, mm] = selectedTime.split(":").map(Number);
-                      const dt = new Date(selectedDate);
-                      dt.setHours(hh, mm, 0, 0);
-                      tt.activate(dt);
+                      // The grid is a civil calendar: its local Y/M/D are the
+                      // chosen Bangalore date, so the instant is built in city
+                      // time rather than wherever the browser happens to be.
+                      const key = toCivilKey(
+                        selectedDate.getFullYear(),
+                        selectedDate.getMonth() + 1,
+                        selectedDate.getDate(),
+                      );
+                      tt.activate(cityInstant(key, hh, mm));
                       setTtPopoverOpen(false);
                     }}
                     disabled={!selectedDate}

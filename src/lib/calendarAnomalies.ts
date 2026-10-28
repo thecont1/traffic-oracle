@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import * as Papa from "papaparse";
-import { bust } from "./useTrafficData";
+import { bust } from "./bust";
 import type { TimeOfDay } from "./useTrafficData";
 
 // ============================================================================
@@ -254,14 +254,56 @@ function cityOffsetMs(instant: number, timeZone: string): number {
  * cutoff must be built in city time too. `new Date("2026-10-16T12:00:00")`
  * would mean noon wherever the viewer happens to be — up to a day off.
  */
-export function civilNoonInstant(dateKey: string, timeZone: string = CITY_TIMEZONE): Date {
+export function cityInstant(
+  dateKey: string,
+  hour = 12,
+  minute = 0,
+  timeZone: string = CITY_TIMEZONE,
+): Date {
   const civil = parseCivilDate(dateKey);
   if (!civil) throw new RangeError(`Not a civil date: ${dateKey}`);
-  const target = Date.UTC(civil.year, civil.month - 1, civil.day, 12, 0, 0);
+  const target = Date.UTC(civil.year, civil.month - 1, civil.day, hour, minute, 0);
   // Two passes: the first uses the offset at the naive guess, the second
   // corrects for zones whose offset differs at the actual instant (DST edges).
   const first = target - cityOffsetMs(target, timeZone);
   return new Date(target - cityOffsetMs(first, timeZone));
+}
+
+/** Noon in the city on a civil date — the default Time Travel cutoff. */
+export function civilNoonInstant(dateKey: string, timeZone: string = CITY_TIMEZONE): Date {
+  return cityInstant(dateKey, 12, 0, timeZone);
+}
+
+/** `HH:MM` on the city's clock, regardless of the viewer's zone. */
+export function cityClockTime(value: Date = new Date(), timeZone: string = CITY_TIMEZONE): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("hour")}:${get("minute")}`;
+}
+
+/**
+ * Monday of the civil week a date belongs to, as `YYYY-MM-DD`.
+ *
+ * Derived from the civil date itself, never from a Date's local fields: a
+ * viewer west of Greenwich must not see Sunday's readings filed under Monday.
+ */
+export function weekKeyForCivil(dateKey: string): string {
+  const civil = parseCivilDate(dateKey);
+  if (!civil) throw new RangeError(`Not a civil date: ${dateKey}`);
+  const midnight = Date.UTC(civil.year, civil.month - 1, civil.day);
+  // weekday: 0 = Sunday … 6 = Saturday; the week starts on Monday.
+  const offset = (civil.weekday + 6) % 7;
+  const monday = new Date(midnight - offset * 86_400_000);
+  const y = monday.getUTCFullYear();
+  const m = String(monday.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(monday.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /** `16 Oct '26 · 21:05` on the city's clock, never the viewer's. */

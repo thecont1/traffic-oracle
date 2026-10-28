@@ -243,6 +243,18 @@ test.describe("Calendar widget — anomaly export", () => {
   test.describe("in a US-Pacific browser", () => {
     test.use({ timezoneId: "America/Los_Angeles" });
 
+    test("opens the picker on Bangalore's clock, not the viewer's", async ({ page }) => {
+      await page.goto(CAL_URL);
+      await page.waitForSelector("text=Mon");
+
+      await page.locator('button[title*="Time Traveller"]').first().click();
+
+      // The frozen instant is 04:30 UTC = 10:00 in Bangalore; a Pacific
+      // browser would otherwise show 21:30 on the previous date.
+      await expect(page.getByText("Time · Bangalore")).toBeVisible();
+      await expect(page.locator('input[type="time"]').first()).toHaveValue("10:00");
+    });
+
     test("activates the clicked day at noon in city time", async ({ page }) => {
       await page.goto(CAL_URL);
       await page.waitForSelector("text=Mon");

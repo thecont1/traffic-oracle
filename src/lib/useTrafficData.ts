@@ -3,6 +3,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import * as Papa from "papaparse";
 import appConfig from "../config.json";
 import type { AppConfig } from "./config";
+import { bust } from "./bust";
+import { cityInstant, parseCivilDate, weekKeyForCivil } from "./calendarAnomalies";
 
 const cfg = appConfig as AppConfig;
 const WORST_CASE_PCT: number = cfg.percentile.worst_case;
@@ -31,9 +33,7 @@ const ROUTES_URL  = toProxyPath(defaultRoutes);
 const TRAFFIC_URL = toProxyPath(defaultTraffic);
 
 /** Append a cache-busting query param so CDNs never serve a stale copy. */
-export function bust(url: string): string {
-  return `${url}?t=${Date.now()}`;
-}
+export { bust };
 
 export interface Route {
   route_code: string;
@@ -128,6 +128,47 @@ export function toWeekKey(d: Date): string {
   const m = String(mon.getMonth() + 1).padStart(2, "0");
   const dd = String(mon.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+export interface ParsedRowTimestamp {
+  ts: Date;
+  /** Hour on the city's clock (0–23). */
+  hour: number;
+  /** 0 = Sunday … 6 = Saturday, from the civil date. */
+  dayOfWeek: number;
+  /** Monday of the civil week, `YYYY-MM-DD`. */
+  weekKey: string;
+}
+
+/**
+ * Parse the feed's zone-less `date` + `time` as Bangalore wall-clock time.
+ *
+ * `new Date("2026-04-07T08:30:00")` means 08:30 wherever the viewer sits: in a
+ * US-Pacific browser every reading moved 12.5 hours earlier, landing in the
+ * previous evening, which shifted the hourly bucket, the weekday and the week
+ * key — and put the rows on the wrong side of a Time Travel cutoff. The
+ * timestamp is an instant; the hour, weekday and week key are civil facts about
+ * the reading, so they come from the civil date rather than the Date object.
+ */
+export function parseCityRowTimestamp(
+  dateRaw: string,
+  timeRaw: string,
+): ParsedRowTimestamp | null {
+  const civil = parseCivilDate(dateRaw);
+  if (!civil) return null;
+
+  const [rawHour, rawMinute = "0"] = (timeRaw || "12:00").split(":");
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+
+  return {
+    ts: cityInstant(dateRaw, hour, minute),
+    hour,
+    dayOfWeek: civil.weekday,
+    weekKey: weekKeyForCivil(dateRaw),
+  };
 }
 
 export function percentile(sorted: number[], p: number): number {
@@ -252,11 +293,9 @@ export function fetchTrafficData(
         const timeRaw = getCol(r, "time").trim();
         if (!dateRaw) continue;
 
-        const tsString = timeRaw
-          ? `${dateRaw}T${timeRaw}:00`
-          : `${dateRaw}T12:00:00`;
-        const ts = new Date(tsString);
-        if (isNaN(ts.getTime())) continue;
+        const stamp = parseCityRowTimestamp(dateRaw, timeRaw);
+        if (!stamp) continue;
+        const ts = stamp.ts;
 
         const rcRaw = getCol(r, "route_code").trim();
         const route = routeByCode.get(rcRaw);
@@ -278,9 +317,9 @@ export function fetchTrafficData(
           duration_min: Math.round(duration_min * 10) / 10,
           distance_km,
           speed_kmh,
-          hour: ts.getHours(),
-          dayOfWeek: ts.getDay(),
-          weekKey: toWeekKey(ts),
+          hour: stamp.hour,
+          dayOfWeek: stamp.dayOfWeek,
+          weekKey: stamp.weekKey,
           temp_c:     parseNumOpt(getCol(r, "temp")),
           realfeel_c: parseNumOpt(getCol(r, "realfeel")),
           humidity_pct: parseNumOpt(getCol(r, "humidity")),
@@ -340,11 +379,9 @@ export async function refreshTrafficData(
     const timeRaw = getCol(r, "time").trim();
     if (!dateRaw) continue;
 
-    const tsString = timeRaw
-      ? `${dateRaw}T${timeRaw}:00`
-      : `${dateRaw}T12:00:00`;
-    const ts = new Date(tsString);
-    if (isNaN(ts.getTime())) continue;
+    const stamp = parseCityRowTimestamp(dateRaw, timeRaw);
+    if (!stamp) continue;
+    const ts = stamp.ts;
 
     const rcRaw = getCol(r, "route_code").trim();
     const route = routeByCode.get(rcRaw);
@@ -365,9 +402,9 @@ export async function refreshTrafficData(
       duration_min: Math.round(duration_min * 10) / 10,
       distance_km,
       speed_kmh,
-      hour: ts.getHours(),
-      dayOfWeek: ts.getDay(),
-      weekKey: toWeekKey(ts),
+      hour: stamp.hour,
+      dayOfWeek: stamp.dayOfWeek,
+      weekKey: stamp.weekKey,
       temp_c:     parseNumOpt(getCol(r, "temp")),
       realfeel_c: parseNumOpt(getCol(r, "realfeel")),
       humidity_pct: parseNumOpt(getCol(r, "humidity")),

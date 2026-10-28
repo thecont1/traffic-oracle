@@ -289,6 +289,17 @@ describe("CalendarWidget interaction", () => {
     expect(clicked).toEqual(["2025-04-10"]);
   });
 
+  it("activates the day on Enter and Space", () => {
+    const clicked: string[] = [];
+    renderCal([anomaly("2025-04-10", { category: "worse" })], {
+      onDateClick: (dk) => clicked.push(dk),
+    });
+    const cell = document.querySelector('[data-dk="2025-04-10"]') as HTMLElement;
+    fireEvent.keyDown(cell, { key: "Enter" });
+    fireEvent.keyDown(cell, { key: " " });
+    expect(clicked).toEqual(["2025-04-10", "2025-04-10"]);
+  });
+
   it("names the day and the verdict, and describes the numbers separately", () => {
     renderCal([
       anomaly("2025-04-10", {

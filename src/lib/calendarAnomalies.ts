@@ -310,6 +310,18 @@ export function formatCityTime12h(value: Date, timeZone: string = CITY_TIMEZONE)
   return `${get("hour")}:${get("minute")} ${get("dayPeriod")}`.trim();
 }
 
+/** Minutes since midnight on the city's clock — for time-of-day comparisons. */
+export function cityMinutesOfDay(value: Date, timeZone: string = CITY_TIMEZONE): number {
+  const parts = cachedFormatter("clock24", "en-GB", timeZone, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return get("hour") * 60 + get("minute");
+}
+
 /** `HH:MM` on the city's clock, regardless of the viewer's zone. */
 export function cityClockTime(value: Date = new Date(), timeZone: string = CITY_TIMEZONE): string {
   const parts = cachedFormatter("clock24", "en-GB", timeZone, {

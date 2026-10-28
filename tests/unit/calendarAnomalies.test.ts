@@ -13,6 +13,7 @@ import {
   ANOMALY_CSV_URL,
   cityClockTime,
   cityInstant,
+  cityMinutesOfDay,
   civilNoonInstant,
   feedAfterFetchError,
   formatCityStamp,
@@ -338,6 +339,12 @@ describe("civil dates", () => {
     expect(formatCityTime12h(new Date("2026-04-07T03:00:00Z"))).toBe("8:30 AM");
     expect(formatCityTime12h(new Date("2026-04-07T15:35:00Z"))).toBe("9:05 PM");
     expect(formatCityTime12h(new Date("2026-04-06T18:30:00Z"))).toBe("12:00 AM");
+  });
+
+  it("reads minutes-since-midnight on the city clock", () => {
+    expect(cityMinutesOfDay(new Date("2026-04-07T03:00:00Z"))).toBe(510); // 08:30
+    expect(cityMinutesOfDay(new Date("2026-04-07T15:35:00Z"))).toBe(1265); // 21:05
+    expect(cityMinutesOfDay(new Date("2026-04-06T18:30:00Z"))).toBe(0); // midnight
   });
 
   it("reads the city clock time", () => {

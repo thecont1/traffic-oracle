@@ -332,6 +332,15 @@ export function CalendarWidget({
           data-category={scorable ? record?.category ?? undefined : undefined}
           data-status={record?.status}
           onClick={interactive && onDateClick ? () => onDateClick(dateKey) : undefined}
+          onKeyDown={
+            interactive && onDateClick
+              ? (e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  onDateClick(dateKey);
+                }
+              : undefined
+          }
           onMouseEnter={interactive && record ? (e) => showTip(record, e.currentTarget) : undefined}
           onMouseLeave={interactive ? hideTip : undefined}
           onFocus={interactive && record ? (e) => showTip(record, e.currentTarget) : undefined}

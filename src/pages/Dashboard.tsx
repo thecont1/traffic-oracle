@@ -2760,7 +2760,7 @@ function DashboardInner() {
             tt.isActive && tt.simulatedNow ? (
               <span>{effectiveRowCount.toLocaleString()} of {rowCount.toLocaleString()} rows · as of {ttFormat(tt.simulatedNow)}{effectiveRowCount < 100 && <span style={{ color: themeKey === "colour" ? "#FBBF24" : themeKey === "pastel" ? "#D97706" : "#B45309", fontWeight: 600, marginLeft: 4 }}>⚠ sparse data</span>}</span>
             ) : (
-              <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+              <span>{rowCount.toLocaleString()} rows updated at {cityClockTime(dataTimestamp)}</span>
             )
           )}
           <span style={{ marginLeft:"auto" }}>© 2026 <a href="https://thecontrarian.in/" target="_blank" rel="noopener noreferrer" style={{ color: thm.chart.line4, padding:"14px 0", minHeight:44, display:"inline-flex", alignItems:"baseline" }}>Mahesh Shantaram</a></span>

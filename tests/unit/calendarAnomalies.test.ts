@@ -11,7 +11,10 @@ import { describe, it, expect } from "bun:test";
 import * as Papa from "papaparse";
 import {
   ANOMALY_CSV_URL,
+  civilNoonInstant,
   feedAfterFetchError,
+  formatCityStamp,
+  formatCityStampWithWeekday,
   isBeforePublishedWindow,
   CATEGORY_LABELS,
   SUPPORTED_METHOD_VERSIONS,
@@ -298,6 +301,27 @@ describe("civil dates", () => {
     expect(isBeforePublishedWindow("2026-07-30", feed)).toBe(false);
     expect(isBeforePublishedWindow("2026-08-01", feed)).toBe(false);
     expect(isBeforePublishedWindow("2025-01-01", { earliestDate: null })).toBe(false);
+  });
+
+  it("builds noon on a civil date in city time, not the viewer's", () => {
+    // 12:00 Asia/Kolkata is 06:30 UTC, whatever the machine is set to.
+    expect(civilNoonInstant("2026-10-16").toISOString()).toBe("2026-10-16T06:30:00.000Z");
+    // Round-trips back to the same civil date the calendar clicked.
+    expect(instantToCivilKey(civilNoonInstant("2026-10-16"))).toBe("2026-10-16");
+    // A zone that observes DST: the offset has to come from the zone, not a constant.
+    expect(civilNoonInstant("2026-07-01", "America/New_York").toISOString()).toBe("2026-07-01T16:00:00.000Z");
+    expect(civilNoonInstant("2026-01-15", "America/New_York").toISOString()).toBe("2026-01-15T17:00:00.000Z");
+    expect(() => civilNoonInstant("16/10/2026")).toThrow(RangeError);
+  });
+
+  it("formats a Time Travel stamp on the city clock", () => {
+    const instant = new Date("2026-10-16T15:35:00Z");
+    expect(formatCityStamp(instant)).toBe("16 Oct '26 · 21:05");
+    expect(formatCityStamp(instant, "UTC")).toBe("16 Oct '26 · 15:35");
+    // Midnight is 00:00, never 24:00.
+    expect(formatCityStamp(new Date("2026-10-15T18:30:00Z"))).toBe("16 Oct '26 · 00:00");
+    // The banner variant names the weekday, still on the city's clock.
+    expect(formatCityStampWithWeekday(instant)).toBe("Fri 16 Oct '26 · 21:05");
   });
 
   it("round-trips a civil key", () => {

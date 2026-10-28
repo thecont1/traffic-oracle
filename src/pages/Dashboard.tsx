@@ -25,7 +25,7 @@ import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
 import { CalendarWidget, CalendarLegend } from "@/components/CalendarWidget";
-import { anomaliesForRoute, cityToday, useCalendarAnomalies } from "@/lib/calendarAnomalies";
+import { anomaliesForRoute, cityToday, civilNoonInstant, formatCityStampWithWeekday, useCalendarAnomalies } from "@/lib/calendarAnomalies";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -126,14 +126,10 @@ function DashboardInner() {
     return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   });
 
+  // City time, not the viewer's: a US-Pacific browser must not call the same
+  // Time Travel moment "Wed 1 Apr 23:30" that the pane calls "2 Apr 12:00".
   function ttFormat(dt: Date): string {
-    const wd = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()];
-    const d = dt.getDate();
-    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
-    const yr = String(dt.getFullYear()).slice(2);
-    const hh = String(dt.getHours()).padStart(2, "0");
-    const mm = String(dt.getMinutes()).padStart(2, "0");
-    return `${wd} ${d} ${mon} '${yr} · ${hh}:${mm}`;
+    return formatCityStampWithWeekday(dt);
   }
 
   // TT glow colours per theme — blazing tier
@@ -2607,7 +2603,7 @@ function DashboardInner() {
                             cutoffDate={tt.isActive ? tt.simulatedNow : null}
                             widgetCalYear={widgetCalYear}
                             widgetCalMonth={widgetCalMonth}
-                            onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
+                            onDateClick={(dk) => tt.activate(civilNoonInstant(dk))}
                             debug={!!URL_PARAMS.debug}
                           />
                           {/* ── Footer row: R³S² context + legend ── */}

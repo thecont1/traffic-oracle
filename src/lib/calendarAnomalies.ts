@@ -221,6 +221,71 @@ export function cityTodayKey(timeZone: string = CITY_TIMEZONE): string {
   return toCivilKey(today.year, today.month, today.day);
 }
 
+/**
+ * Offset of `timeZone` from UTC at a given instant, in milliseconds.
+ *
+ * Derived from the zone's own wall clock rather than assumed: the same zone can
+ * be +05:30 in January and +04:30 in July somewhere in the world, and the
+ * browser's own offset is irrelevant.
+ */
+function cityOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(instant));
+  const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wallClockAsUtc = Date.UTC(
+    pick("year"), pick("month") - 1, pick("day"),
+    pick("hour"), pick("minute"), pick("second"),
+  );
+  return wallClockAsUtc - instant;
+}
+
+/**
+ * The instant at which the city's clock reads noon on a civil date.
+ *
+ * Time Travel is activated from a date the calendar shows in city time, so the
+ * cutoff must be built in city time too. `new Date("2026-10-16T12:00:00")`
+ * would mean noon wherever the viewer happens to be — up to a day off.
+ */
+export function civilNoonInstant(dateKey: string, timeZone: string = CITY_TIMEZONE): Date {
+  const civil = parseCivilDate(dateKey);
+  if (!civil) throw new RangeError(`Not a civil date: ${dateKey}`);
+  const target = Date.UTC(civil.year, civil.month - 1, civil.day, 12, 0, 0);
+  // Two passes: the first uses the offset at the naive guess, the second
+  // corrects for zones whose offset differs at the actual instant (DST edges).
+  const first = target - cityOffsetMs(target, timeZone);
+  return new Date(target - cityOffsetMs(first, timeZone));
+}
+
+/** `16 Oct '26 · 21:05` on the city's clock, never the viewer's. */
+export function formatCityStamp(value: Date, timeZone: string = CITY_TIMEZONE): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")} ${get("month")} '${get("year")} · ${get("hour")}:${get("minute")}`;
+}
+
+/** `Wed 16 Oct '26 · 21:05` — the weekday-prefixed form used by the TT banner. */
+export function formatCityStampWithWeekday(value: Date, timeZone: string = CITY_TIMEZONE): string {
+  const weekday = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short" }).format(value);
+  return `${weekday} ${formatCityStamp(value, timeZone)}`;
+}
+
 /** Convert an instant (e.g. a Time Traveller cutoff) to its city civil date. */
 export function instantToCivilKey(value: Date, timeZone: string = CITY_TIMEZONE): string {
   const parts = new Intl.DateTimeFormat("en-CA", {

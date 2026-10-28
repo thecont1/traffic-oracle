@@ -240,6 +240,23 @@ test.describe("Calendar widget — anomaly export", () => {
     expect(await page.locator("[data-category]").count()).toBe(0);
   });
 
+  test.describe("in a US-Pacific browser", () => {
+    test.use({ timezoneId: "America/Los_Angeles" });
+
+    test("activates the clicked day at noon in city time", async ({ page }) => {
+      await page.goto(CAL_URL);
+      await page.waitForSelector("text=Mon");
+
+      await page.locator(`[data-dk="${monthDay(2)}"]`).click();
+
+      // Noon in Bangalore, whatever the viewer's clock says: 06:30 UTC.
+      await expect(page).toHaveURL(/tt=2026-04-02T06%3A30%3A00\.000Z/);
+      // Every visible label agrees — banner, pane and footer.
+      await expect(page.getByText(/as of 2 Apr '26 · 12:00/).first()).toBeVisible();
+      await expect(page.getByText(/1 Apr '26 · 23:30/)).toHaveCount(0);
+    });
+  });
+
   test("cycling through ToD options does not crash", async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {

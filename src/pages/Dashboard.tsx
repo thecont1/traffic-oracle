@@ -752,8 +752,6 @@ function DashboardInner() {
   const maxIdx    = Math.max(1, allRouteWeeks.length - 1);
   const safeLeft  = Math.max(0, Math.min(sliderVals[0], maxIdx));
   const safeRight = Math.max(safeLeft, Math.min(sliderVals[1], maxIdx));
-  const leftPct   = (safeLeft / maxIdx) * 100;
-  const rightPct  = (safeRight / maxIdx) * 100;
   const THUMB_W = 22;
   const adjPct = (idx: number) =>
     trackW > 0
@@ -1164,7 +1162,7 @@ function DashboardInner() {
     zIndex: 1,
     border: thm.cardBorder,
     boxShadow: thm.cardShadow,
-    borderRadius:18,
+    borderRadius:14,
     padding:"16px 18px",
     display:"flex", flexDirection:"column", gap:4,
   };
@@ -1197,7 +1195,7 @@ function DashboardInner() {
 
   /* ── Render ─────────────────────────────────────────────────── */
   return (
-    <div className={thm.isDark ? "dark" : ""}>
+    <div className={`oracle-app oracle-desktop ${thm.isDark ? "dark" : ""}`}>
       <div aria-live="polite" aria-atomic="true" ref={liveRef} className="sr-only" />
       <div className="transition-colors" style={{ position: "relative", zIndex: 1, background: thm.bodyBg, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
 
@@ -1215,8 +1213,7 @@ function DashboardInner() {
           position:"sticky", top:0, zIndex:500,
           flexShrink: 0,
         }}>
-          <div style={{ margin:"0 auto", padding:"0.75rem 1rem",
-            display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+          <div className="oracle-header">
             {/* Left: Logo + City name */}
             <a href="/" style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, textDecoration:"none" }}>
               <div style={{ position: "relative", display: "inline-block" }}>
@@ -1251,7 +1248,7 @@ function DashboardInner() {
             </a>
 
             {/* Right: Cities + Routes + Time Travel + Share + Zoom + Theme */}
-            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0, position:"relative" }}>
+            <nav className="oracle-header__controls" aria-label="Dashboard controls">
               {/* City pill */}
               <LocationDropdown thm={thm} selectedCity={selectedCity} onCityChange={setSelectedCity} cities={CITIES} />
 
@@ -1287,7 +1284,7 @@ function DashboardInner() {
                   </button>
 
                   {routeDropdownOpen && (
-                    <div style={{
+                    <div className="oracle-route-dropdown" style={{
                       position: "absolute",
                       top: "calc(100% + 4px)",
                       right: 0,
@@ -1303,6 +1300,7 @@ function DashboardInner() {
                       {/* Map preview — edge-to-edge with dropdown, square via aspect-ratio */}
                       {mapshot && (
                         <a
+                          className="oracle-route-dropdown__map"
                           href={previewMapLink ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1706,6 +1704,7 @@ function DashboardInner() {
               }}>
                 <button onClick={zoomOut} disabled={zoomIdx === 0}
                   title="Decrease size"
+                  aria-label="Decrease interface size"
                   style={{
                     display:"flex", alignItems:"center", justifyContent:"center",
                     width:44, height:44, border:"none", background:"transparent",
@@ -1723,6 +1722,7 @@ function DashboardInner() {
                 </span>
                 <button onClick={zoomIn} disabled={zoomIdx === ZOOM_STEPS.length - 1}
                   title="Increase size"
+                  aria-label="Increase interface size"
                   style={{
                     display:"flex", alignItems:"center", justifyContent:"center",
                     width:44, height:44, border:"none", background:"transparent",
@@ -1754,7 +1754,7 @@ function DashboardInner() {
                   {curMeta.label}
                 </span>
               </button>
-            </div>
+            </nav>
           </div>
         </header>
 
@@ -1825,7 +1825,7 @@ function DashboardInner() {
             flexDirection: "column",
             overflow: "hidden",
           }}>
-          <main id="main-content" tabIndex={-1} className="scrollbar-hide" ref={mainContentRef} style={{
+          <main id="main-content" tabIndex={-1} className="oracle-main" ref={mainContentRef} style={{
             flex: 1,
             overflowY: "auto",
             position: "relative",
@@ -1843,7 +1843,7 @@ function DashboardInner() {
             </div>
           )}
 
-          <div style={{
+          <div className="oracle-content" style={{
             maxWidth: isMobile ? "100%" : 1320,
             margin: "0 auto",
             padding: isMobile ? "1.5rem 1rem 2rem" : "1.5rem 1.5rem 2rem",
@@ -1854,37 +1854,37 @@ function DashboardInner() {
           }}>
 
           {/* ── Hero question ────────────────────────────────── */}
-          <div className="animate-bounce-in" style={{ textAlign:"center", padding:"0.75rem 1rem 0.5rem",
+          <div className="oracle-question" style={{
             opacity: showIntro ? 0 : 1,
             animation: showIntro ? "none" : "cards-reveal 0.4s ease both",
-            position: "sticky", top: 0, zIndex: 200,
             background: thm.headerBg,
-            backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
             borderBottom: thm.cardBorder,
           }}>
-            <h1 style={{
-              fontFamily:"var(--app-font-display)", fontWeight:900,
-              fontSize:"clamp(1.3rem,3.2vw,2rem)", lineHeight:1.7,
-              color: thm.textPrimary,
-              display:"flex", flexWrap:"wrap", alignItems:"center",
-              justifyContent:"center", gap:"0.3em",
-            }}>
+            <h1 className="oracle-question__sentence" style={{ color: thm.textPrimary }}>
+              <span className="oracle-question__phrase">
               <span>Has traffic</span>
               <Chip icon={questionMode==="worsened"?"👎":"👍"} variant={questionMode}
                 onClick={toggleMode} animate={!!chipAnim.mode}>{questionMode}</Chip>
+              </span>
+              <span className="oracle-question__phrase">
               <span>on</span>
               <Chip icon="🚦" variant="route"
                 onClick={nextRoute} animate={!!chipAnim.route}>{selectedRoute}</Chip>
+              </span>
+              <span className="oracle-question__phrase">
               <span>during</span>
               <Chip icon="⏱️" variant="tod"
                 onClick={nextTod} animate={!!chipAnim.tod}>{todLabel}</Chip>
+              </span>
+              <span className="oracle-question__phrase">
               <span>over the past</span>
               <Chip icon="📅" variant="period"
                 onClick={nextPeriod} animate={!!chipAnim.period}>{periodLabel}</Chip>
               <span>?</span>
+              </span>
             </h1>
-            <p style={{ marginTop:"0.25rem", fontSize:12, color: thm.textMuted }}>
-              <br></br>(Tap any highlighted word to explore a different question.)
+            <p className="oracle-question__hint" style={{ color: thm.textMuted }}>
+              (Tap any highlighted word to explore a different question.)
             </p>
           </div>
 
@@ -1975,7 +1975,7 @@ function DashboardInner() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: baselineOpen ? 14 : 0,
                     opacity: showIntro ? 0 : 1,
                   }}>
-                    <button onClick={() => setBaselineOpen(o => !o)} style={{
+                  <button aria-expanded={baselineOpen} onClick={() => setBaselineOpen(o => !o)} style={{
                       display: "flex", alignItems: "center", gap: 8,
                       background: "none", border: "none", cursor: "pointer", padding: 0,
                     }}>
@@ -1996,13 +1996,21 @@ function DashboardInner() {
 
                   {baselineOpen && (
                   <>
-                  <div style={{ padding:"28px 0 4px", position:"relative" }}>
+                  <div style={{ padding:"8px 0 4px", position:"relative" }}>
                     {/* Slider interior — hidden until real data loads so placeholder
                         [0,1] thumb positions are never visible */}
                     <div style={{
                       opacity: carReady ? 1 : 0,
                       transition: "opacity 0.3s ease",
                     }}>
+                    <div className="oracle-baseline-dates" style={{ opacity: showIntro ? 0 : 1 }}>
+                      <span style={{ color: dragThumb === 0 ? thm.textPrimary : thm.textMuted }}>
+                        From <strong>{fmtDate(baselineStartDate)}</strong>
+                      </span>
+                      <span style={{ color: dragThumb === 1 ? thm.textPrimary : thm.textMuted }}>
+                        To <strong>{fmtDate(baselineEndDate)}</strong>
+                      </span>
+                    </div>
                     <SliderPrimitive.Root
                       min={0} max={maxIdx} step={1}
                       value={sliderVals} onValueChange={handleSliderChange}
@@ -2010,35 +2018,6 @@ function DashboardInner() {
                       style={{ position:"relative", display:"flex",
                         alignItems:"center", height:40, userSelect:"none", touchAction:"none" }}
                     >
-                      {/* Left thumb date label */}
-                      {baselineStartDate && (
-                        <div style={{
-                          opacity: showIntro ? 0 : 1,
-                          position:"absolute", left:`${leftPct}%`, top:-20,
-                          transform:"translateX(-50%)",
-                          fontSize:10, fontWeight: dragThumb === 0 ? 600 : 400,
-                          color: dragThumb === 0 ? thm.textPrimary : thm.textMuted,
-                          whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
-                          transition:"color 0.12s, font-weight 0.12s",
-                        }}>
-                          {fmtDate(baselineStartDate)}
-                        </div>
-                      )}
-                      {/* Right thumb date label */}
-                      {baselineEndDate && (
-                        <div style={{
-                          opacity: showIntro ? 0 : 1,
-                          position:"absolute", left:`${rightPct}%`, top:-20,
-                          transform:"translateX(-50%)",
-                          fontSize:10, fontWeight: dragThumb === 1 ? 600 : 400,
-                          color: dragThumb === 1 ? thm.textPrimary : thm.textMuted,
-                          whiteSpace:"nowrap", pointerEvents:"none", zIndex:30,
-                          transition:"color 0.12s, font-weight 0.12s",
-                        }}>
-                          {fmtDate(baselineEndDate)}
-                        </div>
-                      )}
-
                       {/* Track */}
                       <SliderPrimitive.Track ref={trackRef} style={{
                         position:"relative", flexGrow:1,
@@ -2073,6 +2052,8 @@ function DashboardInner() {
 
                       {/* Left thumb — hidden during intro */}
                       <SliderPrimitive.Thumb
+                        aria-label="Baseline start"
+                        aria-valuetext={fmtDate(baselineStartDate)}
                         className="slider-thumb"
                         onPointerDown={() => setDragThumb(0)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
@@ -2092,6 +2073,8 @@ function DashboardInner() {
 
                       {/* Right thumb — hidden during intro */}
                       <SliderPrimitive.Thumb
+                        aria-label="Baseline end"
+                        aria-valuetext={fmtDate(baselineEndDate)}
                         className="slider-thumb"
                         onPointerDown={() => setDragThumb(1)}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
@@ -2153,12 +2136,12 @@ function DashboardInner() {
               <div className="animate-fade-in" style={{
                 background: thm.verdictBg(v.bg),
                 border: `1px solid ${thm.verdictBorder(v.border)}`,  
-                borderRadius:"1.5rem", padding: "1.25rem 1.5rem",
+                borderRadius:14, padding: "1.25rem 1.5rem",
                 position: "relative",
               }}>
                 {/* Header row: title + toggle + Info icon */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: verdictOpen ? 12 : 0 }}>
-                  <button onClick={() => setVerdictOpen(o => !o)} style={{
+                  <button aria-expanded={verdictOpen} onClick={() => setVerdictOpen(o => !o)} style={{
                     display: "flex", alignItems: "center", gap: 8,
                     background: "none", border: "none", cursor: "pointer", padding: 0,
                   }}>
@@ -2181,7 +2164,7 @@ function DashboardInner() {
                   <>
                     <div style={{ textAlign:"center" }}>
                       <div className="animate-bounce-in" key={verdictKey}
-                        style={{ fontSize:"3.5rem", lineHeight:1, marginBottom:8 }}>
+                        style={{ fontSize:"2.25rem", lineHeight:1, marginBottom:8 }}>
                         {v.face}
                       </div>
                       <p data-testid="verdict-message" style={{ fontFamily:"var(--app-font-display)", fontWeight:700, fontSize:18,
@@ -2239,8 +2222,7 @@ function DashboardInner() {
 
               {/* ── KPI cards ─────────────────────────────────── */}
               {selectedStats.count > 0 ? (
-                <div style={{ display:"grid",
-                  gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14 }}>
+                <div className="oracle-kpis">
 
                   <div style={{ ...kpiCardBase, background: thm.kpiCardBgs[0] }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>

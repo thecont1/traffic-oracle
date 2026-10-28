@@ -238,6 +238,7 @@ function RouteCard({
       onMouseLeave={onMouseLeave}
       tabIndex={0}
       role="button"
+      aria-pressed={isSelected}
       className="route-card-focus"
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(card.label); } }}
       onFocus={onMouseEnter}
@@ -253,40 +254,36 @@ function RouteCard({
         transition: "background 0.12s",
       }}
     >
-      {/* Route name + endpoints side-by-side */}
+      {/* Keep complete endpoints readable even in the narrow desktop pane. */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "auto 1fr",
-        gridTemplateRows: "1fr 1fr",
-        columnGap: 16,
+        gridTemplateColumns: "minmax(0, 1fr)",
+        gap: 3,
         alignItems: "baseline",
         minHeight: 0,
       }}>
         <span style={{
-          gridRow: "1 / 3",
-          fontSize: 17, fontWeight: 700,
+          fontSize: 16, fontWeight: 700,
           color: isSelected ? thm.chart.line1 : thm.textPrimary,
           lineHeight: 1.35,
           transition: "color 0.12s",
           alignSelf: "center",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          overflowWrap: "anywhere",
         }}>
           {card.label}
         </span>
         {card.origin && (
           <span style={{
-            fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            textAlign: "right",
+            fontSize: 11, color: thm.textMuted, lineHeight: 1.4,
+            overflowWrap: "anywhere",
           }}>
             {card.origin}
           </span>
         )}
         {card.destination && (
           <span style={{
-            fontSize: 10, color: thm.textMuted, lineHeight: 1.3,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            textAlign: "right",
+            fontSize: 11, color: thm.textMuted, lineHeight: 1.4,
+            overflowWrap: "anywhere",
           }}>
             → {card.destination}
           </span>
@@ -432,7 +429,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
   }, [dragging]);
 
   return (
-    <div style={{
+    <div className="oracle-route-pane" style={{
       flexShrink: 0,
       width: isOpen ? paneWidth + RAIL_WIDTH : RAIL_WIDTH,
       transition: dragging ? "none" : "width 0.3s cubic-bezier(0.4,0,0.2,1)",
@@ -464,7 +461,7 @@ function DesktopPane({ cards, selectedRoute, onRouteSelect, thm, isOpen, onToggl
       )}
 
       {/* Pane content */}
-      <div style={{
+      <div className="oracle-route-pane__content" inert={!isOpen} style={{
         width: paneWidth, flexShrink: 0,
         display: "flex", flexDirection: "column", overflow: "hidden",
         background: thm.paneBg,

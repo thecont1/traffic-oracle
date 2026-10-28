@@ -23,15 +23,15 @@ export default function Chip({ children, icon, variant, onClick, animate, inert 
 
   return (
     <button
+      type="button"
       className={`chip chip-${variant} ${animate ? "animate-pop" : ""}`}
       onClick={inert ? undefined : onClick}
       title={inert ? "Multi-city support coming soon" : "Tap to explore differently"}
-      style={inert
-        ? { cursor: "default", opacity: 0.9, display: "flex", alignItems: "center", gap: 6, padding: "6px 44px", ...styleOverride }
-        : { display: "flex", alignItems: "center", gap: 6, padding: "4px 34px", ...styleOverride }
-      }
+      aria-disabled={inert || undefined}
+      style={inert ? { cursor: "default", opacity: 0.9, ...styleOverride } : styleOverride}
     >
-      <span>{icon}</span>{children}
+      <span aria-hidden="true" className="chip__icon">{icon}</span>
+      <span className="chip__label">{children}</span>
     </button>
   );
 }

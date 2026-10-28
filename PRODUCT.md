@@ -48,6 +48,7 @@ R³S² is supporting comparative evidence, not an unexplained score that replace
 ## Brand Commitments
 
 - Preserve the name `traffiCOracle`, existing logo assets, and creator attribution.
+- Keep the interactive question centre-aligned on desktop and mobile unless explicitly changed by the user.
 - Retain established feature terminology where it identifies existing behavior: TrafficNOW!, Route Observer, City Explorer, and Time Traveller.
 - Plain-language questions and findings are part of the product's explanatory approach. Copy must make the comparison and time frame clear rather than imply unsupported certainty.
 - Initialization does not choose a palette, type system, visual direction, or new brand personality.

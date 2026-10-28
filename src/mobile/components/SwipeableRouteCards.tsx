@@ -104,6 +104,7 @@ export default function SwipeableRouteCards({
   const [slideDir, setSlideDir] = useState(0); // -1 exit left, 1 exit right, 0 settled
   const [noTransition, setNoTransition] = useState(false);
   const animating = useRef(false);
+  const [animationBusy, setAnimationBusy] = useState(false);
 
   // Sync with external route selection
   useEffect(() => {
@@ -145,6 +146,7 @@ export default function SwipeableRouteCards({
       if (total === 0 || animating.current) return;
       const newIdx = wrapIdx(currentIdx + direction);
       animating.current = true;
+      setAnimationBusy(true);
 
       // Phase 1: slide content out
       setSlideDir(direction);
@@ -161,7 +163,10 @@ export default function SwipeableRouteCards({
           requestAnimationFrame(() => {
             setNoTransition(false);
             setSlideDir(0);
-            setTimeout(() => { animating.current = false; }, 220);
+            setTimeout(() => {
+              animating.current = false;
+              setAnimationBusy(false);
+            }, 220);
           });
         });
       }, 120);
@@ -243,11 +248,8 @@ export default function SwipeableRouteCards({
       : null;
 
   /* Nav button shared style */
-  const NAV_SIZE = 30;
+  const NAV_SIZE = 44;
   const navBtnBase: React.CSSProperties = {
-    position: "absolute",
-    top: "50%",
-    transform: "translateY(-50%)",
     width: NAV_SIZE,
     height: NAV_SIZE,
     borderRadius: NAV_SIZE / 2,
@@ -258,7 +260,6 @@ export default function SwipeableRouteCards({
     justifyContent: "center",
     cursor: "pointer",
     color: thm.textMuted,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
     zIndex: 3,
     padding: 0,
     transition: "opacity 0.15s",
@@ -277,7 +278,7 @@ export default function SwipeableRouteCards({
           : "translateX(-50%)";
 
   return (
-    <div style={{ position: "relative", marginTop: 14 }}>
+    <section aria-label="Current route conditions" aria-busy={animationBusy} className="oracle-route-carousel" style={{ position: "relative", marginTop: 14 }}>
       {/* ── Title cutting across the top border ──────────── */}
       <div
         style={{
@@ -337,9 +338,9 @@ export default function SwipeableRouteCards({
         >
           {/* Row 1: route name + live timestamp inline */}
           <p style={{
-            fontSize: 16, fontWeight: 400, color: thm.chart.line1,
+            fontSize: 16, fontWeight: 600, color: thm.textPrimary,
             lineHeight: 1.3, margin: 0,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
           }}>
             {card.label}
             {dataTimestamp && (
@@ -357,13 +358,11 @@ export default function SwipeableRouteCards({
           {/* Row 2: origin → destination */}
           <p
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: thm.textMuted,
               lineHeight: 1.3,
               margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              overflowWrap: "anywhere",
             }}
           >
             {card.origin}
@@ -465,21 +464,25 @@ export default function SwipeableRouteCards({
         </div>
       </div>
 
-      {/* ── Nav buttons (outside overflow:hidden card) ───── */}
+      <div className="oracle-route-carousel__navigation">
       <button
         onClick={() => slideTo(-1)}
         aria-label="Previous route"
-        style={{ ...navBtnBase, left: -15 }}
+        style={navBtnBase}
       >
         <ChevronLeft size={16} />
       </button>
+      <span style={{ color: thm.textMuted, fontSize: 12 }} aria-hidden="true">
+        {currentIdx + 1} / {total}
+      </span>
       <button
         onClick={() => slideTo(1)}
         aria-label="Next route"
-        style={{ ...navBtnBase, right: -15 }}
+        style={navBtnBase}
       >
         <ChevronRight size={16} />
       </button>
+      </div>
 
       {/* Accessible carousel label */}
       <div
@@ -489,6 +492,6 @@ export default function SwipeableRouteCards({
       >
         Route {currentIdx + 1} of {total}
       </div>
-    </div>
+    </section>
   );
 }

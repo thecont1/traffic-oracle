@@ -421,32 +421,158 @@
   align-items: center;
   gap: 0.25em;
   border-radius: 9999px;
-  padding: 0.15em 0.65em;
+  padding: 0.3em 0.65em;
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
   font-family: var(--app-font-display);
   font-weight: 700;
   color: white;
   cursor: pointer;
   user-select: none;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  transition: filter 0.18s ease, box-shadow 0.18s ease;
   position: relative;
-  white-space: nowrap;
+  white-space: normal;
   vertical-align: baseline;
   line-height: 1.4;
 }
 .chip:hover {
-  transform: scale(1.08) rotate(-1deg);
   filter: brightness(1.08);
 }
 .chip:active {
-  transform: scale(0.94);
+  filter: brightness(0.95);
+}
+.chip__icon { flex-shrink: 0; font-size: 0.85em; }
+.chip__label { overflow-wrap: anywhere; }
+
+/* Shared refinement: retain the existing type, themes and semantic chip colours. */
+.oracle-app {
+  font-variant-numeric: tabular-nums;
+}
+.oracle-app ::selection { background: hsl(var(--ring) / 0.25); }
+.oracle-app :is(button, a, [role="button"], [role="slider"]):focus-visible {
+  outline: 2px solid hsl(var(--ring)) !important;
+  outline-offset: 3px;
+}
+.oracle-app button:disabled { cursor: not-allowed; }
+.oracle-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 16px 24px;
+}
+.oracle-header__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  position: relative;
+}
+.oracle-main {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+  scroll-padding-block: 16px;
+}
+.oracle-content { container-type: inline-size; }
+.oracle-question {
+  padding: 4px 0 20px;
+  text-align: center;
+}
+.oracle-question__sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  margin: 0;
+  font-family: var(--app-font-display);
+  font-weight: 700;
+  font-size: clamp(18px, 2.3cqi, 24px);
+  line-height: 1.5;
+  letter-spacing: -0.02em;
+}
+.oracle-question__phrase {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.oracle-question__hint { margin-top: 12px; font-size: 12px; line-height: 1.5; }
+.oracle-baseline-dates {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.oracle-baseline-dates strong { font-weight: 600; }
+.oracle-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@container (max-width: 800px) {
+  .oracle-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 769px) and (max-width: 1199px) {
+  .oracle-header__controls { width: 100%; justify-content: flex-start; }
+  .oracle-route-pane { max-width: 38vw; }
+  .oracle-route-pane__content { max-width: calc(38vw - 44px); }
+  .oracle-route-dropdown {
+    left: 0;
+    right: auto !important;
+    flex-direction: column;
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto !important;
+  }
+  .oracle-route-dropdown__map {
+    position: relative !important;
+    right: auto !important;
+    width: 100%;
+    height: 160px;
+    flex-shrink: 0;
+  }
+}
+.oracle-mobile { container-type: inline-size; }
+.oracle-mobile header { min-height: 72px; }
+.oracle-mobile header > div:first-of-type { flex: 0 1 260px; min-width: 0; }
+.oracle-mobile header img { width: min(260px, 100%) !important; height: auto; }
+.oracle-mobile header > button { min-width: 44px; min-height: 44px; }
+.oracle-mobile-menu {
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.oracle-mobile-menu :is(button, a) { min-height: 44px; }
+.oracle-mobile .oracle-question { padding: 0 0 4px; }
+.oracle-mobile .oracle-question__sentence { font-size: 18px; gap: 8px; }
+.oracle-mobile .oracle-question__phrase { gap: 6px; }
+.oracle-mobile .chip { border-radius: 12px; font-size: 16px; }
+.oracle-mobile-chart-heading { flex-wrap: wrap; gap: 12px; }
+.oracle-mobile-chart-heading button { min-height: 44px; }
+.oracle-route-carousel { min-width: 0; flex-shrink: 0; }
+.oracle-route-carousel__navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 /* ── Colour (dark) chip classes ──────────────────────────────── */
 /* These apply when theme.js passes no styleOverride (colour theme) */
-.chip-route    { background: linear-gradient(135deg, #1E3A5F, #2A5A8F); color: #93C5FD; box-shadow: 0 4px 14px rgba(30,58,95,0.4); }
+.chip-route    { background: linear-gradient(135deg, #1E3A5F, #2A5A8F); color: #BFDBFE; box-shadow: 0 4px 14px rgba(30,58,95,0.4); }
 .chip-period   { background: linear-gradient(135deg, #1A1A2E, #16213E); color: #94A3B8; box-shadow: 0 4px 14px rgba(26,26,46,0.5); }
 .chip-tod      { background: linear-gradient(135deg, #78350F, #92400E); color: #FCD34D; box-shadow: 0 4px 14px rgba(120,53,15,0.4); }
-.chip-worsened { background: linear-gradient(135deg, #7F1D1D, #991B1B); color: #FCA5A5; box-shadow: 0 4px 14px rgba(127,29,29,0.4); }
+.chip-worsened { background: linear-gradient(135deg, #7F1D1D, #991B1B); color: #FECACA; box-shadow: 0 4px 14px rgba(127,29,29,0.4); }
 .chip-improved { background: linear-gradient(135deg, #052E16, #064E3B); color: #86EFAC; box-shadow: 0 4px 14px rgba(5,46,22,0.4); }
 .chip-city     { background: linear-gradient(135deg, #1E293B, #334155); color: #94A3B8; box-shadow: 0 2px 8px rgba(30,41,59,0.4);
                  font-size: 0.78em; padding: 0.1em 0.55em; font-weight: 700; }

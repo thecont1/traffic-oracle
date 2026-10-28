@@ -15,6 +15,7 @@ import { readUrlParams } from "@/core/urlState";
 import { useMobileShare } from "@/mobile/hooks/useMobileShare";
 import SwipeableRouteCards from "@/mobile/components/SwipeableRouteCards";
 import NapkinChart from "@/components/shared/NapkinChart";
+import Chip from "@/components/shared/Chip";
 import Route404 from "@/components/shared/Route404";
 import {
   AreaChart, Area, ComposedChart, Line,
@@ -90,6 +91,20 @@ function MobileInner() {
   const { share, shared } = useMobileShare();
   const [showLoader, setShowLoader] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
   const [citiesOpen, setCitiesOpen] = useState(false);
   const [routesOpen, setRoutesOpen] = useState(false);
   const [chartGranularity, setChartGranularity] = useState<"daily" | "weekly">("weekly");
@@ -287,10 +302,11 @@ function MobileInner() {
   }
 
   return (
-    <div style={{
+    <div className={`oracle-app oracle-mobile ${thm.isDark ? "dark" : ""}`} style={{
       display: "flex", flexDirection: "column", height: "100dvh",
       background: thm.bodyBg, overflow: "hidden",
     }}>
+      <a href="#mobile-main-content" className="sr-only focusable">Skip to main content</a>
       {/* ── Header ──────────────────────────────────────────── */}
       <header style={{
         background: thm.headerBg, backdropFilter: "blur(12px)",
@@ -332,12 +348,15 @@ function MobileInner() {
           </svg>
         </div>
         <button
+          ref={menuButtonRef}
           onClick={() => setMenuOpen(o => !o)}
           style={{
             background: "none", border: "none", cursor: "pointer",
             color: thm.textMuted, padding: 8,
           }}
           aria-label="Menu"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
         >
           <Menu size={20} />
         </button>
@@ -351,7 +370,7 @@ function MobileInner() {
             onClick={() => setMenuOpen(false)}
             style={{ position: "fixed", inset: 0, zIndex: 99 }}
           />
-          <div style={{
+          <div ref={menuRef} id="mobile-navigation" className="oracle-mobile-menu" style={{
             position: "absolute", top: 64, right: 8, zIndex: 200,
             background: thm.sectionBg, border: thm.cardBorder,
             borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
@@ -360,6 +379,7 @@ function MobileInner() {
 
             {/* ── CITY EXPLORER collapsible submenu ─────────── */}
             <button
+              aria-expanded={citiesOpen}
               onClick={() => setCitiesOpen(o => !o)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -405,6 +425,7 @@ function MobileInner() {
             {citySource ? (
               <>
                 <button
+                  aria-expanded={routesOpen}
                   onClick={() => setRoutesOpen(o => !o)}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -507,7 +528,7 @@ function MobileInner() {
       )}
 
       {/* ── Scrollable content ──────────────────────────────── */}
-      <main style={{
+      <main id="mobile-main-content" tabIndex={-1} className="oracle-main" style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
         padding: "16px", display: "flex", flexDirection: "column", gap: 24,
       }}>
@@ -542,53 +563,27 @@ function MobileInner() {
             />
 
             {/* ── Route question (clickable pills) ─────────── */}
-            <div style={{ textAlign: "center", padding: "8px 0" }}>
-              <p style={{
-                fontFamily: "var(--app-font-display)", fontWeight: 800,
-                fontSize: "clamp(1.15rem, 5vw, 1.6rem)", lineHeight: 1.6,
-                color: thm.textPrimary, margin: 0,
-                display: "flex", flexWrap: "wrap", alignItems: "center",
-                justifyContent: "center", gap: "0.3em",
-              }}>
+            <div className="oracle-question">
+              <h1 className="oracle-question__sentence" style={{ color: thm.textPrimary }}>
+                <span className="oracle-question__phrase">
                 <span>Has traffic</span>
-                <button onClick={toggleMode} style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "2px 10px", borderRadius: 8, cursor: "pointer",
-                  background: thm.verdictBg(v.bg),
-                  border: `1px solid ${thm.verdictBorder(v.border)}`,
-                  color: thm.verdictText(v.tc),
-                  fontWeight: 700, fontSize: "inherit",
-                  fontFamily: "inherit",
-                }}>{questionModeState === "worsened" ? "👎" : "👍"} {questionModeState}</button>
-                <span style={{ width: "100%", height: 0, flexBasis: "100%" }} />
+                <Chip icon={questionModeState === "worsened" ? "👎" : "👍"} variant={questionModeState}
+                  onClick={toggleMode}>{questionModeState}</Chip>
+                </span>
+                <span className="oracle-question__phrase">
                 <span>on</span>
-                <button onClick={nextRoute} style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "2px 10px", borderRadius: 8, cursor: "pointer",
-                  background: thm.sectionBg, border: thm.cardBorder,
-                  color: thm.chart.line1, fontWeight: 700, fontSize: "inherit",
-                  fontFamily: "inherit",
-                }}>🚦 {selectedRoute}</button>
-                <span style={{ width: "100%", height: 0, flexBasis: "100%" }} />
+                <Chip icon="🚦" variant="route" onClick={nextRoute}>{selectedRoute}</Chip>
+                </span>
+                <span className="oracle-question__phrase">
                 <span>during</span>
-                <button onClick={nextTod} style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "2px 10px", borderRadius: 8, cursor: "pointer",
-                  background: thm.sectionBg, border: thm.cardBorder,
-                  color: thm.textPrimary, fontWeight: 600, fontSize: "inherit",
-                  fontFamily: "inherit",
-                }}>⏱️ {TOD_LIST[todIdx].label}</button>
-                <span style={{ width: "100%", height: 0, flexBasis: "100%" }} />
+                <Chip icon="⏱️" variant="tod" onClick={nextTod}>{TOD_LIST[todIdx].label}</Chip>
+                </span>
+                <span className="oracle-question__phrase">
                 <span>over the past</span>
-                <button onClick={nextPeriod} style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "2px 10px", borderRadius: 8, cursor: "pointer",
-                  background: thm.sectionBg, border: thm.cardBorder,
-                  color: thm.textPrimary, fontWeight: 600, fontSize: "inherit",
-                  fontFamily: "inherit",
-                }}>📅 {PERIOD_LIST[periodIdx].label}</button>
+                <Chip icon="📅" variant="period" onClick={nextPeriod}>{PERIOD_LIST[periodIdx].label}</Chip>
                 <span>?</span>
-              </p>
+                </span>
+              </h1>
             </div>
 
             {/* ── Verdict ────────────────────────────────────── */}
@@ -658,7 +653,7 @@ function MobileInner() {
                 border: thm.key !== "colour" ? thm.cardBorder : "none",
                 borderRadius: 16, padding: "16px 8px 8px",
               }}>
-                <div style={{
+                <div className="oracle-mobile-chart-heading" style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   margin: "0 8px 4px",
                 }}>
@@ -672,6 +667,7 @@ function MobileInner() {
                   <div style={{ display: "flex", alignItems: "center", gap: 4, background: thm.sectionBg, borderRadius: 8, padding: 2 }}>
                     {(["daily", "weekly"] as const).map(g => (
                       <button key={g}
+                        aria-pressed={chartGranularity === g}
                         onClick={() => setChartGranularity(g)}
                         style={{
                           padding: "10px 10px",

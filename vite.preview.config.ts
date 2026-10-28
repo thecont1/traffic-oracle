@@ -35,6 +35,18 @@ function reviewOnly(): Plugin {
           "/api/traffic-csv/",
           "https://raw.githubusercontent.com/thecont1/traffic-monitor-lizard/main/data/",
         );
+        if (id.endsWith("/src/App.tsx")) {
+          // This review is a single-screen app hosted beneath an artifact path.
+          // Keep query-string state, but do not interpret that host path as a route.
+          previewCode = previewCode.replace(
+            'base={import.meta.env.BASE_URL.replace(/\\/$/, "")}',
+            'hook={() => ["/", () => undefined]}',
+          );
+        }
+        previewCode = previewCode
+          .replaceAll('"/trafficoracle-light.png"', '"./trafficoracle-light.png"')
+          .replaceAll('"/mapsots"', '"./mapsots"')
+          .replaceAll('href="/"', 'href="./index.html"');
         if (/\blocalStorage\b/.test(previewCode)) {
           previewCode = `import __reviewStorage from "${storageModule}";\n`
             + previewCode.replaceAll(/\blocalStorage\b/g, "__reviewStorage");

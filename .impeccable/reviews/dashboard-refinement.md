@@ -46,4 +46,4 @@ The local test runner uses an ignored configuration under `tmp/` to select the s
 
 `npm run build:preview` uses `vite.preview.config.ts` to build a static review copy into `dist/preview`. It reads the same public upstream CSVs directly and replaces the fingerprint hook with a no-op only in this build. The preview host does not support browser storage, so its theme preferences, pane preferences, and local data cache use an in-memory adapter and reset on reload.
 
-The preview does not use or deploy the production Worker, modify upstream data, or write to production KV. `npm run build` continues to use the unchanged production configuration.
+The preview treats its nested hosting path as the app's root and uses relative logo/map paths; query-string filter state remains intact. It does not use or deploy the production Worker, modify upstream data, or write to production KV. `npm run build` continues to use the unchanged production configuration.

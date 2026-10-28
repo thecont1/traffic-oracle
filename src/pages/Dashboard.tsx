@@ -135,6 +135,13 @@ function DashboardInner() {
   const [calYear, setCalYear] = useState(() => cityToday().year);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState(() => cityClockTime());
+  // A complete, in-range HH:MM — the Activate button and the instant builder
+  // both require it so cityInstant never sees a half-filled or out-of-range time.
+  const timeParts = selectedTime.split(":").map(Number);
+  const timeValid =
+    /^\d{2}:\d{2}$/.test(selectedTime) &&
+    timeParts[0] >= 0 && timeParts[0] <= 23 &&
+    timeParts[1] >= 0 && timeParts[1] <= 59;
 
   // City time, not the viewer's: a US-Pacific browser must not call the same
   // Time Travel moment "Wed 1 Apr 23:30" that the pane calls "2 Apr 12:00".
@@ -1680,8 +1687,8 @@ function DashboardInner() {
                   {/* Activate button */}
                   <button
                     onClick={() => {
-                      if (!selectedDate) return;
-                      const [hh, mm] = selectedTime.split(":").map(Number);
+                      if (!selectedDate || !timeValid) return;
+                      const [hh, mm] = timeParts;
                       // The grid is a civil calendar: its local Y/M/D are the
                       // chosen Bangalore date, so the instant is built in city
                       // time rather than wherever the browser happens to be.
@@ -1693,18 +1700,18 @@ function DashboardInner() {
                       tt.activate(cityInstant(key, hh, mm));
                       setTtPopoverOpen(false);
                     }}
-                    disabled={!selectedDate}
+                    disabled={!selectedDate || !timeValid}
                     style={{
                       width:"100%", marginTop:10, padding:"8px 0",
                       borderRadius:8, border:"none",
-                      background: selectedDate
+                      background: selectedDate && timeValid
                         ? (themeKey==="colour" ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(99,102,241,0.2))" : themeKey==="pastel" ? "#FDE68A" : "#111")
                         : (thm.key==="colour" ? "#2A3545" : "#e0e0e0"),
-                      color: selectedDate
+                      color: selectedDate && timeValid
                         ? (themeKey==="colour" ? "#E9D5FF" : themeKey==="pastel" ? "#92400E" : "#fff")
                         : thm.textMuted,
                       fontFamily:"var(--app-font-display)", fontSize:12, fontWeight:700,
-                      cursor: selectedDate ? "pointer" : "default",
+                      cursor: selectedDate && timeValid ? "pointer" : "default",
                       transition:"background 0.2s, color 0.2s",
                     }}
                   >

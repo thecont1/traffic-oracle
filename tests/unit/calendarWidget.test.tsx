@@ -10,7 +10,7 @@
 
 import { describe, it, expect, beforeEach } from "bun:test";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { CalendarWidget, CalendarLegend, categoryColor } from "../../src/components/CalendarWidget";
+import { CalendarWidget, CalendarLegend, categoryColor, textOn } from "../../src/components/CalendarWidget";
 import { ThemeProvider } from "../../src/lib/ThemeContext";
 import type { CalendarAnomaly } from "../../src/lib/calendarAnomalies";
 
@@ -362,6 +362,26 @@ describe("CalendarWidget interaction", () => {
     // Escape actually dismisses it — not merely "no error was thrown".
     await Promise.resolve();
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+});
+
+/* ── Contrast text selection ────────────────────────────────────── */
+
+describe("textOn contrast threshold", () => {
+  it("picks white on fills at or below the black/white crossover, dark above it", () => {
+    expect(textOn("#111111")).toBe("#fff"); // L ≈ 0.006
+    expect(textOn("#4F4F4F")).toBe("#fff"); // L ≈ 0.078
+    expect(textOn("#B45309")).toBe("#fff"); // L ≈ 0.159 (worse orange)
+    expect(textOn("#8C8C8C")).toBe("#111"); // L ≈ 0.262 — above 0.179 flips to dark
+    expect(textOn("#0D8C52")).toBe("#111"); // L ≈ 0.195 (much_better green)
+    expect(textOn("#FFFFFF")).toBe("#111"); // L = 1
+  });
+
+  it("favours the higher-contrast text at the exact crossover neighbour", () => {
+    // #565656 ≈ L 0.106 < 0.179 → white; #7A7A7A ≈ L 0.206 > 0.179 → dark.
+    // Both sit on the same side of the crossover as they should.
+    expect(textOn("#7A7A7A")).toBe("#111");
+    expect(textOn("#565656")).toBe("#fff");
   });
 });
 

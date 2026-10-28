@@ -93,14 +93,16 @@ export function categoryColor(themeKey: string, category: AnomalyCategory): stri
 }
 
 /** WCAG relative luminance → pick black or white text for contrast. */
-function textOn(hex: string): "#111" | "#fff" {
+export function textOn(hex: string): "#111" | "#fff" {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
   const toLinear = (channel: number) =>
     channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
   const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return L > 0.4 ? "#111" : "#fff";
+  // Black/white have equal contrast when (L + 0.05)² = 0.0525, i.e. L ≈ 0.179.
+  // Above it black text wins; at or below it, white text wins.
+  return L > 0.179 ? "#111" : "#fff";
 }
 
 /* ── Human-readable ToD label ──────────────────────────────────────── */

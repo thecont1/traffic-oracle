@@ -7,6 +7,7 @@ import {
   getCol,
   parseNum,
   toWeekKey,
+  parseCityRowTimestamp,
   percentile,
   matchesToD,
   bust,
@@ -17,6 +18,7 @@ import {
   type TimeOfDay,
   type TimePeriod,
 } from "../../src/lib/useTrafficData";
+import { instantToCivilKey } from "../../src/lib/calendarAnomalies";
 import * as Papa from "papaparse";
 import appConfig from "../../src/config.json";
 import type { AppConfig } from "../../src/lib/config";
@@ -24,6 +26,39 @@ import type { AppConfig } from "../../src/lib/config";
 const cfg = appConfig as AppConfig;
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
+
+describe("parseCityRowTimestamp", () => {
+  it("reads the CSV's zone-less date and time as Bangalore time", () => {
+    const stamp = parseCityRowTimestamp("2026-04-07", "08:30")!;
+    // 08:30 IST is 03:00 UTC, whatever the machine's zone is.
+    expect(stamp.ts.toISOString()).toBe("2026-04-07T03:00:00.000Z");
+    expect(stamp.hour).toBe(8);
+    expect(stamp.dayOfWeek).toBe(2); // Tuesday, 0 = Sunday
+    expect(stamp.weekKey).toBe("2026-04-06");
+    // Daily aggregation groups on this key, so it must be the city's date —
+    // 08:30 IST is still 6 April in Los Angeles.
+    expect(instantToCivilKey(stamp.ts)).toBe("2026-04-07");
+  });
+
+  it("keeps a Sunday reading in the week that started on Monday", () => {
+    const stamp = parseCityRowTimestamp("2026-04-12", "23:10")!;
+    expect(stamp.dayOfWeek).toBe(0);
+    expect(stamp.weekKey).toBe("2026-04-06");
+    expect(stamp.ts.toISOString()).toBe("2026-04-12T17:40:00.000Z");
+  });
+
+  it("defaults a missing time to city noon", () => {
+    const stamp = parseCityRowTimestamp("2026-04-07", "")!;
+    expect(stamp.hour).toBe(12);
+    expect(stamp.ts.toISOString()).toBe("2026-04-07T06:30:00.000Z");
+  });
+
+  it("rejects malformed dates and times", () => {
+    expect(parseCityRowTimestamp("07/04/2026", "08:30")).toBeNull();
+    expect(parseCityRowTimestamp("2026-04-07", "25:00")).toBeNull();
+    expect(parseCityRowTimestamp("2026-04-07", "08:75")).toBeNull();
+  });
+});
 
 function makeRow(overrides: Partial<TrafficRow>): TrafficRow {
   const ts = overrides.timestamp ?? new Date("2026-04-08T12:00:00");

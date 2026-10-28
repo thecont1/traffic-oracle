@@ -3,17 +3,21 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import * as Papa from "papaparse";
 import appConfig from "../config.json";
 import type { AppConfig } from "./config";
+import { bust } from "./bust";
+import {
+  cityInstant,
+  formatCityTime12h,
+  instantToCivilKey,
+  parseCivilDate,
+  weekKeyForCivil,
+} from "./calendarAnomalies";
 
 const cfg = appConfig as AppConfig;
 const WORST_CASE_PCT: number = cfg.percentile.worst_case;
 
-/** Format a Date as "h:mm AM/PM" (no leading zero on hour). */
+/** Format a Date as "h:mm AM/PM" on Bangalore's clock (no leading zero). */
 function fmtTime(d: Date): string {
-  const h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, "0");
-  const ampm = h >= 12 ? "PM" : "AM";
-  const h12 = h % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
+  return formatCityTime12h(d);
 }
 const defaultCity = cfg.cities.find(c => c.data_source) ?? cfg.cities[0];
 /** Extract the bare filename from a GitHub raw URL and return a same-origin
@@ -31,9 +35,7 @@ const ROUTES_URL  = toProxyPath(defaultRoutes);
 const TRAFFIC_URL = toProxyPath(defaultTraffic);
 
 /** Append a cache-busting query param so CDNs never serve a stale copy. */
-export function bust(url: string): string {
-  return `${url}?t=${Date.now()}`;
-}
+export { bust };
 
 export interface Route {
   route_code: string;
@@ -128,6 +130,47 @@ export function toWeekKey(d: Date): string {
   const m = String(mon.getMonth() + 1).padStart(2, "0");
   const dd = String(mon.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+export interface ParsedRowTimestamp {
+  ts: Date;
+  /** Hour on the city's clock (0–23). */
+  hour: number;
+  /** 0 = Sunday … 6 = Saturday, from the civil date. */
+  dayOfWeek: number;
+  /** Monday of the civil week, `YYYY-MM-DD`. */
+  weekKey: string;
+}
+
+/**
+ * Parse the feed's zone-less `date` + `time` as Bangalore wall-clock time.
+ *
+ * `new Date("2026-04-07T08:30:00")` means 08:30 wherever the viewer sits: in a
+ * US-Pacific browser every reading moved 12.5 hours earlier, landing in the
+ * previous evening, which shifted the hourly bucket, the weekday and the week
+ * key — and put the rows on the wrong side of a Time Travel cutoff. The
+ * timestamp is an instant; the hour, weekday and week key are civil facts about
+ * the reading, so they come from the civil date rather than the Date object.
+ */
+export function parseCityRowTimestamp(
+  dateRaw: string,
+  timeRaw: string,
+): ParsedRowTimestamp | null {
+  const civil = parseCivilDate(dateRaw);
+  if (!civil) return null;
+
+  const [rawHour, rawMinute = "0"] = (timeRaw || "12:00").split(":");
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+
+  return {
+    ts: cityInstant(dateRaw, hour, minute),
+    hour,
+    dayOfWeek: civil.weekday,
+    weekKey: weekKeyForCivil(dateRaw),
+  };
 }
 
 export function percentile(sorted: number[], p: number): number {
@@ -252,11 +295,9 @@ export function fetchTrafficData(
         const timeRaw = getCol(r, "time").trim();
         if (!dateRaw) continue;
 
-        const tsString = timeRaw
-          ? `${dateRaw}T${timeRaw}:00`
-          : `${dateRaw}T12:00:00`;
-        const ts = new Date(tsString);
-        if (isNaN(ts.getTime())) continue;
+        const stamp = parseCityRowTimestamp(dateRaw, timeRaw);
+        if (!stamp) continue;
+        const ts = stamp.ts;
 
         const rcRaw = getCol(r, "route_code").trim();
         const route = routeByCode.get(rcRaw);
@@ -278,9 +319,9 @@ export function fetchTrafficData(
           duration_min: Math.round(duration_min * 10) / 10,
           distance_km,
           speed_kmh,
-          hour: ts.getHours(),
-          dayOfWeek: ts.getDay(),
-          weekKey: toWeekKey(ts),
+          hour: stamp.hour,
+          dayOfWeek: stamp.dayOfWeek,
+          weekKey: stamp.weekKey,
           temp_c:     parseNumOpt(getCol(r, "temp")),
           realfeel_c: parseNumOpt(getCol(r, "realfeel")),
           humidity_pct: parseNumOpt(getCol(r, "humidity")),
@@ -340,11 +381,9 @@ export async function refreshTrafficData(
     const timeRaw = getCol(r, "time").trim();
     if (!dateRaw) continue;
 
-    const tsString = timeRaw
-      ? `${dateRaw}T${timeRaw}:00`
-      : `${dateRaw}T12:00:00`;
-    const ts = new Date(tsString);
-    if (isNaN(ts.getTime())) continue;
+    const stamp = parseCityRowTimestamp(dateRaw, timeRaw);
+    if (!stamp) continue;
+    const ts = stamp.ts;
 
     const rcRaw = getCol(r, "route_code").trim();
     const route = routeByCode.get(rcRaw);
@@ -365,9 +404,9 @@ export async function refreshTrafficData(
       duration_min: Math.round(duration_min * 10) / 10,
       distance_km,
       speed_kmh,
-      hour: ts.getHours(),
-      dayOfWeek: ts.getDay(),
-      weekKey: toWeekKey(ts),
+      hour: stamp.hour,
+      dayOfWeek: stamp.dayOfWeek,
+      weekKey: stamp.weekKey,
       temp_c:     parseNumOpt(getCol(r, "temp")),
       realfeel_c: parseNumOpt(getCol(r, "realfeel")),
       humidity_pct: parseNumOpt(getCol(r, "humidity")),
@@ -706,8 +745,8 @@ export function useDailyStats(
     );
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of rows) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);
@@ -750,8 +789,8 @@ export function useDailyStatsAllDay(
     const rows = allRows.filter((r) => r.label_short === selectedRoute);
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of rows) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);
@@ -804,10 +843,18 @@ export function useBenchmarkRoutes(allRows: TrafficRow[]): string[] {
   }, [allRows]);
 }
 
-/** Daily stats for the benchmark route, using the same ToD filter.
- *  When multiple benchmark candidates exist, the caller can pass
- *  `benchmarkRoutes` (ranked descending by avg distance) so we pick
- *  the first route that has rows for a given day. */
+/**
+ * Daily stats for the benchmark route, using the same ToD filter.
+ * When multiple benchmark candidates exist, the caller can pass
+ * `benchmarkRoutes` (ranked descending by avg distance) so we pick
+ * the first route that has rows for a given day.
+ *
+ * @deprecated The "Good Days and Bad Days" calendar no longer compares against
+ * a benchmark route — it uses the upstream day-anomaly export
+ * (`src/lib/calendarAnomalies.ts`). Kept because R³S² and other surfaces still
+ * derive city-relative context from route ranking. Do not reintroduce this as
+ * a calendar baseline.
+ */
 export function useBenchmarkDailyStats(
   allRows: TrafficRow[],
   benchmarkRoutes: string[],
@@ -826,8 +873,8 @@ export function useBenchmarkDailyStats(
     );
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of rows) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);
@@ -894,7 +941,13 @@ function setCachedThresholds(result: BandThresholdsResult): void {
 
 /** Compute empirical ratio distribution across all routes and dates.
  *  Uses tod='all' to capture the full range of traffic conditions.
- *  Results are cached in localStorage and recomputed when stale. */
+ *  Results are cached in localStorage and recomputed when stale.
+ *
+ *  @deprecated No calendar caller: the calendar's five categories come from the
+ *  upstream day-anomaly export, not from pooled city ratios with cached
+ *  thresholds. Kept (with its tests) because other city-relative surfaces may
+ *  still want a pooled ratio distribution; the calendar-specific cache policy
+ *  was the problem, not the helper. */
 export function useEmpiricalBandThresholds(
   allRows: TrafficRow[],
   benchmarkRoutes: string[],
@@ -928,8 +981,7 @@ export function useEmpiricalBandThresholds(
     // Group rows by route+date (no ToD filter — full dataset)
     const byKey = new Map<string, TrafficRow[]>();
     for (const r of allRows) {
-      const d = r.timestamp;
-      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const dateKey = instantToCivilKey(r.timestamp);
       const key = `${r.label_short}|${dateKey}`;
       const arr = byKey.get(key);
       if (arr) arr.push(r); else byKey.set(key, [r]);
@@ -1060,8 +1112,8 @@ export function useFilteredData(
     // Daily aggregation for the chart
     const byDay = new Map<string, TrafficRow[]>();
     for (const r of filtered) {
-      const d = r.timestamp;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // The timestamp is an instant; the day it belongs to is the city's.
+      const key = instantToCivilKey(r.timestamp);
       const arr = byDay.get(key) ?? [];
       arr.push(r);
       byDay.set(key, arr);

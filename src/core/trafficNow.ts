@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import type { TrafficRow, WeatherRow } from "@/lib/useTrafficData";
+import { cityMinutesOfDay } from "@/lib/calendarAnomalies";
 
 /* ── Types ────────────────────────────────────────────────────────── */
 
@@ -62,13 +63,13 @@ export function computeTODStats(
   windowMinutes: number = 90,
 ): RouteTODStats | null {
   const cutoff = new Date(referenceTime.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  const refHour = referenceTime.getHours();
-  const refMin = referenceTime.getMinutes();
-  const refTimeVal = refHour * 60 + refMin;
+  // Time-of-day in Bangalore, not the viewer's zone: the ±90-minute window must
+  // line up with the same wall-clock band the data was filed under.
+  const refTimeVal = cityMinutesOfDay(referenceTime);
 
   const relevantRows = routeRows.filter(r => {
     if (r.timestamp < cutoff) return false;
-    const rowTimeVal = r.timestamp.getHours() * 60 + r.timestamp.getMinutes();
+    const rowTimeVal = cityMinutesOfDay(r.timestamp);
     let diff = Math.abs(rowTimeVal - refTimeVal);
     if (diff > 720) diff = 1440 - diff;
     return diff <= windowMinutes;

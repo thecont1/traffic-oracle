@@ -12,10 +12,10 @@ import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT, fillTemplate } from "@/lib/tooltipContent";
 import {
   useTrafficData, useFilteredData, useAllRouteWeeks, useDailyStats, useWeatherData,
-  useBenchmarkRoutes, useBenchmarkDailyStats, useEmpiricalBandThresholds,
+  useBenchmarkRoutes,
   matchesToD, aggregateRows,
 } from "@/lib/useTrafficData";
-import type { TimePeriod, TimeOfDay, DayStats, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
+import type { TimePeriod, TimeOfDay, TrafficRow, WeatherRow } from "@/lib/useTrafficData";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { THEME_META, THEME_CYCLE } from "@/lib/theme";
 import type { ChipVariant, AppTheme } from "@/lib/theme";
@@ -24,7 +24,19 @@ import { resolveSliderFromWeekKeys, resolveRouteIndex, validateSnapshot } from "
 import type { DashboardSnapshot } from "@/lib/ttStateHelpers";
 import RouteBrowserPane from "@/components/RouteBrowserPane";
 import UncertaintyBandChart from "@/components/UncertaintyBandChart";
-import { CalendarWidget, PALETTES } from "@/components/CalendarWidget";
+import { CalendarWidget, CalendarLegend } from "@/components/CalendarWidget";
+import {
+  anomaliesForRoute,
+  cityClockTime,
+  cityInstant,
+  cityToday,
+  cityTodayKey,
+  civilNoonInstant,
+  formatCityStampWithWeekday,
+  instantToCivilKey,
+  toCivilKey,
+  useCalendarAnomalies,
+} from "@/lib/calendarAnomalies";
 import type { ViewingMode } from "@/components/UncertaintyBandChart";
 import { buildBands } from "@/lib/forecastBands";
 import appConfig from "../config.json";
@@ -117,22 +129,24 @@ function DashboardInner() {
   const [ttPopoverOpen, setTtPopoverOpen] = useState(false);
   const ttButtonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
-  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  // The picker chooses a Bangalore date and time; its defaults come from the
+  // city's clock, not the viewer's.
+  const [calMonth, setCalMonth] = useState(() => cityToday().month - 1);
+  const [calYear, setCalYear] = useState(() => cityToday().year);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTime, setSelectedTime] = useState(() => {
-    const now = new Date();
-    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  });
+  const [selectedTime, setSelectedTime] = useState(() => cityClockTime());
+  // A complete, in-range HH:MM — the Activate button and the instant builder
+  // both require it so cityInstant never sees a half-filled or out-of-range time.
+  const timeParts = selectedTime.split(":").map(Number);
+  const timeValid =
+    /^\d{2}:\d{2}$/.test(selectedTime) &&
+    timeParts[0] >= 0 && timeParts[0] <= 23 &&
+    timeParts[1] >= 0 && timeParts[1] <= 59;
 
+  // City time, not the viewer's: a US-Pacific browser must not call the same
+  // Time Travel moment "Wed 1 Apr 23:30" that the pane calls "2 Apr 12:00".
   function ttFormat(dt: Date): string {
-    const wd = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()];
-    const d = dt.getDate();
-    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
-    const yr = String(dt.getFullYear()).slice(2);
-    const hh = String(dt.getHours()).padStart(2, "0");
-    const mm = String(dt.getMinutes()).padStart(2, "0");
-    return `${wd} ${d} ${mon} '${yr} · ${hh}:${mm}`;
+    return formatCityStampWithWeekday(dt);
   }
 
   // TT glow colours per theme — blazing tier
@@ -530,14 +544,14 @@ function DashboardInner() {
   const dataDays = useMemo(() => {
     const set = new Set<string>();
     for (const r of allRows) {
-      const d = r.timestamp;
-      set.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+      // Timestamps are city instants: their civil date is the city's date.
+      set.add(instantToCivilKey(r.timestamp));
     }
     return set;
   }, [allRows]);
 
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  const cityNow = cityToday();
+  const todayStr = cityTodayKey();
 
   // Announce data state changes to screen readers
   useEffect(() => {
@@ -908,17 +922,25 @@ function DashboardInner() {
     }
   }, [allRouteWeeks.length, showSparkle, recentWindowStartIdx, maxIdx]);
 
-  const dailyStats = useDailyStats(ttAllRows, selectedRoute, tod);
   const calendarDailyStats = useDailyStats(allRows, selectedRoute, tod);
   const benchmarkRoutes = useBenchmarkRoutes(allRows);
-  const benchmarkDailyStats = useBenchmarkDailyStats(allRows, benchmarkRoutes, tod);
+  // The benchmark route label is still used by R³S² city-relative context —
+  // it is no longer part of the calendar's own comparison.
   const benchmarkRouteLabel = benchmarkRoutes[0] ?? "the longest route";
 
   // ── R³S² data loading and context ─────────────────────────────
   const selectedRouteCode = selectedRouteInfo?.route_code ?? "";
   const rrsData = useRrsData();
   const rrsCtx = useRrsContext(rrsData.routeWindow, rrsData.routeDay, selectedRouteCode, tod, benchmarkRouteLabel);
-  const bandThresholds = useEmpiricalBandThresholds(allRows, benchmarkRoutes);
+
+  // ── Calendar day anomalies (canonical, pre-computed upstream) ─
+  // Refetch when the traffic feed advances so today's provisional record tracks
+  // new observations; historical finals are stable for unchanged past inputs.
+  const anomalyFeed = useCalendarAnomalies(dataTimestamp?.getTime() ?? null);
+  const anomalyRecords = useMemo(
+    () => anomaliesForRoute(anomalyFeed, selectedRouteCode, tod),
+    [anomalyFeed, selectedRouteCode, tod],
+  );
   const { merged, dailyData, selectedStats } = useFilteredData(ttAllRows, selectedRoute, period, tod);
 
   // Keep chart x-axes consistent across the two Recharts charts.
@@ -955,12 +977,24 @@ function DashboardInner() {
   const calLastStr  = calAllDates[calAllDates.length - 1] ?? "";
   const calFirstStr = calAllDates[0] ?? "";
 
-  const [widgetCalYear, setWidgetCalYear] = useState(() => new Date().getFullYear());
-  const [widgetCalMonth, setWidgetCalMonth] = useState(() => new Date().getMonth());
+  // Calendar months are city-local civil months, not viewer-local ones.
+  const [widgetCalYear, setWidgetCalYear] = useState(() => cityToday().year);
+  const [widgetCalMonth, setWidgetCalMonth] = useState(() => cityToday().month - 1);
 
   const widgetCalPrefixStr  = `${widgetCalYear}-${String(widgetCalMonth + 1).padStart(2, "0")}`;
-  const widgetCalMinMonthStr = calFirstStr ? calFirstStr.slice(0, 7) : widgetCalPrefixStr;
-  const { y: wCalLy, m: wCalLm } = calLastStr ? parseYM(calLastStr) : { y: widgetCalYear, m: widgetCalMonth };
+  // The anomaly export is a rolling 90-day publication; do not let month
+  // navigation wander into periods it no longer publishes.
+  const anomalyFirstStr = anomalyFeed.earliestDate ?? "";
+  const widgetCalMinMonthStr = (anomalyFirstStr || calFirstStr)
+    ? (anomalyFirstStr || calFirstStr).slice(0, 7)
+    : widgetCalPrefixStr;
+  // Forward navigation is bounded by what the export publishes, not by the
+  // traffic daily stats: the export decides which months have rows at all, and
+  // the daily stats are filtered by the selected time of day. Falls back to the
+  // traffic data (then the current month) while the feed is still loading.
+  const anomalyLastStr = anomalyFeed.latestDate ?? "";
+  const calMaxStr = anomalyLastStr || calLastStr;
+  const { y: wCalLy, m: wCalLm } = calMaxStr ? parseYM(calMaxStr) : { y: widgetCalYear, m: widgetCalMonth };
   const widgetCalMaxMonthStr = `${wCalLy}-${String(wCalLm + 1).padStart(2, "0")}`;
   const widgetCalCanBack = widgetCalPrefixStr > widgetCalMinMonthStr;
   const widgetCalCanFwd  = widgetCalPrefixStr < widgetCalMaxMonthStr;
@@ -1552,15 +1586,15 @@ function DashboardInner() {
                       {["January","February","March","April","May","June","July","August","September","October","November","December"][calMonth]} {calYear}
                     </span>
                     <button onClick={() => {
-                      const nowM = new Date().getMonth();
-                      const nowY = new Date().getFullYear();
+                      const nowM = cityNow.month - 1;
+                      const nowY = cityNow.year;
                       if (calYear > nowY || (calYear === nowY && calMonth >= nowM)) return;
                       if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); }
                       else setCalMonth(m => m+1);
                     }} style={{
                       background:"none", border:"none", cursor:"pointer", color:thm.textMuted,
                       fontSize:18, padding:"4px 8px", borderRadius:4,
-                      opacity: (calYear > today.getFullYear() || (calYear === today.getFullYear() && calMonth >= today.getMonth())) ? 0.3 : 1,
+                      opacity: (calYear > cityNow.year || (calYear === cityNow.year && calMonth >= cityNow.month - 1)) ? 0.3 : 1,
                     }}>›</button>
                   </div>
 
@@ -1633,7 +1667,7 @@ function DashboardInner() {
                     borderTop:`1px solid ${thm.key==="gray"?"#e0e0e0":thm.key==="pastel"?"#DCCFB8":"hsl(var(--border))"}`,
                   }}>
                     <span style={{ fontSize:11, fontWeight:600, color:thm.textSecondary }}>
-                      Time
+                      Time · Bangalore
                     </span>
                     <input
                       type="time"
@@ -1653,25 +1687,31 @@ function DashboardInner() {
                   {/* Activate button */}
                   <button
                     onClick={() => {
-                      if (!selectedDate) return;
-                      const [hh, mm] = selectedTime.split(":").map(Number);
-                      const dt = new Date(selectedDate);
-                      dt.setHours(hh, mm, 0, 0);
-                      tt.activate(dt);
+                      if (!selectedDate || !timeValid) return;
+                      const [hh, mm] = timeParts;
+                      // The grid is a civil calendar: its local Y/M/D are the
+                      // chosen Bangalore date, so the instant is built in city
+                      // time rather than wherever the browser happens to be.
+                      const key = toCivilKey(
+                        selectedDate.getFullYear(),
+                        selectedDate.getMonth() + 1,
+                        selectedDate.getDate(),
+                      );
+                      tt.activate(cityInstant(key, hh, mm));
                       setTtPopoverOpen(false);
                     }}
-                    disabled={!selectedDate}
+                    disabled={!selectedDate || !timeValid}
                     style={{
                       width:"100%", marginTop:10, padding:"8px 0",
                       borderRadius:8, border:"none",
-                      background: selectedDate
+                      background: selectedDate && timeValid
                         ? (themeKey==="colour" ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(99,102,241,0.2))" : themeKey==="pastel" ? "#FDE68A" : "#111")
                         : (thm.key==="colour" ? "#2A3545" : "#e0e0e0"),
-                      color: selectedDate
+                      color: selectedDate && timeValid
                         ? (themeKey==="colour" ? "#E9D5FF" : themeKey==="pastel" ? "#92400E" : "#fff")
                         : thm.textMuted,
                       fontFamily:"var(--app-font-display)", fontSize:12, fontWeight:700,
-                      cursor: selectedDate ? "pointer" : "default",
+                      cursor: selectedDate && timeValid ? "pointer" : "default",
                       transition:"background 0.2s, color 0.2s",
                     }}
                   >
@@ -2559,10 +2599,7 @@ function DashboardInner() {
                             ✳︎ Good Days and Bad Days
                           </p>
                           <InfoTip thm={thm}>
-                            {selectedRoute === benchmarkRouteLabel
-                              ? TOOLTIP_CONTENT.dailyCalendarBenchmark.body
-                              : TOOLTIP_CONTENT.dailyCalendar.body
-                            }
+                            {TOOLTIP_CONTENT.dailyCalendar.body}
                           </InfoTip>
                           <span style={{ fontSize: 16, color: thm.textMuted, display: "inline-block",
                             transform: calendarCardOpen ? "rotate(180deg)" : "rotate(0deg)",
@@ -2576,19 +2613,26 @@ function DashboardInner() {
                       </div>
                       {calendarCardOpen && (
                         <>
+                          <p style={{ fontSize: 12, color: thm.textMuted, margin: "0 0 8px", lineHeight: 1.5 }}>
+                            Each day is compared with the same weekday and hours on this route
+                            over the preceding 90 days. This 90-day reference is independent of
+                            the main question's baseline; only the most recent 90 days are published.
+                          </p>
                           <CalendarWidget
-                            dailyStats={calendarDailyStats}
-                            allRows={allRows}
+                            anomalies={anomalyRecords}
+                            feedState={anomalyFeed.state}
+                            feedMeta={{
+                              methodVersion: anomalyFeed.methodVersion,
+                              generatedAt: anomalyFeed.generatedAt,
+                              error: anomalyFeed.error,
+                            }}
+                            publishedFrom={anomalyFeed.earliestDate}
                             selectedRoute={selectedRoute}
                             tod={tod}
-                            benchmarkDailyStats={benchmarkDailyStats}
-                            benchmarkRouteLabel={benchmarkRouteLabel}
-                            bandThresholds={bandThresholds}
                             cutoffDate={tt.isActive ? tt.simulatedNow : null}
                             widgetCalYear={widgetCalYear}
                             widgetCalMonth={widgetCalMonth}
-                            onDateClick={(dk) => tt.activate(new Date(dk + "T12:00:00"))}
-                            isBenchmarkRoute={selectedRoute === benchmarkRouteLabel}
+                            onDateClick={(dk) => tt.activate(civilNoonInstant(dk))}
                             debug={!!URL_PARAMS.debug}
                           />
                           {/* ── Footer row: R³S² context + legend ── */}
@@ -2604,29 +2648,8 @@ function DashboardInner() {
                               <RrsContextBlock ctx={rrsCtx} tod={tod} theme={thm} />
                             )}
 
-                            {/* Right: Slow–Fast legend */}
-                            {(() => {
-                              const effectiveTheme = selectedRoute === benchmarkRouteLabel ? "benchmark" : thm.key;
-                              const pal = PALETTES[effectiveTheme] ?? PALETTES.colour;
-                              return (
-                                <div role="img" aria-label="Legend: 10 speed deciles from red (slowest) to green (fastest)"
-                                  style={{
-                                    display: "flex", alignItems: "center", gap: 4,
-                                    fontSize: 10, color: thm.textMuted, fontWeight: 600,
-                                    flexShrink: 0,
-                                  }}>
-                                  <span>Slow</span>
-                                  <div>
-                                    <div style={{ display: "flex", gap: 1 }}>
-                                      {pal.map((c, i) => (
-                                        <div key={i} style={{ width: 14, height: 14, background: c }} />
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <span>Fast</span>
-                                </div>
-                              );
-                            })()}
+                            {/* Right: five-category anomaly legend */}
+                            <CalendarLegend themeKey={thm.key} textMuted={thm.textMuted} />
                           </div>
                           {/* ── R³S² DEBUG Block — ?debug=1 to show ── */}
                           {URL_PARAMS.debug && rrsCtx && (
@@ -2744,7 +2767,7 @@ function DashboardInner() {
             tt.isActive && tt.simulatedNow ? (
               <span>{effectiveRowCount.toLocaleString()} of {rowCount.toLocaleString()} rows · as of {ttFormat(tt.simulatedNow)}{effectiveRowCount < 100 && <span style={{ color: themeKey === "colour" ? "#FBBF24" : themeKey === "pastel" ? "#D97706" : "#B45309", fontWeight: 600, marginLeft: 4 }}>⚠ sparse data</span>}</span>
             ) : (
-              <span>{rowCount.toLocaleString()} rows updated at {dataTimestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+              <span>{rowCount.toLocaleString()} rows updated at {cityClockTime(dataTimestamp)}</span>
             )
           )}
           <span style={{ marginLeft:"auto" }}>© 2026 <a href="https://thecontrarian.in/" target="_blank" rel="noopener noreferrer" style={{ color: thm.chart.line4, padding:"14px 0", minHeight:44, display:"inline-flex", alignItems:"baseline" }}>Mahesh Shantaram</a></span>

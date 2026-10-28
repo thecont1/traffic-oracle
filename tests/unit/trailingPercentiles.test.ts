@@ -28,7 +28,10 @@ function ds(avgSpeed: number): DayStats {
 /** Build a stats Map with N entries at 20–40 km/h spread over 30 days. */
 function buildStats(speeds: number[], baseDate = "2025-04-15"): Map<string, DayStats> {
   const map = new Map<string, DayStats>();
-  const base = new Date(baseDate + "T12:00:00").getTime();
+  // UTC, not local: at UTC+14 a local noon lands on the previous UTC day and
+  // the window silently loses one entry.
+  const [by, bm, bd] = baseDate.split("-").map(Number);
+  const base = Date.UTC(by, bm - 1, bd, 12);
   for (let i = 0; i < speeds.length; i++) {
     const d = new Date(base - (i + 1) * 86400000);
     const key = d.toISOString().slice(0, 10);

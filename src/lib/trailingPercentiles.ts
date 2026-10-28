@@ -1,6 +1,13 @@
 /**
- * Trailing-window percentile helpers for the calendar colour system.
+ * Trailing-window percentile helpers for a *previous* calendar colour system.
  * Extracted from Dashboard.tsx for testability.
+ *
+ * @deprecated Not used by any surface. The calendar now renders categories from
+ * the canonical upstream day-anomaly export (`src/lib/calendarAnomalies.ts`),
+ * which compares a route with its own preceding 90 days. This helper's 30-day
+ * window and two-observation minimum are not that method — do not reconnect it
+ * as a shortcut. Safe to delete once the plan for its removal is scheduled;
+ * kept for now so the decision is explicit rather than accidental.
  */
 
 import type { DayStats } from "@/lib/useTrafficData";

@@ -12,6 +12,7 @@ import InfoTip from "@/components/ui/InfoTip";
 import { TOOLTIP_CONTENT } from "@/lib/tooltipContent";
 import NestedScaleChart from "@/components/shared/NestedScaleChart";
 import { getRouteMapshot } from "@/lib/routeMapshots";
+import { formatCityStamp } from "@/lib/calendarAnomalies";
 
 interface RouteMapshot { imageUrl: string; alt: string; }
 
@@ -45,13 +46,10 @@ function relativeTime(date: Date): string {
 }
 
 /* ── TT date format for pane labels ─────────────────────────── */
+// City time, not the viewer's: the calendar activates Time Travel on a city
+// date, so the label has to describe that same clock.
 function ttFormatPane(dt: Date): string {
-  const d = dt.getDate();
-  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
-  const yr = String(dt.getFullYear()).slice(2);
-  const hh = String(dt.getHours()).padStart(2, "0");
-  const mm = String(dt.getMinutes()).padStart(2, "0");
-  return `${d} ${mon} '${yr} · ${hh}:${mm}`;
+  return formatCityStamp(dt);
 }
 
 /* ── Animated sorted card list (FLIP) ─────────────────────────── */
